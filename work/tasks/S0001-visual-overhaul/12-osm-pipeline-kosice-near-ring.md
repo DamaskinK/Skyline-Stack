@@ -7,7 +7,7 @@ CC0 kit pieces (Kenney / KayKit / Quaternius), instanced.
 **Blocked by:** 03, 05
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Scene in three rings", "Assets and build"; brief references.
 
 - [ ] Build site for Kosice chosen near the centre with the landmarks in the default camera view; noted in the level data
