@@ -193,3 +193,22 @@ above). Everything else is CC0 and goes into `CREDITS.md` as a courtesy entry.
 - Several CC0 track lengths are estimates (marked `~`); listen before committing.
 - Freesound downloads need a free login; OGA and Kenney downloads do not.
 - This file lists candidates only. `CREDITS.md` is untouched until the picks are made.
+
+## Developer picks (2026-11-22)
+| Slot | Pick | Licence |
+|------|------|---------|
+| Menu | Calm Ambient 1 (Synthwave 4k), cynicmusic | CC0 |
+| Kosice | Folk Round, Kevin MacLeod | CC-BY 4.0 |
+| Prague | Dvorak Polka, Kevin MacLeod (loop it) | CC-BY 4.0 |
+| Berlin | Empacotatron, Fupi | CC0 |
+| Dubai | Desert City, Kevin MacLeod (loop it) | CC-BY 4.0 |
+| New York | Jazz Brunch, Kevin MacLeod | CC-BY 4.0 |
+| Tokyo | Neon Laser Horizon, Kevin MacLeod | CC-BY 4.0 |
+| Drop | Little Whoosh 2, ch_ase | CC0 |
+| Landing | Low Thud, Qvantor | CC0 |
+| Crash / collapse | **none liked** ("sounds old"): build a modern layered crash instead (Kenney Impact Sounds hits + Low Thud + a synth sub-boom and debris noise), developer listens and approves | CC0 |
+| Thunder | peal of thunder - distant, bastipictures | CC0 |
+| Wind loop | Wind through trees (loop), NomadApe | CC0 |
+| Rain loop | Rain Loop 2, richwise | CC0 |
+| City ambience | City Ambiance (New York), knufds | CC-BY 4.0 |
+| UI | Kenney Interface Sounds | CC0 |
