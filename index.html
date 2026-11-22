@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tower Bloxx 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+<!--BODY-->
+<canvas id="c" aria-label="Tower Bloxx 3D game scene"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+
+<!-- ── in-game HUD ── -->
+<div id="hud" hidden>
+  <div class="hud tl">
+    <div class="box chip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L15 9 L22 9 L16.5 13.5 L18.5 21 L12 16.5 L5.5 21 L7.5 13.5 L2 9 L9 9 Z" fill="#ffb627" stroke="#000" stroke-width="1.5"/></svg>
+      <div><div class="lbl" id="hScoreLbl">SCORE</div><div class="v" id="hScore">0</div></div>
+    </div>
+    <div class="box chip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="4" fill="#ffd2a6" stroke="#000" stroke-width="1.5"/><path d="M4 22 C4 14 20 14 20 22 Z" fill="#52d9ff" stroke="#000" stroke-width="1.5"/></svg>
+      <div><div class="lbl" id="hPopLbl">RESIDENTS</div><div class="v" id="hPop">0</div></div>
+    </div>
+  </div>
+  <div class="hud tc">
+    <div class="lbl">FLOOR</div>
+    <div id="floorBig">0</div>
+    <div class="lbl" id="hMeters">0 M</div>
+    <div class="pips" id="pips"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="lbl" id="hCombo"></div>
+  </div>
+  <div class="hud tr">
+    <div class="ctl">
+      <button class="icon" type="button" id="btnMute" aria-label="Mute sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 H7 L12 4 V20 L7 15 H3 Z" fill="currentColor"/><path id="muteWave" d="M15 8 Q19 12 15 16 M17 5 Q23 12 17 19" stroke="currentColor" stroke-width="2" fill="none"/><path id="muteX" d="M15 9 L21 15 M21 9 L15 15" stroke="currentColor" stroke-width="2.5" hidden/></svg></button>
+      <button class="icon" type="button" id="btnCam" aria-label="Change camera"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="15" height="11" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M17 11 L22 8 V17 L17 14 Z" fill="currentColor"/></svg></button>
+      <button class="icon" type="button" id="btnPause" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" fill="currentColor"/><rect x="14" y="4" width="5" height="16" fill="currentColor"/></svg></button>
+    </div>
+    <div class="lives" id="hLives" aria-label="Lives"></div>
+    <div class="tag" id="hDiff">NORMAL</div>
+    <div class="lbl" id="hTarget"></div>
+  </div>
+  <div class="hud bl box">
+    <div class="chip">
+      <svg id="compass" viewBox="-32 -32 64 64" aria-hidden="true">
+        <circle r="29" fill="rgba(0,0,0,.35)" stroke="#2c3a78" stroke-width="3"/>
+        <g id="arrow"><path d="M-18 0 H12 M4 -8 L14 0 L4 8" stroke="#52d9ff" stroke-width="5" fill="none"/></g>
+      </svg>
+      <div>
+        <div class="lbl">WIND</div>
+        <div class="mid" id="hWind">0 m/s</div>
+        <div class="lbl" id="hTrend" style="margin-top:5px"></div>
+      </div>
+    </div>
+    <div class="chip"><span id="wxIcon"></span><div><div class="mid" id="hWeather">Clear</div><div class="lbl" id="hNextWeather" style="margin-top:5px"></div></div></div>
+  </div>
+  <div class="hud br box">
+    <div><div class="lbl">STABILITY</div><div class="bar" id="stabBar"><i></i></div></div>
+    <div><div class="lbl">SLOW-MO <span class="desk">[SHIFT]</span></div><div class="bar" id="focusBar"><i></i></div></div>
+    <button type="button" class="btn sm" id="anchorBtn">ANCHOR <span class="desk">[A]</span> · <span id="hAnchor">1</span></button>
+    <div><span class="lbl">NEXT </span><span id="hNext"></span></div>
+    <div id="nextHint"></div>
+  </div>
+  <div id="banner"></div>
+  <div id="hint" hidden>Tap or press SPACE when the block is over the tower</div>
+</div>
+<div id="wxCard" class="box" hidden><span id="wxCardIcon"></span><div><b id="wxCardName"></b><span id="wxCardText"></span></div></div>
+<div id="popups"></div>
+<div id="touch"><button id="tFocus" type="button" class="btn">SLOW-MO</button></div>
+
+<!-- ── title screen ── -->
+<section class="screen" id="sTitle">
+  <div class="title-wrap">
+    <div class="logo" aria-label="Tower Bloxx 3D">
+      <div class="logo-row" id="logoTop"></div>
+      <div class="logo-row" id="logoBot"></div>
+      <div class="badge3d">3D</div>
+    </div>
+    <p class="tagline">STACK · BALANCE · SURVIVE THE WEATHER</p>
+    <nav class="menu" aria-label="Main menu">
+      <button type="button" class="mi" data-go="sNew"><span class="cur">▶</span>PLAY</button>
+      <button type="button" class="mi" data-go="sScores"><span class="cur">▶</span>HIGH SCORES</button>
+      <button type="button" class="mi" data-go="sSettings"><span class="cur">▶</span>SETTINGS</button>
+      <button type="button" class="mi" data-go="sHelp"><span class="cur">▶</span>HOW TO PLAY</button>
+    </nav>
+    <div class="best" id="titleBest"></div>
+  </div>
+  <div class="foot"><span class="blink">PRESS ENTER</span><span class="desk"> · ↑↓ to choose · ESC back</span></div>
+</section>
+
+<!-- ── new game: mode + difficulty ── -->
+<section class="screen" id="sNew" hidden>
+  <div class="panel wide">
+    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>NEW GAME</h2></header>
+    <h3>MODE</h3>
+    <div class="cards two" role="group" aria-label="Mode">
+      <button type="button" class="card-opt" data-mode="endless">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2"><rect x="12" y="28" width="16" height="9" fill="#4f7cff"/><rect x="13" y="19" width="16" height="9" fill="#4f7cff"/><rect x="11" y="10" width="16" height="9" fill="#e86f4f"/><rect x="12" y="1" width="16" height="9" fill="#ffc531"/></g></svg>
+        <b>ENDLESS</b><span>One tower, as high as you can. Weather turns every 15 floors.</span>
+      </button>
+      <button type="button" class="card-opt" data-mode="city">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2"><rect x="2" y="22" width="10" height="16" fill="#4f7cff"/><rect x="15" y="8" width="10" height="30" fill="#3fd07a"/><rect x="28" y="16" width="10" height="22" fill="#ff5a5a"/></g></svg>
+        <b>CITY</b><span>Fill a 3×3 block with buildings. Score is the number of residents.</span>
+      </button>
+    </div>
+    <h3>DIFFICULTY</h3>
+    <div class="cards three" role="group" aria-label="Difficulty" id="diffCards"></div>
+    <div class="actions"><button type="button" class="btn big" id="btnStart">START ▶</button></div>
+  </div>
+</section>
+
+<!-- ── settings ── -->
+<section class="screen" id="sSettings" hidden>
+  <div class="panel">
+    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>SETTINGS</h2></header>
+    <div class="rows">
+      <div class="row"><span class="rl">Default difficulty</span><div class="seg" data-set="difficulty"><button type="button" data-v="easy">EASY</button><button type="button" data-v="normal">NORMAL</button><button type="button" data-v="hard">HARD</button></div></div>
+      <div class="row"><label class="rl" for="volMusic">Music</label><input type="range" id="volMusic" min="0" max="100" step="5"><output id="volMusicV"></output></div>
+      <div class="row"><label class="rl" for="volSfx">Sound effects</label><input type="range" id="volSfx" min="0" max="100" step="5"><output id="volSfxV"></output></div>
+      <div class="row"><span class="rl">Graphics</span><div class="seg" data-set="quality"><button type="button" data-v="low">LOW</button><button type="button" data-v="medium">MEDIUM</button><button type="button" data-v="high">HIGH</button></div></div>
+      <div class="row"><span class="rl">Camera</span><div class="seg" data-set="camera"><button type="button" data-v="0">FRONT</button><button type="button" data-v="1">SIDE</button><button type="button" data-v="2">TOP</button></div></div>
+      <div class="row"><span class="rl">Screen shake</span><div class="seg" data-set="shake"><button type="button" data-v="true">ON</button><button type="button" data-v="false">OFF</button></div></div>
+      <div class="row"><span class="rl">Tips and hints</span><div class="seg" data-set="hints"><button type="button" data-v="true">ON</button><button type="button" data-v="false">OFF</button></div></div>
+      <div class="row"><span class="rl">High scores</span><button type="button" class="btn sm danger" id="btnReset">RESET</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── high scores ── -->
+<section class="screen" id="sScores" hidden>
+  <div class="panel">
+    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>HIGH SCORES</h2></header>
+    <div class="tabs" role="tablist"><button type="button" role="tab" data-tab="endless">ENDLESS</button><button type="button" role="tab" data-tab="city">CITY</button></div>
+    <table class="hs" id="hsTable"></table>
+  </div>
+</section>
+
+<!-- ── how to play ── -->
+<section class="screen" id="sHelp" hidden>
+  <div class="panel wide">
+    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>HOW TO PLAY</h2></header>
+    <div class="help">
+      <div>
+        <h3>CONTROLS</h3>
+        <ul class="keys">
+          <li><kbd>SPACE</kbd> or <kbd>CLICK</kbd> drop the block</li>
+          <li>hold <kbd>SHIFT</kbd> slow-mo (refills by itself)</li>
+          <li><kbd>A</kbd> anchor: freeze the sway for 3 s</li>
+          <li><kbd>C</kbd> camera · <kbd>P</kbd> pause · <kbd>M</kbd> mute</li>
+        </ul>
+        <h3>LANDING</h3>
+        <ul class="keys">
+          <li><b class="c-amber">PERFECT</b> centred: combo, calmer tower, slow-mo refill</li>
+          <li><b class="c-ok">GOOD</b> close enough</li>
+          <li><b class="c-bad">RISKY</b> the offset makes the tower lean</li>
+          <li>Over half a block off and it slips. That costs a life.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>BLOCKS</h3>
+        <ul class="keys" id="helpBlocks"></ul>
+        <h3>WEATHER</h3>
+        <ul class="keys" id="helpWeather"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── city plot picker ── -->
+<section class="screen side" id="sCity" hidden>
+  <div class="panel">
+    <header><h2 id="cityTitle">CITY</h2></header>
+    <div class="grid3" id="plots"></div>
+    <div class="types" id="types"></div>
+    <p class="note" id="cityInfo"></p>
+    <div class="actions"><button type="button" class="btn ghost sm" id="btnCityQuit">QUIT TO MENU</button></div>
+  </div>
+</section>
+
+<!-- ── pause ── -->
+<section class="screen dim" id="sPause" hidden>
+  <div class="panel narrow">
+    <header><h2>PAUSED</h2></header>
+    <nav class="menu small">
+      <button type="button" class="mi" id="btnResume"><span class="cur">▶</span>RESUME</button>
+      <button type="button" class="mi" id="btnRestart"><span class="cur">▶</span>RESTART</button>
+      <button type="button" class="mi" data-go="sSettings"><span class="cur">▶</span>SETTINGS</button>
+      <button type="button" class="mi" id="btnQuit"><span class="cur">▶</span>QUIT TO MENU</button>
+    </nav>
+  </div>
+</section>
+
+<!-- ── game over ── -->
+<section class="screen dim" id="sOver" hidden>
+  <div class="panel">
+    <header><h2 id="overTitle">GAME OVER</h2></header>
+    <div class="record" id="newRecord" hidden>NEW RECORD</div>
+    <div class="stats" id="overStats"></div>
+    <form class="actions" id="saveForm">
+      <label class="lbl" for="name" style="width:100%">YOUR NAME FOR THE HIGH SCORES</label>
+      <input type="text" id="name" maxlength="12" value="PLAYER" autocomplete="off">
+      <button type="submit" class="btn" id="btnSave">SAVE</button>
+    </form>
+    <table class="hs" id="overHs"></table>
+    <div class="actions"><button type="button" class="btn" id="btnAgain">PLAY AGAIN</button><button type="button" class="btn ghost" id="btnMenu">MENU</button></div>
+  </div>
+</section>
+<!--/BODY-->
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

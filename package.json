@@ -1,0 +1,14 @@
+{
+  "name": "tower-bloxx-3d",
+  "version": "2.0.0",
+  "description": "Retro tower-stacking game in Three.js: wind, weather, sway physics and a city mode.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}
