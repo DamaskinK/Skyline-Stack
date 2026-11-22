@@ -85,6 +85,8 @@ for (const w of raw.elements) {
     const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);
     const wd = parseFloat(t.width) || (lanes > 0 && k !== 'path' ? Math.max(w0, lanes * 3.2) : w0);
     const r = { k, w: r1(wd), p }; if (t.bridge) r.br = 1; if (t.tunnel) continue; if (t.name) r.n = t.name;
+    const cyc = Object.keys(t).filter((x) => x.startsWith('cycleway')).map((x) => t[x]).concat(t.bicycle === 'designated' ? ['lane'] : []);
+    if (t.highway === 'cycleway') r.bike = 2; else if (cyc.some((v) => v && v !== 'no' && v !== 'none')) r.bike = 1;   // 2: own cycle path, 1: lane on the street
     out.roads.push(r);
   } else if (t.railway === 'tram') out.rails.push({ p });
   else if (closed(w.geometry) && (t.natural === 'water')) { p.length -= 2; out.water.push({ p }); }

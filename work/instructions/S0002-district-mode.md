@@ -1,7 +1,7 @@
 # S0002: District mode and the fictional city
 
 **Type:** feature
-**Status:** ready
+**Status:** planned
 <!-- draft -> ready (run grilling) -> planned (plan and tasks exist) -> done -->
 
 ## Task
@@ -43,3 +43,13 @@ Round 1, 2026-11-22:
 - **Stars:** each plot keeps 1-3 stars by the old rules; the district shows the sum. Endless stays on any opened city.
 - **Fictional city returns:** the original procedural city is a seventh city outside the map, open from the start,
   with Endless and its own 5-plot district. Working name **Newtown**.
+Round 2, 2026-11-22:
+- **Plots across the whole real city:** the first plot in an outskirts panel estate (Kosice e.g. Terasa or KVP), then
+  closer in, the last next to the cathedral. Each plot has its own small OpenStreetMap extract and scene (panel blocks
+  on the outskirts, baroque in the centre); about 2-3 MB per city.
+- **Difficulty towards the centre by three knobs:** target floors grow (Kosice about 12, 15, 18, 22, 26); the quality
+  needed for a plot to count grows (outskirts: reach the target; middle: at most 2 lives lost; centre: at least 40 %
+  perfect landings); the building type gets harder (plain panel outside, hotel further in, the city's signature type at
+  the heart). Wind and weather grow through the district.
+
+Grilling finished 2026-11-22.
