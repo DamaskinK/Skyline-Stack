@@ -5,7 +5,7 @@ import { CFG, DIFFICULTY, BTYPES, ENDLESS_COLORS, phaseAt } from './config.js';
 import { Run, CALM_WIND } from './core/run.js';
 import { scene } from './world.js';
 import { BUILDING_TYPES } from './building-types.js';
-import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
+import { makeBlockMesh, makeFoundation, makeRoof, makeCrown } from './entities.js';
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
@@ -58,7 +58,7 @@ export class Game {
     People.setWalkers(9);
     // Endless runs on the chosen city: its weather segments loop and only its events happen
     this.run = new Run(this.diff, { level: levelById(levelId), endless: mode !== 'level' });
-    this.objects.push(makeFoundation(0, 0));
+    this.objects.push(makeFoundation(0, 0, this.run.buildingType, this.levelDef ? this.levelDef.city : (levelById(levelId) || {}).city));
     this.ui.showHud();
   }
   clear() {
@@ -187,6 +187,8 @@ export class Game {
     if (this.levelDef) {
       saveLevelResult(this.levelDef.id, result.stars, result.floors);
       if (result.completed) {
+        const top = this.floorMeshes[this.floorMeshes.length - 1];
+        if (top) { const crown = makeCrown(this.run.buildingType); crown.position.y = CFG.H / 2; top.add(crown); }
         Sfx.fanfare();
         setTimeout(() => { if (this.state === 'over') this.ui.levelDone(this.lastResult, this.levelDef); }, 1400);
         return;
@@ -200,13 +202,14 @@ export class Game {
 // Tower shown behind the main menu.
 let demo = [];
 const DEMO_FLOORS = 10;   // floors are 2.8 tall now, so fewer of them fill the same skyline
-export function buildDemo() {
+export function buildDemo(levelId = 'kosice') {
   clearDemo();
-  demo.push(makeFoundation(0, 0));
+  const lv = levelById(levelId) || levelById('kosice'), type = lv.buildingType || 'panel', bt = BUILDING_TYPES[type];
+  demo.push(makeFoundation(0, 0, type, lv.city));
   for (let i = 0; i < DEMO_FLOORS; i++) {
-    const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], i === 5, i % 3);
+    const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], false, i % 3, bt.facade);
     m.position.set(Math.sin(i * 1.7) * 0.25, CFG.FOUND_H + CFG.H * (i + 0.5), Math.cos(i * 1.3) * 0.2); demo.push(m);
   }
-  demo.push(makeRoof(new THREE.Vector3(0, CFG.FOUND_H + CFG.H * DEMO_FLOORS, 0)));
+  demo.push(makeRoof(new THREE.Vector3(0, CFG.FOUND_H + CFG.H * DEMO_FLOORS, 0), type));
 }
 export function clearDemo() { for (const o of demo) scene.remove(o); demo = []; }

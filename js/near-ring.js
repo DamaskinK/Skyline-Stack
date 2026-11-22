@@ -3,7 +3,7 @@
 // Frame: 1 unit = 1 m, x east, z south, origin = build site = tower. A small paved plaza stays clear around the tower.
 // Draw calls: ground layers, one wall mesh per facade variant, one roof mesh, a few instanced props.
 import * as THREE from 'three';
-import { calmFacade, STOREY_W, STOREY_H, roofTex, tileRoofTex, pavingTex, grassTex, sidewalkTex } from './textures.js';
+import { calmFacade, STOREY_W, STOREY_H, roofTex, tileRoofTex, sidewalkTex, canvas2d, toTex } from './textures.js';
 import { glowMats, GROUND_Y } from './world.js';
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
@@ -13,8 +13,16 @@ export const PLAZA_HALF = 14;      // paved square around the tower
 const CLEAR = 24;                  // no buildings closer than this to the origin
 
 // ground heights: every layer a real step above the one below, plus a depth bias for the far distance
-const LAYER = { urban: 0.01, park: 0.02, water: 0.03, road: 0.04, path: 0.05, plaza: GROUND_Y.walk };
-const BIAS = { urban: 1, park: 2, water: 3, road: 4, path: 5 };
+const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, path: 0.045, plaza: GROUND_Y.walk };
+const BIAS = { urban: 1, park: 2, water: 3, road: 4, path: 5, plaza: 7, basin: 9 };   // the plaza top always wins over the flat layers around it
+// park grass: soft green with random specks (the shared grass texture has specks on a lattice that read as dashed lines)
+const parkGrass = (() => {
+  const [c, x] = canvas2d(128, 128); x.fillStyle = '#76a35e'; x.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 700; i++) { x.fillStyle = hash(i, 3) > 0.5 ? 'rgba(40,90,30,.16)' : 'rgba(190,225,140,.16)'; x.fillRect(hash(i, 1) * 128, hash(i, 2) * 128, 2, 3); }
+  return toTex(c, true);
+})();
+const BASIN_MAX = 1500;            // m2: water polygons smaller than this are fountains / pools (basin with a rim), larger ones are river
+const CURB_COLOR = new THREE.Color(0xb9b4a8), RIM_COLOR = new THREE.Color(0xa8a498);
 
 // ── tiny geometry builder (non-indexed, world-space uv) ──
 export class Builder {
@@ -39,12 +47,17 @@ export class Builder {
 const UP = [0, 1, 0];
 
 export function polyArea(p) { let a = 0; for (let i = 0, n = p.length / 2; i < n; i++) { const j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; } return a / 2; }
-export function fillPoly(b, p, y, scale, n = UP) {
+export function fillPoly(b, p, y, scale, n = UP, grow = 0) {
   const pts = []; for (let i = 0; i < p.length; i += 2) pts.push(new THREE.Vector2(p[i], p[i + 1]));
   if (pts.length < 3) return;
   const tris = THREE.ShapeUtils.triangulateShape(pts, []);
   const uvf = (q) => [q[0] / scale, q[2] / scale];
-  for (const [i, j, k] of tris) b.tri([pts[i].x, y, pts[i].y], [pts[j].x, y, pts[j].y], [pts[k].x, y, pts[k].y], n, uvf);
+  // grow: push every triangle outwards by a few cm so T-junction cracks between neighbours never show the layer below
+  const gp = (a, c) => { if (!grow) return [a.x, y, a.y]; const dx = a.x - c.x, dz = a.y - c.y, d = Math.hypot(dx, dz) || 1; return [a.x + dx / d * grow, y, a.y + dz / d * grow]; };
+  for (const [i, j, k] of tris) {
+    const c = { x: (pts[i].x + pts[j].x + pts[k].x) / 3, y: (pts[i].y + pts[j].y + pts[k].y) / 3 };
+    b.tri(gp(pts[i], c), gp(pts[j], c), gp(pts[k], c), n, uvf);
+  }
 }
 // a polyline with a width, as a flat ribbon with round-ish joints; same height and material everywhere, so overlaps are invisible
 function ribbon(b, p, w, y, scale) {
@@ -66,6 +79,19 @@ function ribbon(b, p, w, y, scale) {
       b.tri(c, [c[0] + Math.cos(a0) * h, y, c[2] + Math.sin(a0) * h], [c[0] + Math.cos(a1) * h, y, c[2] + Math.sin(a1) * h], UP, uvf);
     }
   }
+}
+// a straight upright prism along an edge (width w, from y0 to y1), extended by w/2 at both ends so corners close; vertex-coloured
+function stripe(b, x0, z0, x1, z1, w, y0, y1, color) {
+  const dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz); if (l < 1e-3) return;
+  const ux = dx / l, uz = dz / l, nx = -uz * w / 2, nz = ux * w / 2, e = w / 2;
+  const a = [x0 - ux * e, z0 - uz * e], c = [x1 + ux * e, z1 + uz * e], k = () => [0, 0];
+  const P = (q, s, y) => [q[0] + nx * s, y, q[1] + nz * s];
+  const quad = (A, B, C, D, n) => { b.tri(A, B, C, n, k, color); b.tri(A, C, D, n, k, color); };
+  quad(P(a, 1, y1), P(a, -1, y1), P(c, -1, y1), P(c, 1, y1), UP);
+  quad(P(a, 1, y0), P(c, 1, y0), P(c, 1, y1), P(a, 1, y1), [-uz, 0, ux]);
+  quad(P(a, -1, y0), P(a, -1, y1), P(c, -1, y1), P(c, -1, y0), [uz, 0, -ux]);
+  quad(P(a, -1, y0), P(a, 1, y0), P(a, 1, y1), P(a, -1, y1), [-ux, 0, -uz]);
+  quad(P(c, -1, y0), P(c, -1, y1), P(c, 1, y1), P(c, 1, y0), [ux, 0, uz]);
 }
 export function hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); }
 export const insideRing = (p, x, z) => { let c = false; for (let i = 0, n = p.length / 2, j = n - 1; i < n; j = i++) { const xi = p[2 * i], zi = p[2 * i + 1], xj = p[2 * j], zj = p[2 * j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
@@ -159,25 +185,46 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   const urban = new Builder(), park = new Builder(), water = new Builder(), road = new Builder(), path = new Builder();
   const H = osm.half;
   fillPoly(urban, [-H, -H, H, -H, H, H, -H, H], LAYER.urban, 6);
-  for (const g of osm.parks) { if (polyArea(g.p) !== 0) fillPoly(park, g.p, LAYER.park, 8); }
-  for (const g of osm.water) fillPoly(water, g.p, LAYER.water, 8);
+  for (const g of osm.parks) { if (polyArea(g.p) !== 0) fillPoly(park, g.p, LAYER.park, 8, UP, 0.05); }
+  const curbs = new Builder(), basinWater = new Builder();
+  const inPlaza = (x, z) => Math.abs(x) < PLAZA_HALF + 0.6 && Math.abs(z) < PLAZA_HALF + 0.6;
+  // water: river and big lakes stay a flat surface; small water (fountains, pools) is a basin: stone rim, water a little below its top
+  for (const g of osm.water) {
+    if (Math.abs(polyArea(g.p)) >= BASIN_MAX) { fillPoly(water, g.p, LAYER.water, 8, UP, 0.05); continue; }
+    fillPoly(basinWater, g.p, 0.32, 8, UP, 0.05);
+    for (let i = 0, n = g.p.length / 2; i < n; i++) { const j = (i + 1) % n; stripe(curbs, g.p[2 * i], g.p[2 * i + 1], g.p[2 * j], g.p[2 * j + 1], 0.9, 0, 0.55, RIM_COLOR); }
+  }
+  // parks get a low kerb, except where the edge lies inside another park (overlapping OSM polygons) or under the plaza
+  const pbox = osm.parks.map((g) => { let a = [1e9, 1e9, -1e9, -1e9]; for (let i = 0; i < g.p.length; i += 2) { a = [Math.min(a[0], g.p[i]), Math.min(a[1], g.p[i + 1]), Math.max(a[2], g.p[i]), Math.max(a[3], g.p[i + 1])]; } return a; });
+  osm.parks.forEach((g, gi) => {
+    if (Math.abs(polyArea(g.p)) < 30) return;
+    for (let i = 0, n = g.p.length / 2; i < n; i++) {
+      const j = (i + 1) % n, x0 = g.p[2 * i], z0 = g.p[2 * i + 1], x1 = g.p[2 * j], z1 = g.p[2 * j + 1], mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+      if (inPlaza(mx, mz)) continue;
+      let covered = false;
+      for (let k = 0; k < osm.parks.length && !covered; k++) { const bx = pbox[k]; if (k !== gi && mx > bx[0] && mx < bx[2] && mz > bx[1] && mz < bx[3] && Math.abs(polyArea(osm.parks[k].p)) >= 30 && insideRing(osm.parks[k].p, mx, mz)) covered = true; }
+      if (!covered) stripe(curbs, x0, z0, x1, z1, 0.3, 0, 0.14, CURB_COLOR);
+    }
+  });
   for (const r of osm.roads) {
     if (r.k === 'walk' || r.k === 'path') ribbon(path, r.p, r.w, LAYER.path, 3);
     else ribbon(road, r.p, r.w, LAYER.road, 9);
   }
   for (const r of osm.rails) ribbon(path, r.p, 1.6, LAYER.path, 3);
   mesh(urban, layerMat(null, 'urban', { color: 0x77736b }), group);
-  mesh(park, layerMat(tile(grassTex), 'park', { color: 0xa9c997 }), group);
+  mesh(park, layerMat(tile(parkGrass), 'park', { color: 0x9bb584 }), group);
   mesh(water, layerMat(null, 'water', { color: 0x3b79a8, roughness: 0.15, metalness: 0.1 }), group);
   mesh(road, layerMat(null, 'road', { color: 0x24262a }), group);
   mesh(path, layerMat(tile(sidewalkTex), 'path', { color: 0x9b968c }), group);
+  mesh(curbs, layerMat(null, 'basin', { vertexColors: true, roughness: 0.95 }), group, true);
+  mesh(basinWater, layerMat(null, 'basin', { color: 0x4f8fb5, roughness: 0.12, metalness: 0.1 }), group);
 
   // the plaza slab at the origin: a 6 cm step with a curb, same as the procedural city had
   {
     const g = new THREE.BoxGeometry(PLAZA_HALF * 2, LAYER.plaza, PLAZA_HALF * 2).translate(0, LAYER.plaza / 2, 0);
     const uv = g.attributes.uv, p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 7.6, p.getZ(i) / 7.6);
-    const m = new THREE.Mesh(g, material(tile(pavingTex), { roughness: 0.95, color: 0x948e82 })); m.receiveShadow = true; group.add(m);
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 3, p.getZ(i) / 3);       // same stone and scale as the paths around it
+    const m = new THREE.Mesh(g, layerMat(tile(sidewalkTex), 'plaza', { color: 0x9b968c })); m.receiveShadow = true; group.add(m);
   }
 
   // ── buildings: walls grouped by facade kind and colour, pitched tile roofs and flat roofs in two meshes ──

@@ -23,6 +23,7 @@ export function facade(hex, variant, opts = {}) {
   const key = `${hex}-${variant}-${opts.gold ? 1 : 0}-${opts.style || ''}`;
   if (facadeCache.has(key)) return facadeCache.get(key);
   if (opts.style === 'panel' && !opts.gold) { const res = panelFacade(variant); facadeCache.set(key, res); return res; }
+  if (TYPE_FACADES[opts.style] && !opts.gold) { const res = typeFacade(opts.style, variant); facadeCache.set(key, res); return res; }
   const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
   x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);   // layout is drawn on a 256x128 grid, stretched to the storey's aspect
   x.fillStyle = css(hex); x.fillRect(0, 0, 256, 128);
@@ -96,6 +97,50 @@ function panelFacade(variant) {
   return { map: toTex(c, true), emis: toTex(ce, true) };
 }
 
+
+// Facades of the other building types, drawn on the same 256x128 storey grid. Placeholders in spirit (only panel is final)
+// but each type already reads differently: wall colour, window shape and the way the lights come on at night.
+const TYPE_FACADES = {
+  hotel:  { wall: '#e8dcc2', band: '#b9a47c', glass: ['#cfe3f2', '#6d94b8', '#34517a'], lit: '#ffd58a', cols: 4 },
+  office: { wall: '#a9adb3', band: '#7c8189', glass: ['#9fd3e6', '#4d8fb0', '#25506f'], lit: '#fff0c0', cols: 1 },
+  glass:  { wall: '#2d4a66', band: '#1d3248', glass: ['#b8e6f7', '#5fb0d6', '#2a6a96'], lit: '#e8f6ff', cols: 8 },
+  deco:   { wall: '#d6c39a', band: '#a07d34', glass: ['#c8dcea', '#6a8fae', '#2f4a68'], lit: '#ffdf8a', cols: 5 },
+  neon:   { wall: '#181a2c', band: '#2a2d4a', glass: ['#3a3f80', '#222659', '#12143a'], lit: '#ff5fd2', cols: 6 },
+};
+function typeFacade(style, variant) {
+  const t = TYPE_FACADES[style];
+  const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
+  x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);
+  x.fillStyle = t.wall; x.fillRect(0, 0, 256, 128);
+  for (let i = 0; i < 400; i++) { x.fillStyle = `rgba(${i % 3 ? '0,0,0' : '255,255,255'},${0.03 + ((i * 37) % 7) * 0.005})`; x.fillRect((i * 97) % 256, (i * 53) % 128, 2, 2); }
+  xe.fillStyle = '#000'; xe.fillRect(0, 0, 256, 128);
+  x.fillStyle = t.band; x.fillRect(0, 0, 256, 6); x.fillRect(0, 122, 256, 6);
+  x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(0, 6, 256, 2);
+  const n = t.cols, cw = 256 / n;
+  // office: one ribbon window; the others: n windows. Glass tower: windows nearly fill the bay.
+  const ribbon = style === 'office', fill = style === 'glass';
+  const wy = fill ? 10 : ribbon ? 26 : 18, wh = fill ? 108 : ribbon ? 56 : 66;
+  for (let i = 0; i < (ribbon ? 1 : n); i++) {
+    const ww = ribbon ? 244 : fill ? cw - 4 : cw * (style === 'deco' ? 0.4 : 0.52);
+    const wx = ribbon ? 6 : i * cw + (cw - ww) / 2;
+    if (!fill && !ribbon) { x.fillStyle = style === 'neon' ? t.band : '#f4efe2'; x.fillRect(wx - 3, wy - 3, ww + 6, wh + 6); }
+    const gl = x.createLinearGradient(wx, wy, wx + ww, wy + wh);
+    gl.addColorStop(0, t.glass[0]); gl.addColorStop(0.55, t.glass[1]); gl.addColorStop(1, t.glass[2]);
+    x.fillStyle = gl; x.fillRect(wx, wy, ww, wh);
+    x.fillStyle = 'rgba(255,255,255,.28)'; x.beginPath(); x.moveTo(wx, wy + wh * 0.4); x.lineTo(wx + ww * 0.55, wy); x.lineTo(wx + ww * 0.8, wy); x.lineTo(wx, wy + wh * 0.65); x.fill();
+    const lit = ((i * 7 + variant * 3) % 5) < 3;
+    if (lit) { xe.fillStyle = t.lit; xe.fillRect(wx, wy, ww, wh); }
+    x.fillStyle = style === 'neon' ? t.lit : '#e9e5da';
+    if (style === 'hotel') { x.fillStyle = '#5a4630'; x.fillRect(wx - 7, wy, 6, wh); x.fillRect(wx + ww + 1, wy, 6, wh); x.fillStyle = '#e9e5da'; }   // shutters
+    if (!ribbon && !fill) x.fillRect(wx + ww / 2 - 1.5, wy, 3, wh);
+    if (style === 'neon') { x.fillStyle = t.lit; x.fillRect(wx - 3, wy + wh + 4, ww + 6, 3); xe.fillStyle = t.lit; xe.fillRect(wx - 3, wy + wh + 4, ww + 6, 3); }
+  }
+  if (ribbon) { x.fillStyle = '#d8dbe0'; for (let i = 1; i < 8; i++) x.fillRect(i * 32 - 1.5, 26, 3, 56); }
+  if (style === 'deco') { x.fillStyle = t.band; for (let i = 0; i <= n; i++) x.fillRect(i * cw - 4, 6, 8, 116); x.fillStyle = '#e7c75a'; for (let i = 0; i < n; i++) x.fillRect(i * cw + cw * 0.3, 92, cw * 0.4, 8); }
+  if (fill) { x.fillStyle = t.band; for (let i = 0; i <= n; i++) x.fillRect(i * cw - 1.5, 6, 3, 116); x.fillRect(0, 62, 256, 3); }
+  return { map: toTex(c, true), emis: toTex(ce, true) };
+}
+
 export const roofTex = (() => {
   const [c, x] = canvas2d(128, 128);
   x.fillStyle = '#8d919c'; x.fillRect(0, 0, 128, 128);
@@ -107,23 +152,36 @@ export const roofTex = (() => {
   return toTex(c);
 })();
 
-export const lobbyTex = (() => {
+// Ground floor of the player's tower: one texture per building type and sign text (the sign is a city or shop name).
+const lobbyCache = new Map();
+const LOBBY_WALL = { panel: '#cfc9bb', hotel: '#e6d8bd', office: '#8f949b', glass: '#2d4a66', deco: '#cdb98e', neon: '#181a2c' };
+export function lobbyTexture(style, sign) {
+  const key = `${style}-${sign}`;
+  if (lobbyCache.has(key)) return lobbyCache.get(key);
   const [c, x] = canvas2d(256, 128), [ce, xe] = canvas2d(256, 128);
-  x.fillStyle = '#d9d2c3'; x.fillRect(0, 0, 256, 128);
-  for (let y = 0; y < 128; y += 16) { x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, y, 256, 2); }
-  x.fillStyle = '#c0392b'; x.fillRect(0, 18, 256, 16);
-  x.fillStyle = '#fff'; x.font = 'bold 13px monospace'; x.textAlign = 'center'; x.fillText('B L O X X   T O W E R', 128, 31);
+  const dark = style === 'glass' || style === 'neon';
+  x.fillStyle = LOBBY_WALL[style] || LOBBY_WALL.panel; x.fillRect(0, 0, 256, 128);
+  for (let y = 0; y < 128; y += 16) { x.fillStyle = 'rgba(0,0,0,.07)'; x.fillRect(0, y, 256, 2); }
   xe.fillStyle = '#000'; xe.fillRect(0, 0, 256, 128);
-  xe.fillStyle = '#ffe9b0'; xe.font = 'bold 13px monospace'; xe.textAlign = 'center'; xe.fillText('B L O X X   T O W E R', 128, 31);
-  for (const [wx, wy, ww] of [[14, 52, 60], [182, 52, 60]]) {
-    x.fillStyle = '#3a5f8f'; x.fillRect(wx, wy, ww, 60); x.fillStyle = '#eee'; x.fillRect(wx + ww / 2 - 1, wy, 2, 60);
-    xe.fillStyle = '#ffd890'; xe.fillRect(wx, wy, ww, 60);
+  x.fillStyle = dark ? '#0f1a28' : '#4a4640'; x.fillRect(0, 0, 256, 6);
+  // shop window with sign fascia, left and right; central glass entrance under the canopy
+  const fascia = style === 'panel' ? '#2f6f5e' : dark ? '#10131f' : '#5a4630';
+  x.fillStyle = fascia; x.fillRect(8, 22, 240, 20);
+  x.fillStyle = '#fff'; x.font = 'bold 15px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(sign, 128, 33);
+  xe.fillStyle = '#ffe9b0'; xe.font = 'bold 15px sans-serif'; xe.textAlign = 'center'; xe.textBaseline = 'middle'; xe.fillText(sign, 128, 33);
+  for (const wx of [14, 176]) {
+    x.fillStyle = '#eee9dc'; x.fillRect(wx - 3, 50, 72, 70);
+    const gl = x.createLinearGradient(wx, 53, wx + 66, 120); gl.addColorStop(0, '#b4d6ee'); gl.addColorStop(1, '#3a6a98');
+    x.fillStyle = gl; x.fillRect(wx, 53, 66, 64);
+    x.fillStyle = '#eee9dc'; x.fillRect(wx + 32, 53, 3, 64);
+    xe.fillStyle = '#ffd890'; xe.fillRect(wx, 53, 66, 64);
+    xe.fillStyle = '#000'; xe.fillRect(wx + 32, 53, 3, 64);
   }
-  x.fillStyle = '#2b2b2b'; x.fillRect(96, 46, 64, 82); x.fillStyle = '#7fb4e8'; x.fillRect(100, 50, 26, 78); x.fillRect(130, 50, 26, 78);
-  xe.fillStyle = '#fff1c4'; xe.fillRect(100, 50, 26, 78); xe.fillRect(130, 50, 26, 78);
-  for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#fff' : '#e74c3c'; x.fillRect(86 + i * 11, 38, 11, 8); }
-  return { map: toTex(c), emis: toTex(ce) };
-})();
+  x.fillStyle = '#2b2b2b'; x.fillRect(94, 52, 68, 76); x.fillStyle = '#8fc0ea'; x.fillRect(98, 56, 28, 72); x.fillRect(130, 56, 28, 72);
+  xe.fillStyle = '#fff1c4'; xe.fillRect(98, 56, 28, 72); xe.fillRect(130, 56, 28, 72);
+  const res = { map: toTex(c), emis: toTex(ce) };
+  lobbyCache.set(key, res); return res;
+}
 
 // Ground floor shops for the background buildings.
 const SHOPS = [['CAFE', '#c0392b'], ['PIZZA', '#e67e22'], ['BANK', '#2c3e50'], ['BOOKS', '#16a085'], ['HOTEL', '#8e44ad'], ['MARKET', '#27ae60'], ['BAKERY', '#d35400'], ['CINEMA', '#c0392b']];

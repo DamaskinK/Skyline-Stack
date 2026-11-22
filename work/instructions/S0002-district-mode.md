@@ -29,3 +29,17 @@ genre usually has. The fictional city was fun and should not disappear.
 ## References
 - S0001 plan and tickets 08 (levels, stars, progress), 12-14 (OSM rings, landmarks), 20 (world map), 38 (city life).
 - ADR 0002 (City mode removed and why).
+
+## Decisions (grilling)
+Round 1, 2026-11-22:
+- **Plots:** 5 per city, opened one after another. **Order from the outskirts to the centre:** outskirts plots ask
+  less (fewer floors, lower quality requirements), each plot towards the centre is harder; the plot at the heart of the
+  city (in Kosice next to the cathedral) comes last and is the hardest.
+- **Building type and target are fixed per plot** and shown on the district map.
+- **Next city opens at a residents threshold** in the district (e.g. Kosice 1500); building all plots is not required;
+  the district can be finished later.
+- **Bonuses instead of neighbour rules:** "view" (+20 % residents for a tower whose upper floors see a landmark) and
+  "skyline" (bonus when neighbouring towers differ clearly in height); both shown on the map before building.
+- **Stars:** each plot keeps 1-3 stars by the old rules; the district shows the sum. Endless stays on any opened city.
+- **Fictional city returns:** the original procedural city is a seventh city outside the map, open from the start,
+  with Endless and its own 5-plot district. Working name **Newtown**.
