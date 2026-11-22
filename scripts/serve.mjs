@@ -22,4 +22,7 @@ createServer((req, res) => {
   catch { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('not found'); return; }
   res.writeHead(200, { 'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
   createReadStream(file).pipe(res);
+}).on('error', (e) => {
+  if (e.code === 'EADDRINUSE') { console.log(`Port ${port} is already in use: the game is probably already served at http://localhost:${port}`); process.exit(0); }
+  throw e;
 }).listen(port, () => console.log(`serving ${root} at http://localhost:${port}`));
