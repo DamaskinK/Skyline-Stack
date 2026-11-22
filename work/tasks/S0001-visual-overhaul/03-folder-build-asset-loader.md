@@ -7,7 +7,7 @@ loader, RGBE/EXR loader, post-processing passes) are vendored. ADR 0001.
 **Blocked by:** None (can start immediately).
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Assets and build"; `docs/adr/0001-folder-build-with-per-level-assets.md`.
 
 - [ ] Single-file outputs removed; `dist/` runs with `npm run serve` style static hosting
