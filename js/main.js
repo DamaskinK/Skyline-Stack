@@ -24,7 +24,7 @@ onSettings((k) => { if (k === 'quality') { applyQuality(); applyPostQuality(); }
 window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
-const camOffsets = [new THREE.Vector3(12, 6, 30), new THREE.Vector3(30, 6, 12), new THREE.Vector3(0, 26, 12)];
+const camOffsets = [new THREE.Vector3(-28, 9, -24), new THREE.Vector3(30, 6, 12), new THREE.Vector3(0, 26, 12)];
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
 let clock = 0, camY = 8;

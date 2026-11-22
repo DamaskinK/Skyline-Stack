@@ -5,6 +5,7 @@ import { CFG } from './config.js';
 import { scene, renderer, setEnvironment, setNearProcedural, GROUND_Y } from './world.js';
 import { buildNearRing } from './near-ring.js';
 import { buildMiddleFar } from './far-ring.js';
+import { landmarkHide, buildLandmarks } from './landmarks/index.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
 
@@ -29,8 +30,9 @@ export function applyLevelAssets(id, assets) {
   // a level with an OpenStreetMap near ring replaces the procedural city around the tower
   setNearProcedural(!assets.osm);
   if (assets.osm) {
-    const near = buildNearRing(assets.osm, assets);
+    const near = buildNearRing(assets.osm, assets, landmarkHide(id));
     group.add(near, buildMiddleFar());
+    const lm = buildLandmarks(id); if (lm) group.add(lm);
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
   }
   if (assets.bench) {

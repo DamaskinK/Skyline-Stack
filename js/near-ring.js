@@ -151,7 +151,7 @@ export function pitchedRoof(b, p, h, color, rhFixed = 0) {
   }
 }
 
-export function buildNearRing(osm, kit = {}) {
+export function buildNearRing(osm, kit = {}, hide = null) {
   const group = new THREE.Group(); group.name = 'near-ring';
   const bbIn = (x, z, m = 0) => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
 
@@ -192,6 +192,7 @@ export function buildNearRing(osm, kit = {}) {
     for (let i = 0; i < p.length; i += 2) { cx += p[i]; cz += p[i + 1]; near = Math.min(near, Math.hypot(p[i], p[i + 1])); }
     cx /= n; cz /= n;
     if (near < CLEAR || insideRing(p, 0, 0)) continue;
+    if (hide && hide.has(bd.n)) { kept.push(p); continue; }       // replaced by a hand-built landmark model
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
     const old = bd.k !== 'theatre' && area < 2200 && !(bd.h > 20);
     let storeys;
