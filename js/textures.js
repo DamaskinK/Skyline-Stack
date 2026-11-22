@@ -194,3 +194,67 @@ export function storeyUV(geo, w, h, d) {
   }
   return geo;
 }
+
+// ── calm facades for real-city buildings (near, middle ring) ──
+// One tile = 6 m wide x 3.4 m storey with two windows, so a facade reads as a few big openings, not a grid of tiny ones.
+// kind 'old': plaster with framed tall windows and a cornice (baroque / classicist houses); 'plain': wide windows, flat wall;
+// 'panel': prefab concrete with a coloured loggia band. The second canvas is the lit-window map for night.
+export const STOREY_W = 6, STOREY_H = 3.4;
+const calmCache = new Map();
+export function calmFacade(hex, kind, variant = 0) {
+  const key = `${hex}-${kind}-${variant}`;
+  if (calmCache.has(key)) return calmCache.get(key);
+  const W = 256, H = 145, [c, x] = canvas2d(W, H), [ce, xe] = canvas2d(W, H);
+  x.fillStyle = css(hex); x.fillRect(0, 0, W, H);
+  for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(${i % 2 ? '0,0,0' : '255,255,255'},${0.025 + ((i * 37) % 5) * 0.004})`; x.fillRect((i * 97) % W, (i * 53) % H, 3, 2); }
+  xe.fillStyle = '#000'; xe.fillRect(0, 0, W, H);
+  const glass = (wx, wy, ww, wh, lit) => {
+    const g = x.createLinearGradient(wx, wy, wx + ww, wy + wh); g.addColorStop(0, '#9fc2dd'); g.addColorStop(0.6, '#56789f'); g.addColorStop(1, '#2f4a70');
+    x.fillStyle = g; x.fillRect(wx, wy, ww, wh);
+    if (lit) { xe.fillStyle = (variant + wx) % 3 ? '#ffd27a' : '#ffe6a8'; xe.fillRect(wx, wy, ww, wh); }
+  };
+  if (kind === 'old') {
+    x.fillStyle = 'rgba(255,255,255,.55)'; x.fillRect(0, 0, W, 7); x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(0, 7, W, 4);    // cornice
+    x.fillStyle = 'rgba(0,0,0,.10)'; x.fillRect(0, H - 6, W, 6);                                                           // storey band
+    for (let i = 0; i < 2; i++) {
+      const cx = 64 + i * 128, ww = 48, wh = 78, wx = cx - ww / 2, wy = 34;
+      x.fillStyle = '#f3eee2'; x.fillRect(wx - 6, wy - 6, ww + 12, wh + 12);
+      x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(wx - 6, wy + wh + 6, ww + 12, 4);
+      if ((variant + i) % 2) { x.fillStyle = '#f3eee2'; x.beginPath(); x.moveTo(wx - 8, wy - 6); x.lineTo(cx, wy - 18); x.lineTo(wx + ww + 8, wy - 6); x.fill(); }   // small pediment
+      glass(wx, wy, ww, wh, (variant + i) % 3 !== 1);
+      x.fillStyle = '#f3eee2'; x.fillRect(cx - 1.5, wy, 3, wh); x.fillRect(wx, wy + 26, ww, 3);
+      if (xe) { xe.fillStyle = '#000'; xe.fillRect(cx - 1.5, wy, 3, wh); }
+    }
+  } else if (kind === 'plain') {
+    x.fillStyle = 'rgba(0,0,0,.12)'; x.fillRect(0, H - 5, W, 5);
+    for (let i = 0; i < 2; i++) {
+      const cx = 64 + i * 128, ww = 80, wh = 66, wx = cx - ww / 2, wy = 40;
+      x.fillStyle = '#e9e6de'; x.fillRect(wx - 4, wy - 4, ww + 8, wh + 8);
+      glass(wx, wy, ww, wh, (variant + i) % 3 !== 0);
+      x.fillStyle = '#e9e6de'; x.fillRect(cx - 1.5, wy, 3, wh);
+      xe.fillStyle = '#000'; xe.fillRect(cx - 1.5, wy, 3, wh);
+    }
+  } else {   // panel
+    const accents = ['#d9772b', '#2f8f9d', '#c9a227', '#b5503c'];
+    x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(0, 0, 3, H); x.fillRect(W - 3, 0, 3, H); x.fillRect(0, H - 3, W, 3);           // panel joints
+    x.fillStyle = accents[variant % 4]; x.fillRect(8, 96, W - 16, 38);                                                        // loggia band
+    x.fillStyle = 'rgba(255,255,255,.35)'; for (let k = 0; k < 6; k++) x.fillRect(14 + k * 40, 100, 3, 30);
+    for (let i = 0; i < 2; i++) {
+      const cx = 64 + i * 128, ww = 58, wh = 58, wx = cx - ww / 2, wy = 24;
+      x.fillStyle = '#f2efe8'; x.fillRect(wx - 3, wy - 3, ww + 6, wh + 6);
+      glass(wx, wy, ww, wh, (variant + i) % 3 !== 2);
+      x.fillStyle = '#f2efe8'; x.fillRect(cx - 1.5, wy, 3, wh);
+      xe.fillStyle = '#000'; xe.fillRect(cx - 1.5, wy, 3, wh);
+    }
+  }
+  const res = { map: toTex(c, true), emis: toTex(ce, true) };
+  calmCache.set(key, res);
+  return res;
+}
+// pitched tile roof: greyscale tile courses, multiplied by a terracotta / brown / slate vertex colour
+export const tileRoofTex = (() => {
+  const [c, x] = canvas2d(64, 64); x.fillStyle = '#e8e8e8'; x.fillRect(0, 0, 64, 64);
+  for (let r = 0; r < 8; r++) { x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(0, r * 8, 64, 2); for (let k = 0; k < 4; k++) { x.fillStyle = 'rgba(0,0,0,.14)'; x.fillRect(k * 16 + (r % 2) * 8, r * 8 + 2, 2, 6); } }
+  for (let i = 0; i < 120; i++) { x.fillStyle = `rgba(0,0,0,${0.03 + (i % 4) * 0.01})`; x.fillRect((i * 29) % 64, (i * 47) % 64, 4, 3); }
+  return toTex(c, true);
+})();

@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { CFG } from './config.js';
 import { scene, renderer, setEnvironment, setNearProcedural, GROUND_Y } from './world.js';
 import { buildNearRing } from './near-ring.js';
+import { buildMiddleFar } from './far-ring.js';
+import { traffic } from './world.js';
+import { People } from './fx.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
 export const level = { id: null, env: null };
@@ -25,7 +28,11 @@ export function applyLevelAssets(id, assets) {
   setEnvironment(envRT ? envRT.texture : null);
   // a level with an OpenStreetMap near ring replaces the procedural city around the tower
   setNearProcedural(!assets.osm);
-  if (assets.osm) group.add(buildNearRing(assets.osm, assets));
+  if (assets.osm) {
+    const near = buildNearRing(assets.osm, assets);
+    group.add(near, buildMiddleFar());
+    traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
+  }
   if (assets.bench) {
     for (const s of [-1, 1]) {
       const b = assets.bench.clone(true);

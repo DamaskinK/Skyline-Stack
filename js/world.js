@@ -14,7 +14,7 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(PHASES[0].bot, 110, 320);
-export const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 1200);   // near 0.5: 5x the depth precision of 0.1
+export const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 6000);   // near 0.5: 5x the depth precision of 0.1
 
 export const hemi = new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 1.0); scene.add(hemi);
 export const sun = new THREE.DirectionalLight(0xfff3dc, 1.7);
@@ -73,12 +73,15 @@ const skyMat = new THREE.ShaderMaterial({
     }`,
   side: THREE.BackSide, depthWrite: false, fog: false,
 });
-const sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), skyMat); sky.renderOrder = -1; scene.add(sky);
+const sky = new THREE.Mesh(new THREE.SphereGeometry(5000, 32, 16), skyMat); sky.renderOrder = -1; scene.add(sky);
 
 // Everything of the procedural city that the OpenStreetMap near ring replaces (see near-ring.js) lives in this group,
 // so a level with a near ring hides it as one.
 export const nearProc = new THREE.Group(); nearProc.name = 'procedural-near'; scene.add(nearProc);
-export function setNearProcedural(on) { nearProc.visible = on; traffic.enabled = on; traffic.setCount(traffic.want); }
+// The procedural backdrop (grass plain, far blocks, pyramid hills) is replaced by the middle and far ring (far-ring.js) in the same way.
+export const backdrop = new THREE.Group(); backdrop.name = 'procedural-backdrop'; scene.add(backdrop);
+let realRings = false;
+export function setNearProcedural(on) { nearProc.visible = on; backdrop.visible = on; realRings = !on; traffic.mode = on ? 'grid' : 'osm'; traffic.setCount(traffic.want); }
 
 // ── ground, plaza, roads, sidewalks ──
 // No two ground surfaces share a plane: every layer has a real height step and strips are cut where they would cross.
@@ -106,7 +109,7 @@ function mergeGeos(geos) {
   }
   return out;
 }
-const flat = (w, d, mat, x, z, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m; };
+const flat = (w, d, mat, x, z, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; backdrop.add(m); return m; };
 flat(2400, 2400, new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }), 0, 0, 0);
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x3b3e46, roughness: 1 });
 const tile = (t) => { const c = t.clone(); c.repeat.set(1, 1); c.needsUpdate = true; return c; };
@@ -210,14 +213,14 @@ finishBlocks(roofPropList, billboards, nearProc);
 {
   let st = 91; const fr = () => { st = (st * 16807) % 2147483647; return (st - 1) / 2147483646; };
   const farProps = [], farBoards = [];
-  Object.assign(blockCtx, { parent: scene, props: farProps, boards: farBoards });
+  Object.assign(blockCtx, { parent: backdrop, props: farProps, boards: farBoards });
   for (let i = 0; i < 30; i++) {
     const a = fr() * Math.PI * 2, r = 310 + fr() * 170, x = Math.cos(a) * r, z = Math.sin(a) * r, w = 9 + fr() * 12, d = 9 + fr() * 12;
     const along = (x * -9 + z * -22) / 23.8, across = Math.abs(x * 22 - z * 9) / 23.8;
     if (along > 0 && across < 12 + Math.max(w, d) / 2) continue;
     cityBlock(x, z, w, d, 20 + fr() * 90, palette[i % palette.length], i % 3, i + 100);
   }
-  finishBlocks(farProps, farBoards, scene);
+  finishBlocks(farProps, farBoards, backdrop);
 }
 
 // ── street furniture ──
@@ -266,7 +269,7 @@ for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
 const hillMat = new THREE.MeshLambertMaterial({ color: 0x6f9a7a, flatShading: true, fog: false, transparent: true });
 const hills = [];
 for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2 + rnd() * 0.2; hills.push([Math.cos(a) * (520 + rnd() * 80), Math.sin(a) * (520 + rnd() * 80), 60 + rnd() * 90, 50 + rnd() * 80]); }
-instanced(new THREE.ConeGeometry(1, 1, 7, 1).translate(0, 0.5, 0), hillMat, hills, ([x, z, w, h], o) => { o.position.set(x, -2, z); o.scale.set(w, h, w * 0.8); o.rotation.y = x; });
+instanced(new THREE.ConeGeometry(1, 1, 7, 1).translate(0, 0.5, 0), hillMat, hills, ([x, z, w, h], o) => { o.position.set(x, -2, z); o.scale.set(w, h, w * 0.8); o.rotation.y = x; }, false, backdrop);
 
 // ── 3D clouds at every height, so a tall tower climbs through them ──
 const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92 });
@@ -297,9 +300,34 @@ for (let i = 0; i < MAX_CARS; i++) {
   carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
 }
 export const traffic = {
-  count: 34, want: 34, enabled: true,
-  setCount(n) { this.want = n; this.count = this.enabled ? Math.min(MAX_CARS, n) : 0; carMesh.count = carLights.count = this.count; },
+  count: 34, want: 34, mode: 'grid', routes: [],
+  setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
+  // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
+  setRoutes(list) {
+    this.routes = list.map((p) => {
+      const cum = [0]; for (let i = 2; i < p.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
+      return { p, cum, len: cum[cum.length - 1] };
+    }).filter((r) => r.len > 40);
+    this.setCount(this.want);
+  },
+  updateRoutes(dt) {
+    const R = this.routes; if (!R.length) return;
+    for (let i = 0; i < this.count; i++) {
+      const c = cars[i], r = R[i % R.length];
+      c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= i % 2 ? 1 : -1;
+      c.s += c.d * (c.sp || 6) * 0.7 * dt;
+      if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
+      let k = 1; while (k < r.cum.length - 1 && r.cum[k] < c.s) k++;
+      const l = r.cum[k] - r.cum[k - 1] || 1, f = (c.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
+      const tx = (x1 - x0) / l * c.d, tz = (z1 - z0) / l * c.d, off = 1.7;
+      o3.position.set(x0 + (x1 - x0) * f - tz * off, 0.04, z0 + (z1 - z0) * f + tx * off); o3.rotation.set(0, Math.atan2(tx, tz), 0);
+      o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
+      carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);
+    }
+    carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
+  },
   update(dt) {
+    if (this.mode === 'osm') return this.updateRoutes(dt);
     for (let i = 0; i < this.count; i++) {
       const c = cars[i];
       c.pos += c.sp * dt * c.lane; if (c.pos > LEN / 2) c.pos -= LEN; if (c.pos < -LEN / 2) c.pos += LEN;
@@ -385,7 +413,10 @@ export function updateWorld(dt, ph, wind, focus, flash) {
   u.top.value.copy(atm.top); u.bot.value.copy(atm.bot); u.cloudCol.value.copy(atm.cloud); u.sunCol.value.copy(atm.sunCol); u.sunDir.value.copy(atm.sunDir);
   u.time.value = clock; u.cover.value = atm.cover; u.wind.value.set(wind.x, wind.z); u.night.value = atm.night;
   sky.position.copy(camera.position);
-  scene.fog.color.copy(atm.bot); scene.fog.near = atm.fogNear; scene.fog.far = atm.fogFar;
+  scene.fog.color.copy(atm.bot);
+  // with the real middle and far ring the clear-weather fog is pushed out to ~1.8 km; thick fog and rain keep their short range
+  const fogK = realRings ? Math.min(1, Math.max(0, (atm.fogFar - 48) / 272)) : 0;
+  scene.fog.near = atm.fogNear * (1 + 1.4 * fogK); scene.fog.far = atm.fogFar * (1 + 4.5 * fogK);
   sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.55 : 1);
   updateEnvIntensity((1 - 0.85 * atm.night) * 0.35);
   aimSun(focus);

@@ -162,7 +162,14 @@ function makePerson(withUmbrella) {
 
 const _right = new THREE.Vector3(), _p = new THREE.Vector3();
 export const People = {
-  flyers: [], walkers: [], side: 1,
+  flyers: [], walkers: [], side: 1, routes: [],
+  // OpenStreetMap levels: street walkers follow the real streets and footpaths (items { p: flat [x, z, ...], off: metres from the centre line }) instead of the procedural grid.
+  setRoutes(list) {
+    this.routes = list.map(({ p, off }) => {
+      const cum = [0]; for (let i = 2; i < p.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
+      return { p, off, cum, len: cum[cum.length - 1] };
+    }).filter((r) => r.len > 25);
+  },
   // Residents glide in with umbrellas from the upper left or right, away from the drop zone, and step in through the side of the new floor.
   arrive(floorMesh, count, camera) {
     _right.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
@@ -182,7 +189,7 @@ export const People = {
       const p = makePerson(false);
       const kind = i % 3 === 0 ? 'street' : 'plaza';
       this.walkers.push({ p, kind, a: Math.random() * Math.PI * 2, r: radius + Math.random() * 4, sp: (0.15 + Math.random() * 0.2) * (i % 2 ? 1 : -1), ph: Math.random() * 6,
-        road: i % 4, pos: (Math.random() - 0.5) * 200, off: (i % 2 ? 1 : -1) * 6, v: (1.2 + Math.random()) * (i % 2 ? 1 : -1) });
+        rt: i, road: i % 4, pos: (Math.random() - 0.5) * 200, off: (i % 2 ? 1 : -1) * 6, v: (1.2 + Math.random()) * (i % 2 ? 1 : -1) });
     }
   },
   update(dt, wind, raining) {
@@ -214,6 +221,16 @@ export const People = {
         w.a += w.sp * dt * 0.5;
         w.p.position.set(Math.cos(w.a) * w.r, Math.abs(Math.sin(w.ph)) * 0.06, Math.sin(w.a) * w.r);
         w.p.rotation.y = -w.a + (w.sp > 0 ? Math.PI : 0);
+      } else if (this.routes.length) {
+        const r = this.routes[w.rt % this.routes.length];
+        w.s ??= (w.rt * 0.37 % 1) * r.len; w.d ??= w.v > 0 ? 1 : -1;
+        w.s += w.d * Math.abs(w.v) * 0.6 * dt;
+        if (w.s > r.len) { w.s = r.len; w.d = -1; } else if (w.s < 0) { w.s = 0; w.d = 1; }
+        let k = 1; while (k < r.cum.length - 1 && r.cum[k] < w.s) k++;
+        const l = r.cum[k] - r.cum[k - 1] || 1, f = (w.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
+        const tx = (x1 - x0) / l * w.d, tz = (z1 - z0) / l * w.d, off = r.off * (w.rt % 2 ? 1 : -1);
+        w.p.position.set(x0 + (x1 - x0) * f - tz * off, 0.06 + Math.abs(Math.sin(w.ph)) * 0.06, z0 + (z1 - z0) * f + tx * off);
+        w.p.rotation.y = Math.atan2(tx, tz);
       } else {
         w.pos += w.v * dt; if (w.pos > 120) w.pos -= 240; if (w.pos < -120) w.pos += 240;
         const s = w.road < 2 ? (w.road ? 1 : -1) : (w.road === 2 ? 1 : -1), base = 44 * s + w.off;
