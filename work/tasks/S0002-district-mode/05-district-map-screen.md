@@ -7,7 +7,7 @@ plots dimmed. Reached from the city choice; keyboard, mouse and touch; phone lay
 **Blocked by:** 01, 02
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "District map screen"; S0001 tickets 18 and 20 (use their look if they are done, otherwise keep to the
 current UI style and leave hooks).
 
