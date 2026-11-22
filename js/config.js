@@ -39,18 +39,33 @@ export const DIFFICULTY = {
 
 // sky top / horizon, cloud cover in the sky shader, light strength, how lit the windows are (0 day … 1 night)
 export const PHASES = [
-  { name: 'Clear', mu: 0.9, base: 1, gust: 1, top: 0x2f86e0, bot: 0xc4e6ff, cover: 0.35, cloud: 0xffffff, sun: 1.7, sunCol: 0xfff3dc, hemi: 1.0, night: 0, fog: [110, 320],
+  { kind: 'clear', name: 'Clear', mu: 0.9, base: 1, gust: 1, top: 0x2f86e0, bot: 0xc4e6ff, cover: 0.35, cloud: 0xffffff, sun: 1.7, sunCol: 0xfff3dc, hemi: 1.0, night: 0, fog: [110, 320],
     sunDir: [0.35, 0.45, -0.82], text: 'Calm air. Learn the swing.' },
-  { name: 'Rain', mu: 0.5, base: 3, gust: 3, top: 0x46566f, bot: 0x95a3b5, cover: 0.85, cloud: 0x8c95a5, sun: 0.6, sunCol: 0xdfe6ff, hemi: 0.8, night: 0.35, fog: [60, 200], rain: true,
+  { kind: 'rain', name: 'Rain', mu: 0.5, base: 3, gust: 3, top: 0x46566f, bot: 0x95a3b5, cover: 0.85, cloud: 0x8c95a5, sun: 0.6, sunCol: 0xdfe6ff, hemi: 0.8, night: 0.35, fog: [60, 200], rain: true,
     sunDir: [0.35, 0.45, -0.82], text: 'Wet roofs: blocks slide the way they move.' },
-  { name: 'Snow', mu: 0.3, base: 5, gust: 4, top: 0x7f97b4, bot: 0xe6eef7, cover: 0.7, cloud: 0xe9eef5, sun: 0.9, sunCol: 0xffffff, hemi: 1.0, night: 0.15, fog: [45, 170], snow: true,
+  { kind: 'snow', name: 'Snow', mu: 0.3, base: 5, gust: 4, top: 0x7f97b4, bot: 0xe6eef7, cover: 0.7, cloud: 0xe9eef5, sun: 0.9, sunCol: 0xffffff, hemi: 1.0, night: 0.15, fog: [45, 170], snow: true,
     sunDir: [0.35, 0.35, -0.82], text: 'Ice: even more sliding, stronger wind.' },
-  { name: 'Storm', mu: 0.5, base: 7.5, gust: 7, top: 0x0b0f1c, bot: 0x2a3247, cover: 0.95, cloud: 0x2c3242, sun: 0.25, sunCol: 0x9fb2ff, hemi: 0.45, night: 1, fog: [45, 180], rain: true, lightning: true,
+  { kind: 'storm', name: 'Storm', mu: 0.5, base: 7.5, gust: 7, top: 0x0b0f1c, bot: 0x2a3247, cover: 0.95, cloud: 0x2c3242, sun: 0.25, sunCol: 0x9fb2ff, hemi: 0.45, night: 1, fog: [45, 180], rain: true, lightning: true,
     sunDir: [-0.4, 0.5, -0.7], text: 'Night storm. Lightning shakes the tower.' },
-  { name: 'Fog', mu: 0.7, base: 4, gust: 3, top: 0x5a4f86, bot: 0xf2a87a, cover: 0.55, cloud: 0xf5c6b0, sun: 0.8, sunCol: 0xffb07a, hemi: 0.8, night: 0.7, fog: [10, 48],
+  { kind: 'fog', name: 'Fog', mu: 0.7, base: 4, gust: 3, top: 0x5a4f86, bot: 0xf2a87a, cover: 0.55, cloud: 0xf5c6b0, sun: 0.8, sunCol: 0xffb07a, hemi: 0.8, night: 0.7, fog: [10, 48],
     sunDir: [0.6, 0.08, -0.8], text: 'Dusk fog. Watch the shadow on the roof.' },
 ];
-export const PHASE_LEN = 15;
+export const PHASE_LEN = 15;   // global cycle only (Endless without a level)
+
+// Weather kinds that only levels use (the global cycle above keeps the five classic ones). Visuals fall back to the
+// nearest classic look until the city tickets add their own: heat haze looks like clear, sandstorm like a warm fog,
+// typhoon like the storm. `gustEvent`: the level event 'sandstormGust' may fire in it. `lightning`: 'lightning' may.
+const EXTRA_WEATHER = [
+  { kind: 'heatHaze', name: 'Heat haze', mu: 0.9, base: 1.5, gust: 1, top: 0x3d8fe0, bot: 0xf3e2b8, cover: 0.15, cloud: 0xfff4d8, sun: 2.0, sunCol: 0xffe7b0, hemi: 1.0, night: 0, fog: [90, 280],
+    sunDir: [0.35, 0.6, -0.8], text: 'Hot, bright air. Light wind, glare off the glass.' },
+  { kind: 'sandstorm', name: 'Sandstorm', mu: 0.6, base: 6, gust: 6, top: 0x9a6b3c, bot: 0xd8a468, cover: 0.8, cloud: 0xc99a62, sun: 0.7, sunCol: 0xffc27a, hemi: 0.8, night: 0.2, fog: [12, 70], gustEvent: true,
+    sunDir: [0.35, 0.35, -0.82], text: 'Sand in the air. Low visibility, gusts push the tower.' },
+  { kind: 'typhoon', name: 'Typhoon', mu: 0.45, base: 9, gust: 8, top: 0x0b0f1c, bot: 0x2a3247, cover: 1, cloud: 0x2c3242, sun: 0.2, sunCol: 0x9fb2ff, hemi: 0.4, night: 1, fog: [35, 150], rain: true, lightning: true,
+    sunDir: [-0.4, 0.5, -0.7], text: 'Heavy rain and violent gusts. Hold on.' },
+];
+// Every weather kind by id, as a level's weather segments name it.
+export const WEATHER = Object.fromEntries([...PHASES, ...EXTRA_WEATHER].map((w) => [w.kind, w]));
+export const SEGMENT_LEN = 15;   // floors a level's last weather segment lasts when Endless loops the segments
 
 export const BTYPES = {
   normal: { m: 1, color: 0x4f7cff, label: 'Normal', hint: '' },

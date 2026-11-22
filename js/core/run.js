@@ -1,16 +1,22 @@
 // Simulation core: the rules and physics of one run. No Three.js, DOM or audio, so it runs in Node for tests.
 // Input: drop(), useAnchor(), timeScale(realDt, slowMoHeld). Advance with step(dt) at CFG.DT.
 // Output: readable state on this object, and events collected with drain(). Same input, same events.
-import { CFG, BTYPES, PHASE_LEN, phaseAt, specialFor } from '../config.js';
+import { CFG, BTYPES, specialFor } from '../config.js';
+import { weatherAt, nextWeather } from './weather.js';
 import { windAt, hookAt, Tower } from '../physics.js';
 import { starsFor } from './stars.js';
 
 export const CALM_WIND = Object.freeze({ x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
 
 export class Run {
-  // `level` is a definition from js/levels.js (or null for plain Endless): reaching level.target ends the run with stars.
-  constructor(diff, { bx = 0, bz = 0, level = null } = {}) {
-    this.diff = diff; this.level = level; this.landings = 0;
+  // `level` is a definition from js/levels.js: reaching level.target ends the run with stars, unless `endless` is set
+  // (Endless on a city: no target, the city's weather segments loop with growing strength). No level at all = plain
+  // Endless with the old global weather cycle and its quake every CFG.quakeEvery floors.
+  // The level's `events` list decides which events can happen; core emits no other.
+  constructor(diff, { bx = 0, bz = 0, level = null, endless = false } = {}) {
+    this.diff = diff; this.level = level; this.endless = !!(level && endless); this.landings = 0;
+    this.allowedEvents = level ? level.events || [] : ['lightning', 'quake'];
+    this.wx = weatherAt(level, 0, this.endless);
     this.tower = new Tower(bx, bz, diff);
     this.t = 0; this.events = []; this.over = false; this.result = null;
     this.wind = CALM_WIND; this.hook = null; this.block = null;
@@ -19,8 +25,12 @@ export class Run {
     this.score = 0; this.pop = 0; this.perfects = 0; this.bestHeight = 0; this.drops = 0;
     this.focus = 1; this.focusIdle = 9;
     this.spawnT = 0.4; this.ltT = 0; this.ltWarned = false;
-    this.craneY = CFG.FOUND_H; this.lastPhase = 0;
+    this.craneY = CFG.FOUND_H;
   }
+
+  hasEvent(kind) { return this.allowedEvents.includes(kind); }
+  // The next weather change from the current floor ({ at, left, wx }) or null.
+  nextWeather() { return nextWeather(this.level, this.tower.n, this.endless); }
 
   emit(type, data = {}) { this.events.push({ type, t: this.t, ...data }); }
   drain() { const e = this.events; this.events = []; return e; }
@@ -52,17 +62,21 @@ export class Run {
   step(dt) {
     const T = this.tower;
     this.t += dt;
-    const n = T.n, ph = phaseAt(n);
-    this.wind = windAt(this.t, n, this.diff);
-    // lightning: telegraphed by a warning, then a fixed kick in the wind direction
-    if (ph.lightning && CFG.features.lightning) {
+    const n = T.n, ph = weatherAt(this.level, n, this.endless);
+    if (ph.seg !== this.wx.seg) this.emit('weather', { floor: n, kind: ph.kind });
+    this.wx = ph; T.wx = ph;
+    this.wind = windAt(this.t, n, this.diff, ph);
+    // lightning and sandstorm gusts: telegraphed by a warning, then a fixed kick in the wind direction
+    const strike = CFG.features.lightning && ph.lightning && this.hasEvent('lightning') ? 'lightning'
+      : CFG.features.lightning && ph.gustEvent && this.hasEvent('sandstormGust') ? 'gust' : null;
+    if (strike) {
       this.ltT += dt;
-      if (!this.ltWarned && this.ltT > CFG.lightningEvery - CFG.lightningWarn) { this.ltWarned = true; this.emit('lightningWarning'); }
+      if (!this.ltWarned && this.ltT > CFG.lightningEvery - CFG.lightningWarn) { this.ltWarned = true; this.emit(strike === 'gust' ? 'gustWarning' : 'lightningWarning'); }
       if (this.ltT >= CFG.lightningEvery) {
         this.ltT = 0; this.ltWarned = false;
         const s = this.wind.speed || 1; T.kick(CFG.lightningKick * this.wind.x / s, CFG.lightningKick * this.wind.z / s);
         const top = T.n ? T.top() : { x: T.bx, z: T.bz };
-        this.emit('lightning', { x: top.x, y: T.topY(), z: top.z });
+        this.emit(strike, { x: top.x, y: T.topY(), z: top.z });
       }
     } else { this.ltT = 0; this.ltWarned = false; }
     T.step(dt, this.wind);
@@ -146,9 +160,8 @@ export class Run {
     const record = n > this.bestHeight;
     this.bestHeight = Math.max(this.bestHeight, n);
     if (CFG.features.anchor && record && n > 0 && n % CFG.anchorEvery === 0) { this.anchors++; this.emit('anchorGained'); }
-    if (n % PHASE_LEN === 0 && n > 0 && Math.floor(n / PHASE_LEN) !== this.lastPhase) { this.lastPhase = Math.floor(n / PHASE_LEN); this.emit('weather', { floor: n }); }
-    if (this.level && n >= this.level.target) { this.completeLevel(); return; }
-    if (CFG.features.quake) {
+    if (this.level && !this.endless && n >= this.level.target) { this.completeLevel(); return; }
+    if (CFG.features.quake && this.hasEvent('quake')) {
       if (n % CFG.quakeEvery === CFG.quakeEvery - 2) this.emit('quakeWarning', { floor: n + 2 });
       if (n > 0 && n % CFG.quakeEvery === 0) { T.quake(); this.emit('quake'); }
     }

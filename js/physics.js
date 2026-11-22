@@ -5,8 +5,7 @@ import { CFG, phaseAt } from './config.js';
 // Smooth, seeded gusts, so the player can read the trend and wait for a lull.
 export function gustAt(t) { return 0.5 * Math.sin(0.37 * t) + 0.3 * Math.sin(0.91 * t + 1.3) + 0.2 * Math.sin(2.1 * t + 0.4); }
 
-export function windAt(t, n, diff) {
-  const ph = phaseAt(n);
+export function windAt(t, n, diff, ph = phaseAt(n)) {
   const speed = Math.max(0, ph.base + ph.gust * gustAt(t)) * ph.mult * diff.wind;
   const a = 1.2 * Math.sin(0.031 * t) + 0.4 * Math.sin(0.13 * t + 2);
   return { x: speed * Math.cos(a), z: speed * Math.sin(a), speed, angle: a, trend: gustAt(t + 1.5) - gustAt(t) };
@@ -45,7 +44,7 @@ export class Tower {
   constructor(bx, bz, diff) {
     this.bx = bx; this.bz = bz; this.diff = diff; this.f = [];
     this.s = { x: 0, z: 0 }; this.v = { x: 0, z: 0 };
-    this.calm = 0; this.anchor = 0; this.quakeT = 0; this.quakePh = 0; this.unstableT = 0;
+    this.wx = null; this.calm = 0; this.anchor = 0; this.quakeT = 0; this.quakePh = 0; this.unstableT = 0;
     this.dyn = { r: 0, k: -1, dir: { x: 0, z: 0 } };
   }
   get n() { return this.f.length; }
@@ -128,7 +127,7 @@ export class Tower {
     const vrx = b.vx - top.vx, vrz = b.vz - top.vz, vr = Math.hypot(vrx, vrz);
     let sx = 0, sz = 0;
     if (vr > 0.01) {
-      const sl = Math.min(CFG.slideCap * CFG.W, CFG.slideK * this.diff.slide * vr * vr / phaseAt(this.n).mu);
+      const sl = Math.min(CFG.slideCap * CFG.W, CFG.slideK * this.diff.slide * vr * vr / (this.wx || phaseAt(this.n)).mu);
       sx = vrx / vr * sl; sz = vrz / vr * sl;
     }
     return { type: 'land', dx: dx + sx, dz: dz + sz, vrx, vrz };

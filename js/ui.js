@@ -1,5 +1,5 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
-import { CFG, DIFFICULTY, BTYPES, PHASES, PHASE_LEN, phaseAt, specialFor } from './config.js';
+import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById } from './levels.js';
 import { Sfx, Music } from './audio.js';
@@ -15,6 +15,9 @@ export const WX_ICONS = {
   Rain: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#c8d2e2" stroke="#000" stroke-width="2"/><path d="M10 22l-2 6M16 22l-2 6M22 22l-2 6" stroke="#52d9ff" stroke-width="2.5"/></svg>',
   Snow: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#eef3fa" stroke="#000" stroke-width="2"/><g fill="#fff" stroke="#000"><circle cx="10" cy="25" r="2"/><circle cx="17" cy="27" r="2"/><circle cx="23" cy="24" r="2"/></g></svg>',
   Storm: '<svg viewBox="0 0 32 32"><path d="M8 17a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#5a6378" stroke="#000" stroke-width="2"/><path d="M17 15l-5 8h5l-3 7 8-10h-5l3-5z" fill="#ffd34d" stroke="#000" stroke-width="1.5"/></svg>',
+  'Heat haze': '<svg viewBox="0 0 32 32"><circle cx="16" cy="12" r="6" fill="#ffd34d" stroke="#000" stroke-width="2"/><g stroke="#ff9a4d" stroke-width="2.5" fill="none" stroke-linecap="round"><path d="M3 22q3-3 6 0t6 0 6 0 6 0M3 28q3-3 6 0t6 0 6 0 6 0"/></g></svg>',
+  Sandstorm: '<svg viewBox="0 0 32 32"><g stroke="#d8a468" stroke-width="3" stroke-linecap="round" fill="none"><path d="M4 10h16a3 3 0 1 0-3-3M4 17h22a3 3 0 1 1-3 3M4 24h12"/></g></svg>',
+  Typhoon: '<svg viewBox="0 0 32 32"><path d="M8 17a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#3a4258" stroke="#000" stroke-width="2"/><path d="M10 21l-3 8M16 21l-3 8M22 21l-3 8" stroke="#52d9ff" stroke-width="3"/></svg>',
   Fog: '<svg viewBox="0 0 32 32"><g stroke="#f2c0a0" stroke-width="3" stroke-linecap="round"><path d="M4 10h20M8 16h20M4 22h18M10 28h14"/></g></svg>',
 };
 const HEART = (on) => `<svg viewBox="0 0 24 22" class="${on ? '' : 'off'}"><path d="M12 21 L3 12 A5 5 0 0 1 12 5 A5 5 0 0 1 21 12 Z" fill="#ff4d5e" stroke="#000" stroke-width="2"/></svg>`;
@@ -159,7 +162,7 @@ export function createUI(game) {
 
   // ── help ──
   $('#helpBlocks').innerHTML = Object.values(BTYPES).filter((b) => b.hint).map((b) => `<li><span class="swatch" style="background:${hex(b.color)}"></span><b>${b.label.toUpperCase()}</b>${b.hint}</li>`).join('');
-  $('#helpWeather').innerHTML = PHASES.map((p) => `<li>${WX_ICONS[p.name]}<b>${p.name.toUpperCase()}</b>${p.text}</li>`).join('') + `<li>Weather changes every ${PHASE_LEN} floors. Earthquakes hit every ${CFG.quakeEvery}.</li>`;
+  $('#helpWeather').innerHTML = Object.values(WEATHER).map((p) => `<li>${WX_ICONS[p.name]}<b>${p.name.toUpperCase()}</b>${p.text}</li>`).join('') + '<li>Each city has its own weather by floor and its own events. A warning comes before every hit.</li>';
 
   // ── keyboard ──
   window.addEventListener('keydown', (e) => {
@@ -276,7 +279,7 @@ export function createUI(game) {
       if (wxTimer > 0) { wxTimer -= rdt; if (wxTimer <= 0) $('#wxCard').hidden = true; }
       if (bannerT > 0) { bannerT -= rdt; setText('banner', bannerText); } else setText('banner', '');
       if ($('#hud').hidden) return;
-      const T = game.tower, n = T ? T.n : 0, ph = phaseAt(n), w = game.wind;
+      const T = game.tower, n = T ? T.n : 0, ph = game.weather, w = game.wind;
       setText('hTarget', game.levelDef ? `TARGET ${n} / ${game.levelDef.target}` : '');
       setText('hScore', String(game.score));
       setText('hPop', String(game.pop));
@@ -292,8 +295,8 @@ export function createUI(game) {
       $('#arrow').setAttribute('transform', `rotate(${((w.angle - camAz + Math.PI / 2) * 180 / Math.PI).toFixed(1)})`);
       setText('hWeather', ph.name);
       setHTML('wxIcon', WX_ICONS[ph.name]);
-      const left = PHASE_LEN - (n % PHASE_LEN);
-      setText('hNextWeather', `${phaseAt(n + left).name.toUpperCase()} IN ${left} FL`);
+      const nx = game.run ? game.run.nextWeather() : null;
+      setText('hNextWeather', nx ? `${nx.wx.name.toUpperCase()} IN ${nx.left} FL` : '');
       const stab = T ? Math.max(0, Math.min(1, 1 - T.dyn.r)) : 1;
       stabFill.style.width = `${(stab * 100).toFixed(0)}%`;
       stabFill.style.background = stab > 0.6 ? 'var(--ok)' : stab > 0.3 ? 'var(--warn)' : 'var(--bad)';

@@ -1,6 +1,6 @@
 // Entry point: wires the game to the interface and runs the frame loop (fixed 120 Hz simulation, free-running render).
 import * as THREE from 'three';
-import { CFG, phaseAt } from './config.js';
+import { CFG } from './config.js';
 import { renderer, scene, camera, applyQuality, resize, updateWorld } from './world.js';
 import { updateCrane, updateMarker } from './entities.js';
 import { FX, People, updateWeather, updateBolt } from './fx.js';
@@ -32,7 +32,7 @@ function render(rdt) {
   clock += rdt;
   const T = game.tower, bv = game.blockView, b = bv ? game.block : null, playing = game.state === 'play' && T;
   game.syncTower(rdt);
-  const n = T ? T.n : 0, ph = phaseAt(game.state === 'menu' ? 0 : n);
+  const n = T ? T.n : 0, ph = game.state === 'menu' ? game.weather : game.run ? game.run.wx : game.weather;
 
   // hanging block pops in and tilts a little with the swing
   if (b) {

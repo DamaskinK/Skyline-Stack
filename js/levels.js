@@ -8,7 +8,7 @@ export const LEVELS = [
     buildingType: 'panel',
     site: { lat: 48.7206, lon: 21.2578 },
     weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }],
-    events: [],
+    events: [],                                   // only listed events ever happen: 'lightning', 'quake', 'sandstormGust'
     dayArc: { start: 0.35, end: 0.5 },            // placeholder: fraction of a day, noon is 0.5
     palette: null,                                // placeholder
     track: null,                                  // placeholder

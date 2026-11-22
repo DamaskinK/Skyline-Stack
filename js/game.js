@@ -36,6 +36,7 @@ export class Game {
   get pop() { return this.run ? this.run.pop : 0; }
   get perfects() { return this.run ? this.run.perfects : 0; }
   get focus() { return this.run ? this.run.focus : 1; }
+  get weather() { return this.run ? this.run.wx : phaseAt(0); }
   get drops() { return this.run ? this.run.drops : 0; }
 
   get levelId() { return level.id; }
@@ -53,7 +54,8 @@ export class Game {
     this.prevBest = loadScores(levelId)[0]?.score || 0;
     this.state = 'play'; this.paused = false; this.saved = false;
     People.setWalkers(9);
-    this.run = new Run(this.diff, { level: this.levelDef });
+    // Endless runs on the chosen city: its weather segments loop and only its events happen
+    this.run = new Run(this.diff, { level: levelById(levelId), endless: mode !== 'level' });
     this.objects.push(makeFoundation(0, 0));
     this.ui.showHud();
   }
@@ -95,7 +97,9 @@ export class Game {
       case 'land': this.onLand(ev); break;
       case 'goldenNext': this.ui.banner('Golden block next', 2); break;
       case 'anchorGained': this.ui.banner('+1 anchor', 2); break;
-      case 'weather': this.ui.weather(phaseAt(ev.floor)); Sfx.whoosh(); break;
+      case 'weather': this.ui.weather(this.run.wx); Sfx.whoosh(); break;
+      case 'gustWarning': this.ui.banner('Sandstorm gust incoming', 1.5); Sfx.rumble(); break;
+      case 'gust': this.shake = Math.max(this.shake, 0.4); Sfx.whoosh(); break;
       case 'quakeWarning': this.ui.banner(`Earthquake at floor ${ev.floor}`, 3); break;
       case 'quake': this.shake = CFG.quakeTime; this.ui.banner('EARTHQUAKE', CFG.quakeTime); Sfx.crash(); break;
       case 'collapse': {
