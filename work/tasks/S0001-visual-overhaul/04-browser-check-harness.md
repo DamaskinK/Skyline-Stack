@@ -7,7 +7,7 @@ moving camera differ only where things move). First used on the current game to 
 **Blocked by:** None (can start immediately).
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Testing Decisions: Seam 2".
 
 - [ ] One command per check (shots, perf, flicker), with quality preset and level as options
