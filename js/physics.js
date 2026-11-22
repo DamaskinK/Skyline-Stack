@@ -100,13 +100,13 @@ export class Tower {
     for (let i = k + 1; i < this.n; i++) {
       const p = this.pose(i), f = this.f[i], push = 1 + 0.15 * (i - k);
       items.push({
-        mesh: f.mesh, p: { x: p.x, y: this.yc(i), z: p.z },
+        index: i, type: f.type, p: { x: p.x, y: this.yc(i), z: p.z },
         v: { x: p.vx + dir.x / len * push, y: 0, z: p.vz + dir.z / len * push },
         av: { x: dir.z / len * 2, y: ((i % 3) - 1) * 0.8, z: -dir.x / len * 2 },
       });
     }
     this.f.splice(k + 1);
-    return { count: items.length, items };
+    return { from: k + 1, count: items.length, items };
   }
 
   release(b) { b.vx *= CFG.inherit; b.vz *= CFG.inherit; }
@@ -137,30 +137,12 @@ export class Tower {
   place(b, dx, dz, perfect) {
     const prev = this.n ? this.f[this.n - 1] : { x: 0, z: 0 };
     if (perfect) { dx = 0; dz = 0; }
-    const f = { x: prev.x + dx, z: prev.z + dz, m: b.m, type: b.type, mesh: b.mesh, vis: { x: 0, z: 0 }, squash: 0.25 };
-    this.f.push(f);
-    const p = this.pose(this.n - 1);
-    f.vis.x = b.x - p.x; f.vis.z = b.z - p.z;     // visual slide from the contact point to the final spot
+    this.f.push({ x: prev.x + dx, z: prev.z + dz, m: b.m, type: b.type });
     if (perfect) { this.v.x *= CFG.perfectDamp; this.v.z *= CFG.perfectDamp; }
     else { const k = CFG.swayImpulse * this.diff.sway * b.m * (1 + this.n / 25); this.kick(k * b.lastVrx, k * b.lastVrz); }
     if (b.golden) this.calm = CFG.goldenCalm;
   }
 
-  // Copy simulation state onto the floor meshes.
-  sync(dt) {
-    const n = this.n, h = Math.max(CFG.H, CFG.H * n);
-    for (let i = 0; i < n; i++) {
-      const f = this.f[i], p = this.pose(i), yr = CFG.H * (i + 0.5), slope = 2 * yr / (h * h);
-      const decay = Math.exp(-dt * 14); f.vis.x *= decay; f.vis.z *= decay;
-      f.mesh.position.set(p.x + f.vis.x, this.yc(i), p.z + f.vis.z);
-      f.mesh.rotation.set(this.s.z * slope, 0, -this.s.x * slope);
-      if (f.squash > 0) { f.squash = Math.max(0, f.squash - dt); const k = f.squash / 0.25; f.mesh.scale.set(1 + 0.08 * k, 1 - 0.14 * k, 1 + 0.08 * k); }
-      else f.mesh.scale.set(1, 1, 1);
-    }
-  }
-  freeze() {
-    for (let i = 0; i < this.n; i++) {
-      const f = this.f[i]; f.mesh.position.set(this.bx + f.x, this.yc(i), this.bz + f.z); f.mesh.rotation.set(0, 0, 0); f.mesh.scale.set(1, 1, 1);
-    }
-  }
+  // Tilt of floor i caused by the sway (the slope of the (y/H)^2 mode shape), for drawing.
+  slope(i) { const h = Math.max(CFG.H, CFG.H * this.n); return 2 * CFG.H * (i + 0.5) / (h * h); }
 }

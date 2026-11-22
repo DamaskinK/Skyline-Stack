@@ -78,8 +78,8 @@ const marker = new THREE.Mesh(new THREE.PlaneGeometry(CFG.W, CFG.D), new THREE.M
 marker.rotation.x = -Math.PI / 2; scene.add(marker);
 const _v = new THREE.Vector3();
 
-// cx, cz: tower base; jibY: jib height; hook: {x,z}; hy: hook height; block: hanging block or null
-export function updateCrane(cx, cz, jibY, hx, hy, hz, block, clock) {
+// cx, cz: tower base; jibY: jib height; hook: {x,z}; hy: hook height; block: hanging block {x,y,z} or null; mesh: its mesh
+export function updateCrane(cx, cz, jibY, hx, hy, hz, block, mesh, clock) {
   crane.position.set(cx - 14, 0, cz - 3);
   mast.scale.y = jibY; mastTex.repeat.set(1, jibY / 1.4);
   jib.position.set(16, jibY + 0.6, 3); cjib.position.set(-5, jibY + 0.5, 3);
@@ -92,7 +92,7 @@ export function updateCrane(cx, cz, jibY, hx, hy, hz, block, clock) {
   cablePos.set([cx - 0.3, ty, cz, hx - 0.2, hy + 0.4, hz, cx + 0.3, ty, cz, hx + 0.2, hy + 0.4, hz], 0);
   if (block) {
     [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz], i) => {
-      _v.set(sx * CFG.W * 0.45, CFG.H / 2, sz * CFG.D * 0.45).applyEuler(block.mesh.rotation).multiplyScalar(block.mesh.scale.x);
+      _v.set(sx * CFG.W * 0.45, CFG.H / 2, sz * CFG.D * 0.45).applyEuler(mesh.rotation).multiplyScalar(mesh.scale.x);
       cablePos.set([hx, hy - 0.7, hz, block.x + _v.x, block.y + _v.y, block.z + _v.z], 12 + i * 6);
     });
   } else for (let i = 12; i < 36; i++) cablePos[i] = cablePos[i % 3 + 3];

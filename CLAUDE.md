@@ -12,6 +12,7 @@ Use the words of `GLOSSARY.md`. Hard decisions live in `docs/adr/`.
 npm install
 npm run serve        # http://localhost:8000 (ES modules need a server)
 npm run build        # bundle into dist/
+npm test             # Vitest: simulation core (tests/core)
 ```
 
 ## Layout

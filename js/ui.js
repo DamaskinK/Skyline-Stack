@@ -171,7 +171,7 @@ export function createUI(game) {
   syncMute();
 
   function toMenu() {
-    game.clear(); game.state = 'menu'; game.tower = null; game.paused = false;
+    game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
     stack = []; show('sTitle'); buildDemo(); People.setWalkers(9); Music.setMood('menu');
   }

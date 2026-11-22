@@ -26,17 +26,18 @@ let clock = 0, camY = 8;
 
 function render(rdt) {
   clock += rdt;
-  const T = game.tower, b = game.block, playing = game.state === 'play' && T;
-  if (T) T.sync(rdt);
+  const T = game.tower, bv = game.blockView, b = bv ? game.block : null, playing = game.state === 'play' && T;
+  game.syncTower(rdt);
   const n = T ? T.n : 0, ph = phaseAt(game.state === 'menu' ? 0 : n);
 
   // hanging block pops in and tilts a little with the swing
   if (b) {
-    b.mesh.position.set(b.x, b.y, b.z);
+    const mesh = bv.mesh;
+    mesh.position.set(b.x, b.y, b.z);
     if (b.state === 'hang') {
-      b.appear = Math.min(1, b.appear + rdt * 4); b.mesh.scale.setScalar(0.6 + 0.4 * b.appear);
-      b.mesh.rotation.set(-Math.atan2(b.z - T.bz, CFG.ropeLen) * 0.3, 0, Math.atan2(b.x - T.bx, CFG.ropeLen) * 0.3);
-    } else { b.mesh.scale.setScalar(1); b.mesh.rotation.x *= 0.95; b.mesh.rotation.z *= 0.95; }
+      bv.appear = Math.min(1, bv.appear + rdt * 4); mesh.scale.setScalar(0.6 + 0.4 * bv.appear);
+      mesh.rotation.set(-Math.atan2(b.z - T.bz, CFG.ropeLen) * 0.3, 0, Math.atan2(b.x - T.bx, CFG.ropeLen) * 0.3);
+    } else { mesh.scale.setScalar(1); mesh.rotation.x *= 0.95; mesh.rotation.z *= 0.95; }
   }
 
   // crane follows the tower top; in the menu it idles over the demo tower
@@ -46,7 +47,7 @@ function render(rdt) {
   const hx = playing && game.hook ? game.hook.x : cx + Math.sin(clock * 1.2) * 2;
   const hz = playing && game.hook ? game.hook.z : cz;
   const hy = b && b.state === 'hang' ? b.y + CFG.H / 2 + 1.2 : (playing ? craneY + CFG.dropGap + CFG.H + 1.6 : craneY + 6);
-  updateCrane(cx, cz, jibY, hx, hy, hz, b && b.state === 'hang' ? b : null, clock);
+  updateCrane(cx, cz, jibY, hx, hy, hz, b && b.state === 'hang' ? b : null, b ? bv.mesh : null, clock);
   const top = T && T.n ? T.top() : { x: cx, z: cz };
   const markerOn = !!(playing && b) && Math.max(Math.abs(b.x - top.x), Math.abs(b.z - top.z)) < CFG.W;
   updateMarker(markerOn, b?.x, T ? T.topY() + 0.02 : 0, b?.z, ph.name === 'Fog' ? 0.45 : 0.22);
@@ -81,9 +82,9 @@ function render(rdt) {
 
   // the weakest floor blinks red when the tower is close to tipping
   if (T) {
-    for (const f of T.f) f.mesh.userData.warn.visible = false;
+    for (const m of game.floorMeshes) m.userData.warn.visible = false;
     const stab = 1 - T.dyn.r, wi = T.dyn.k + 1;
-    if (stab < 0.3 && wi >= 0 && wi < T.n) T.f[wi].mesh.userData.warn.visible = Math.sin(clock * 14) > -0.2;
+    if (stab < 0.3 && wi >= 0 && wi < game.floorMeshes.length) game.floorMeshes[wi].userData.warn.visible = Math.sin(clock * 14) > -0.2;
     $vig.style.opacity = stab < 0.3 ? String(0.4 + 0.3 * Math.sin(clock * 6)) : '0';
   } else $vig.style.opacity = '0';
 

@@ -8,11 +8,11 @@ becomes a thin adapter: rendering, audio and UI react to events and read state. 
 **Blocked by:** 01
 
 **Type:** improve
-**Status:** claimed
+**Status:** done
 **Read:** plan "Architecture: Simulation core", "Testing Decisions".
 
-- [ ] Vitest set up (`npm test`), runs in Node without a browser
-- [ ] Test: same difficulty, seed and input times give the same event list twice
-- [ ] Tests: perfect / good / risky / slip at the edges of the windows; collapse when the weight above a floor stays past its edge
-- [ ] Endless in the browser looks and plays as before (manual check plus no console errors)
-- [ ] `window.__game` still exposes the state for browser scripts
+- [x] Vitest set up (`npm test`), runs in Node without a browser
+- [x] Test: same difficulty, seed and input times give the same event list twice
+- [x] Tests: perfect / good / risky / slip at the edges of the windows; collapse when the weight above a floor stays past its edge
+- [x] Endless in the browser looks and plays as before (manual check plus no console errors)
+- [x] `window.__game` still exposes the state for browser scripts

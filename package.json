@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "serve": "python3 -m http.server 8000",
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.24.0",
+    "vitest": "^2.1.9"
   }
 }
