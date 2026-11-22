@@ -5,7 +5,7 @@
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 1. Level runs no longer write into the Endless high scores (`js/ui.js` ~233 `addScore(game.cityId, ...)`,
       `js/game.js` ~57 and ~197 `prevBest` from the Endless list). Save form and NEW RECORD / fanfare only in Endless.
