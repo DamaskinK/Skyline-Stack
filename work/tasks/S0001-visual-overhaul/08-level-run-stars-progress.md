@@ -8,7 +8,7 @@ opened levels, Endless scores per city) is saved under new versioned keys.
 **Blocked by:** 02
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Level definitions", "Progress store", user stories 28-39.
 
 - [ ] Core tests: star rules, target reached ends the run, next level opens on one star
