@@ -194,3 +194,8 @@ above, so the levels feel like the real city without heavy geometry.
 5. Exact block proportions.
 6. Art style: stylised low-poly (fits the CC0 kits) or semi-realistic PBR (heavier)?
 7. New game title.
+
+Playtest of Kosice, 2026-11-22:
+- **Art direction refined:** "rich stylised" - stay stylised, but add real depth (cornices, window frames, recesses),
+  relief maps on surfaces, fuller vegetation, volumetric clouds, warmer contrasted light. Not semi-realistic PBR.
+- **People:** more detailed figures, dressed for each city and culture, respectful and everyday.
