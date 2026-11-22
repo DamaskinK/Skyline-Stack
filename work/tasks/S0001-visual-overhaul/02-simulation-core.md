@@ -8,7 +8,7 @@ becomes a thin adapter: rendering, audio and UI react to events and read state. 
 **Blocked by:** 01
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Architecture: Simulation core", "Testing Decisions".
 
 - [ ] Vitest set up (`npm test`), runs in Node without a browser
