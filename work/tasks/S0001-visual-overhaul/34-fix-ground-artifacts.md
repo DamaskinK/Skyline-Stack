@@ -6,7 +6,7 @@
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 **Now:** in front of the tower a huge flat blue OSM water polygon lies on the square (reads as a puddle, not a fountain);
 parks are flat bright-green polygons with a dashed outline; patches of the old checker paving and darker paving
 overlap the new plaza; some ground pieces look like stacked flat colour shapes.
