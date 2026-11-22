@@ -7,7 +7,7 @@ builder helpers (lathe, extrude, merged primitives) that later cities reuse.
 **Blocked by:** 13
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Landmarks"; brief decisions round 2-3.
 
 - [ ] Each landmark 1-3k triangles, recognisable by silhouette from the game camera
