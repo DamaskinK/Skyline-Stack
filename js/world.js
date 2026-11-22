@@ -302,6 +302,12 @@ let clock = 0;
 export const blockMats = new Map();
 export const glowMats = sceneryMats;
 
+// Point the sun (and its shadow frustum) at the area around `focus`.
+export function aimSun(focus) {
+  sun.position.copy(focus).addScaledVector(atm.sunDir, 60); sun.target.position.copy(focus);
+  sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
+}
+
 export function updateWorld(dt, ph, wind, focus, flash) {
   clock += dt;
   const k = Math.min(1, dt * 1.2);
@@ -315,7 +321,7 @@ export function updateWorld(dt, ph, wind, focus, flash) {
   sky.position.copy(camera.position);
   scene.fog.color.copy(atm.bot); scene.fog.near = atm.fogNear; scene.fog.far = atm.fogFar;
   sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = atm.hemiI + flash * 2.5;
-  sun.position.copy(focus).addScaledVector(atm.sunDir, 60); sun.target.position.copy(focus);
+  aimSun(focus);
   cloudMat.color.copy(atm.cloud);
   // hills ignore fog, so fade them into the horizon colour at night and in fog instead of letting them turn into black cut-outs
   hillMat.color.setHex(0x5f8f6e).lerp(atm.bot, Math.min(0.94, 0.5 + 0.42 * atm.night + 0.45 * Math.max(0, 1 - atm.fogFar / 220)));

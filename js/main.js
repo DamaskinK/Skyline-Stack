@@ -8,11 +8,13 @@ import { Sfx, Music } from './audio.js';
 import { settings, onSettings } from './settings.js';
 import { Game, buildDemo } from './game.js';
 import { createUI } from './ui.js';
+import { installDebug } from './debug.js';
 
 const game = new Game();
 game.camera = camera;
 game.ui = createUI(game);
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
+installDebug({ renderer, scene, camera });
 
 applyQuality(); resize();
 window.addEventListener('resize', resize);

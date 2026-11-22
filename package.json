@@ -8,10 +8,12 @@
     "serve": "node scripts/serve.mjs . 8000",
     "build": "node build.mjs",
     "test": "vitest run",
-    "preview": "node scripts/serve.mjs dist 8001"
+    "preview": "node scripts/serve.mjs dist 8001",
+    "check": "node tests/browser/check.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
+    "playwright": "^1.65.1",
     "vitest": "^2.1.9"
   }
 }
