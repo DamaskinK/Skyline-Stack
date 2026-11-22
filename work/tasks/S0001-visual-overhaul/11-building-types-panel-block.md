@@ -7,7 +7,7 @@ Special blocks still stack on top. The HUD and how-to-play explain the current t
 **Blocked by:** 07, 08
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Building types"; `GLOSSARY.md` Building type, Special block.
 
 - [ ] Core tests: each multiplier changes the outcome it should, the plain type changes nothing
