@@ -7,7 +7,7 @@ residents goal opens the next city. Kosice gets five plots (outskirts panel esta
 **Blocked by:** None (can start immediately).
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Implementation Decisions" (Data, Core), user stories 1-8, 12-18, 24, 26.
 
 - [ ] Plot data shape as in the plan; Kosice plots with real sites (lat, lon) chosen from OSM: an outskirts estate
