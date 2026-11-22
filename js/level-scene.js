@@ -31,7 +31,7 @@ function disposeGroup(g) {
 
 export function applyLevelAssets(id, assets) {
   disposeGroup(group); group.clear();
-  level.id = id; level.env = assets.sky || null;
+  level.id = id; level.env = assets.sky || null; People.setCity(id);
   envRT?.dispose(); envRT = null;
   if (assets.sky) {
     pmrem ??= new THREE.PMREMGenerator(renderer);

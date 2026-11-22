@@ -4,6 +4,8 @@ import { CFG } from './config.js';
 import { scene, mergeColored } from './world.js';
 import { puffTex, starTex, canvas2d, toTex } from './textures.js';
 import { settings } from './settings.js';
+import { styleFor, skinFor, dressForCold } from './people/styles.js';
+import { buildFigure, makeFigureMaterial } from './people/figure.js';
 
 // ── sprite particles: dust, sparks, confetti; rings on perfect drops ──
 export const FX = {
@@ -66,9 +68,10 @@ for (let i = 0; i < SNOW_N; i++) { snowPos[i * 3] = (Math.random() - .5) * 50; s
 for (let i = 0; i < STREAK_N; i++) { streakPos[i * 6] = (Math.random() - .5) * 40; streakPos[i * 6 + 1] = Math.random() * 30; streakPos[i * 6 + 2] = (Math.random() - .5) * 30; }
 const wrap = (v, c, half) => (v < c - half ? v + half * 2 : v > c + half ? v - half * 2 : v);
 
+let snowNow = false;
 export function updateWeather(dt, ph, w, c, active, clock) {
   const lo = settings.quality === 'low';
-  rain.visible = !!ph.rain && active; snow.visible = !!ph.snow && active;
+  rain.visible = !!ph.rain && active; snow.visible = !!ph.snow && active; snowNow = snow.visible;
   rain.geometry.setDrawRange(0, (lo ? RAIN_N / 2 : RAIN_N) * 2);
   if (rain.visible) {
     for (let i = 0; i < RAIN_N; i++) {
@@ -123,22 +126,16 @@ export function updateBolt(dt) {
 }
 
 // ── people ──
-const skin = [0xffd2a6, 0xe0a87a, 0x9a6440, 0xffe0bd];
-const shirts = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xff7f50, 0xffffff, 0x1abc9c];
-const personGeos = new Map();
-function personGeo(si, ki) {
-  const key = si * 10 + ki;
-  if (!personGeos.has(key)) {
-    personGeos.set(key, mergeColored([
-      [new THREE.BoxGeometry(0.3, 0.42, 0.16).translate(0, 0.21, 0), 0x2c3e66],
-      [new THREE.CylinderGeometry(0.16, 0.2, 0.55, 7).translate(0, 0.68, 0), shirts[si]],
-      [new THREE.SphereGeometry(0.16, 8, 6).translate(0, 1.1, 0), skin[ki]],
-      [new THREE.BoxGeometry(0.08, 0.45, 0.08).translate(0.22, 1.1, 0), shirts[si]],   // raised arm holding the umbrella
-    ]));
-  }
-  return personGeos.get(key);
+// Figures live in js/people/: clothing data per city (styles.js) and the low-poly figure with swinging limbs (figure.js).
+let city = 'kosice', cold = false;
+function dress() {
+  const st = styleFor(city), skins = skinFor(city);
+  let sum = 0; for (const o of st.outfits) sum += o.w;
+  let r = Math.random() * sum, o = st.outfits[0];
+  for (const c of st.outfits) { r -= c.w; if (r <= 0) { o = c; break; } }
+  if (cold) o = dressForCold(o, Math.random);
+  return { geo: buildFigure(o, skins[Math.floor(Math.random() * skins.length)]), scale: o.scale ?? 1 };
 }
-const personMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
 const umbrellaTexs = [[0xe74c3c, 0xffffff], [0x3498db, 0xffffff], [0xf1c40f, 0xe67e22], [0x2ecc71, 0xffffff], [0x9b59b6, 0xffd34d]].map(([a, b]) => {
   const [c, x] = canvas2d(128, 8);
   for (let i = 0; i < 8; i++) { x.fillStyle = '#' + new THREE.Color(i % 2 ? b : a).getHexString(); x.fillRect(i * 16, 0, 16, 8); }
@@ -151,13 +148,21 @@ const handleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
 
 function makePerson(withUmbrella) {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(personGeo(Math.floor(Math.random() * shirts.length), Math.floor(Math.random() * skin.length)), personMat);
-  body.castShadow = true; g.add(body);
+  const { geo, scale } = dress(), mat = makeFigureMaterial();
+  const body = new THREE.Mesh(geo, mat); body.castShadow = true; body.scale.setScalar(scale); g.add(body);
   const um = new THREE.Group();
-  const canopy = new THREE.Mesh(umbrellaGeo, umbrellaMats[Math.floor(Math.random() * umbrellaMats.length)]); canopy.position.x = 0.22; canopy.geometry = umbrellaGeo;
+  const canopy = new THREE.Mesh(umbrellaGeo, umbrellaMats[Math.floor(Math.random() * umbrellaMats.length)]); canopy.position.x = 0.22;
   um.add(canopy, new THREE.Mesh(handleGeo, handleMat)); um.visible = withUmbrella; g.add(um);
-  g.userData.umbrella = um; g.userData.body = body;
+  mat.userData.u.uAmp.value = geo.userData.amp * 0.6; mat.userData.u.uRaise.value = withUmbrella ? 1 : 0;
+  g.userData.umbrella = um; g.userData.body = body; g.userData.u = mat.userData.u; g.userData.baseAmp = geo.userData.amp;
   g.scale.setScalar(1.25); scene.add(g); return g;
+}
+function removePerson(p) { scene.remove(p); p.userData.body.geometry.dispose(); p.userData.body.material.dispose(); }
+// New outfits for the people already standing around (a new city or a change in the cold).
+function redress(p) {
+  const old = p.userData.body, { geo, scale } = dress();
+  old.geometry.dispose(); old.geometry = geo; old.scale.setScalar(scale);
+  p.userData.baseAmp = geo.userData.amp;
 }
 
 const _right = new THREE.Vector3(), _p = new THREE.Vector3();
@@ -170,6 +175,8 @@ export const People = {
       return { p, off, cum, len: cum[cum.length - 1] };
     }).filter((r) => r.len > 25);
   },
+  // The city whose clothes people wear (a level id from levels.js); people already walking get new outfits.
+  setCity(id) { if (id === city) return; city = id; for (const w of this.walkers) redress(w.p); },
   // Residents glide in with umbrellas from the upper left or right, away from the drop zone, and step in through the side of the new floor.
   arrive(floorMesh, count, camera) {
     _right.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
@@ -182,7 +189,7 @@ export const People = {
     }
   },
   setWalkers(radius) {
-    for (const w of this.walkers) scene.remove(w.p);
+    for (const w of this.walkers) removePerson(w.p);
     this.walkers = [];
     const n = settings.quality === 'low' ? 12 : 26;
     for (let i = 0; i < n; i++) {
@@ -193,17 +200,18 @@ export const People = {
     }
   },
   update(dt, wind, raining) {
+    if (snowNow !== cold) { cold = snowNow; for (const w of this.walkers) redress(w.p); }
     this.flyers = this.flyers.filter((f) => {
-      if (!f.target.parent) { scene.remove(f.p); return false; }
+      if (!f.target.parent) { removePerson(f.p); return false; }
       if (f.delay > 0) { f.delay -= dt; f.p.visible = false; return true; }
       f.p.visible = true;
-      const fp = f.target.position;
+      f.p.userData.u.uPhase.value = f.t * 6; const fp = f.target.position;
       const end = _p.copy(fp).addScaledVector(f.right, f.s * (CFG.W * 0.5 + 0.35)); end.y = fp.y - CFG.H * 0.45 + f.oy;
       if (f.done > 0) {
         f.done += dt; const k = Math.min(1, f.done / 0.4);
         f.p.position.copy(end).addScaledVector(f.right, -f.s * k * 0.8);
         f.p.scale.setScalar(1.25 * (1 - k)); f.p.userData.umbrella.scale.setScalar(1 - k);
-        if (k >= 1) { scene.remove(f.p); return false; }
+        if (k >= 1) { removePerson(f.p); return false; }
         return true;
       }
       f.t += dt; const k = Math.min(1, f.t / f.dur);
@@ -238,8 +246,9 @@ export const People = {
         else { w.p.position.set(base, 0.05, w.pos); w.p.rotation.y = w.v > 0 ? 0 : Math.PI; }
         w.p.position.y += Math.abs(Math.sin(w.ph)) * 0.06;
       }
+      const u = w.p.userData.u; u.uPhase.value = w.ph; u.uAmp.value = w.p.userData.baseAmp * 0.6; u.uRaise.value = raining ? 1 : 0;
       w.p.userData.umbrella.visible = raining;
     }
   },
-  clear() { for (const f of this.flyers) scene.remove(f.p); this.flyers = []; },
+  clear() { for (const f of this.flyers) removePerson(f.p); this.flyers = []; },
 };
