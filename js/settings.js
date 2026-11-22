@@ -1,6 +1,8 @@
-// Player settings and high scores, kept in this browser's localStorage.
+// Player settings and progress, kept in this browser's localStorage.
 const KEY = 'tb3d_settings_v2';
-const SCORES = 'tb3d_scores_v2';
+const PROGRESS = 'tb3d_progress_v3';
+import { sanitize, recordLevel, recordEndless } from './core/stars.js';
+import { LEVELS } from './levels.js';
 
 const DEFAULTS = { difficulty: 'normal', sfx: 0.7, music: 0.35, quality: 'high', shake: true, hints: true, muted: false, camera: 0 };
 
@@ -12,10 +14,11 @@ const listeners = [];
 export function onSettings(fn) { listeners.push(fn); }
 export function setSetting(k, v) { settings[k] = v; write(KEY, settings); for (const fn of listeners) fn(k, v); }
 
-export function loadScores() { return read(SCORES) || {}; }
-export function addScore(mode, entry) {
-  const all = loadScores(); const list = all[mode] || [];
-  list.push(entry); list.sort((a, b) => b.score - a.score); all[mode] = list.slice(0, 10);
-  write(SCORES, all); return all[mode];
-}
-export function resetScores() { write(SCORES, {}); }
+// Progress (best stars, best height, opened levels, Endless scores per city) lives under its own versioned key.
+// The old City-score key tb3d_scores_v2 is never read, so a bad or old value cannot break the game.
+export function loadProgress() { return sanitize(read(PROGRESS)); }
+function saveProgress(p) { write(PROGRESS, p); return p; }
+export function saveLevelResult(levelId, stars, height) { return saveProgress(recordLevel(loadProgress(), LEVELS, levelId, { stars, height })); }
+export function loadScores(cityId = 'kosice') { return loadProgress().endless[cityId] || []; }
+export function addScore(cityId, entry) { return saveProgress(recordEndless(loadProgress(), cityId, entry)).endless[cityId]; }
+export function resetScores() { const p = loadProgress(); p.endless = {}; saveProgress(p); }

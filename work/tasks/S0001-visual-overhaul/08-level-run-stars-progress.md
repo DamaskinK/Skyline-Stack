@@ -8,10 +8,16 @@ opened levels, Endless scores per city) is saved under new versioned keys.
 **Blocked by:** 02
 
 **Type:** feature
-**Status:** claimed
+**Status:** done
 **Read:** plan "Level definitions", "Progress store", user stories 28-39.
 
-- [ ] Core tests: star rules, target reached ends the run, next level opens on one star
-- [ ] Progress survives reload; old keys are ignored without errors
-- [ ] HUD shows progress to the target
-- [ ] Endless keeps going past any target
+- [x] Core tests: star rules, target reached ends the run, next level opens on one star
+- [x] Progress survives reload; old keys are ignored without errors
+- [x] HUD shows progress to the target
+- [x] Endless keeps going past any target
+
+## Comments
+- Core: `Run(diff, { level })` ends the run on reaching the target with a `target` event (stars) then `over` (result: completed, stars, landings). Pure rules in `js/core/stars.js` (stars add up: 1 target, +1 at most one life lost, +1 at least 50 % perfect landings of all landings; unlock on 1 star). Level data in `js/levels.js` (Kosice full, five others `built: false`).
+- Progress under `tb3d_progress_v3` (best stars, best height, opened, Endless top 10 per city). Old `tb3d_scores_v2` is no longer read; Endless scores moved into the new store, so old Endless scores are gone.
+- UI: mode cards on New Game (Kosice, Endless), HUD `TARGET n / target`, level result screen (stars, height, perfects, residents; Retry, Continue to menu).
+- Checked: 22 core tests; scripted browser run with the target lowered to 3 (result screen, progress saved, survives reload, garbage old and new keys give no errors); check.mjs all PASS. HUD still shows the old weather text ("RAIN IN 14 FL"): weather segments belong to a later ticket.

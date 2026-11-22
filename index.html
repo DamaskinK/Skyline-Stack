@@ -97,7 +97,9 @@
 <section class="screen" id="sNew" hidden>
   <div class="panel wide">
     <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>NEW GAME</h2></header>
-    <p class="note">ENDLESS: one tower, as high as you can. Weather turns every 15 floors.</p>
+    <h3>MODE</h3>
+    <div class="cards three" role="group" aria-label="Mode" id="modeCards"></div>
+    <p class="note" id="modeNote"></p>
     <h3>DIFFICULTY</h3>
     <div class="cards three" role="group" aria-label="Difficulty" id="diffCards"></div>
     <div class="actions"><button type="button" class="btn big" id="btnStart">START ▶</button></div>
@@ -179,6 +181,16 @@
       <button type="button" class="mi" data-go="sSettings"><span class="cur">▶</span>SETTINGS</button>
       <button type="button" class="mi" id="btnQuit"><span class="cur">▶</span>QUIT TO MENU</button>
     </nav>
+  </div>
+</section>
+
+<!-- ── level complete ── -->
+<section class="screen dim" id="sLevelDone" hidden>
+  <div class="panel">
+    <header><h2 id="doneTitle">LEVEL COMPLETE</h2></header>
+    <div class="stars" id="doneStars" role="img" aria-label="Stars"></div>
+    <div class="stats" id="doneStats"></div>
+    <div class="actions"><button type="button" class="btn" id="btnRetry">RETRY</button><button type="button" class="btn ghost" id="btnContinue">CONTINUE</button></div>
   </div>
 </section>
 

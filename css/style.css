@@ -227,3 +227,9 @@ kbd { font-family: var(--f-disp); font-size: 9px; color: var(--ink); background:
 .bar.load { width: 100%; height: 16px; margin: 6px 0 2px; }
 .bar.load i { width: 0; background: var(--amber); }
 #loadText.err { color: var(--bad); }
+
+/* level result: stars */
+.stars { display: flex; justify-content: center; gap: 10px; }
+.stars svg { width: 56px; height: 56px; }
+svg.off path { fill: #1a2148; stroke: #2c3a78; }
+.card-opt .sub { font-size: 14px; color: var(--dim); }

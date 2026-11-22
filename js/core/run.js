@@ -3,12 +3,14 @@
 // Output: readable state on this object, and events collected with drain(). Same input, same events.
 import { CFG, BTYPES, PHASE_LEN, phaseAt, specialFor } from '../config.js';
 import { windAt, hookAt, Tower } from '../physics.js';
+import { starsFor } from './stars.js';
 
 export const CALM_WIND = Object.freeze({ x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
 
 export class Run {
-  constructor(diff, { bx = 0, bz = 0 } = {}) {
-    this.diff = diff;
+  // `level` is a definition from js/levels.js (or null for plain Endless): reaching level.target ends the run with stars.
+  constructor(diff, { bx = 0, bz = 0, level = null } = {}) {
+    this.diff = diff; this.level = level; this.landings = 0;
     this.tower = new Tower(bx, bz, diff);
     this.t = 0; this.events = []; this.over = false; this.result = null;
     this.wind = CALM_WIND; this.hook = null; this.block = null;
@@ -135,6 +137,7 @@ export class Run {
     this.score += Math.round((10 + (perfect ? 15 : 0)) * mult * gm * this.diff.score);
     this.pop += Math.round((perfect ? 25 : 10) * mult * gm * this.diff.score);
     const n = T.n;
+    this.landings++;
     this.emit('land', {
       kind: perfect ? 'perfect' : good ? 'good' : 'risky', offset, golden, combo: this.combo,
       floor: n - 1, x: b.x, z: b.z, roofY: T.topY(),
@@ -144,6 +147,7 @@ export class Run {
     this.bestHeight = Math.max(this.bestHeight, n);
     if (CFG.features.anchor && record && n > 0 && n % CFG.anchorEvery === 0) { this.anchors++; this.emit('anchorGained'); }
     if (n % PHASE_LEN === 0 && n > 0 && Math.floor(n / PHASE_LEN) !== this.lastPhase) { this.lastPhase = Math.floor(n / PHASE_LEN); this.emit('weather', { floor: n }); }
+    if (this.level && n >= this.level.target) { this.completeLevel(); return; }
     if (CFG.features.quake) {
       if (n % CFG.quakeEvery === CFG.quakeEvery - 2) this.emit('quakeWarning', { floor: n + 2 });
       if (n > 0 && n % CFG.quakeEvery === 0) { T.quake(); this.emit('quake'); }
@@ -164,10 +168,20 @@ export class Run {
     if (this.lives <= 0) this.end();
   }
 
-  end() {
+  completeLevel() {
+    const livesLost = this.diff.lives - this.lives;
+    const stars = starsFor({ reached: true, livesLost, perfects: this.perfects, landings: this.landings });
+    this.emit('target', { target: this.level.target, stars, livesLost });
+    this.end({ completed: true, stars });
+  }
+
+  end(extra = {}) {
     if (this.over) return;
     this.over = true;
-    this.result = { score: this.score, floors: Math.max(this.bestHeight, this.tower.n), pop: this.pop, perfects: this.perfects };
+    this.result = {
+      score: this.score, floors: Math.max(this.bestHeight, this.tower.n), pop: this.pop, perfects: this.perfects,
+      landings: this.landings, completed: false, stars: 0, ...extra,
+    };
     this.emit('over', { result: this.result });
   }
 }

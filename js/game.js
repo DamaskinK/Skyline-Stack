@@ -7,7 +7,8 @@ import { scene } from './world.js';
 import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
-import { settings, loadScores } from './settings.js';
+import { settings, loadScores, saveLevelResult } from './settings.js';
+import { levelById } from './levels.js';
 import { loadLevelAssets } from './assets.js';
 import { applyLevelAssets, level } from './level-scene.js';
 
@@ -45,13 +46,14 @@ export class Game {
     return errors;
   }
 
-  start(mode = this.mode, diffKey = settings.difficulty) {
+  start(mode = this.mode, diffKey = settings.difficulty, levelId = 'kosice') {
     this.clear();
     this.mode = mode; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
-    this.prevBest = (loadScores()[mode] || [])[0]?.score || 0;
+    this.cityId = levelId; this.levelDef = mode === 'level' ? levelById(levelId) : null;
+    this.prevBest = loadScores(levelId)[0]?.score || 0;
     this.state = 'play'; this.paused = false; this.saved = false;
     People.setWalkers(9);
-    this.run = new Run(this.diff);
+    this.run = new Run(this.diff, { level: this.levelDef });
     this.objects.push(makeFoundation(0, 0));
     this.ui.showHud();
   }
@@ -106,6 +108,7 @@ export class Game {
         break;
       }
       case 'lifeLost': if (ev.reason) this.ui.popup(ev.reason, '#ff4d5e'); break;
+      case 'target': this.ui.popup('TARGET REACHED', '#ffd34d'); Sfx.golden(); break;
       case 'over': this.gameOver(ev.result); break;
       default: break;
     }
@@ -171,6 +174,14 @@ export class Game {
     if (this.state === 'over' || this.state === 'menu') return;
     this.state = 'over';
     this.lastResult = { ...result, diff: this.diffKey };
+    if (this.levelDef) {
+      saveLevelResult(this.levelDef.id, result.stars, result.floors);
+      if (result.completed) {
+        Sfx.fanfare();
+        setTimeout(() => { if (this.state === 'over') this.ui.levelDone(this.lastResult, this.levelDef); }, 1400);
+        return;
+      }
+    }
     Sfx.over();
     setTimeout(() => { if (this.state === 'over') this.ui.gameOver(this.lastResult, this.lastResult.score > this.prevBest && this.lastResult.score > 0); }, 1400);
   }

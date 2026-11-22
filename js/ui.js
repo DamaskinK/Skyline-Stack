@@ -1,6 +1,7 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
 import { CFG, DIFFICULTY, BTYPES, PHASES, PHASE_LEN, phaseAt, specialFor } from './config.js';
-import { settings, setSetting, loadScores, addScore, resetScores } from './settings.js';
+import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
+import { levelById } from './levels.js';
 import { Sfx, Music } from './audio.js';
 import { People } from './fx.js';
 import { buildDemo, clearDemo } from './game.js';
@@ -17,6 +18,7 @@ export const WX_ICONS = {
   Fog: '<svg viewBox="0 0 32 32"><g stroke="#f2c0a0" stroke-width="3" stroke-linecap="round"><path d="M4 10h20M8 16h20M4 22h18M10 28h14"/></g></svg>',
 };
 const HEART = (on) => `<svg viewBox="0 0 24 22" class="${on ? '' : 'off'}"><path d="M12 21 L3 12 A5 5 0 0 1 12 5 A5 5 0 0 1 21 12 Z" fill="#ff4d5e" stroke="#000" stroke-width="2"/></svg>`;
+const STAR = (on) => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 
 export function createUI(game) {
@@ -28,8 +30,9 @@ export function createUI(game) {
     if (push) stack.push(id);
     const s = $('#' + id);
     s.style.animation = 'none'; void s.offsetWidth; s.style.animation = '';
-    if (id === 'sScores') renderScores($('#hsTable'), scoreTab);
+    if (id === 'sScores') renderScores($('#hsTable'), 'kosice');
     if (id === 'sTitle') renderTitleBest();
+    if (id === 'sNew') renderModes();
     if (id === 'sSettings') syncSettings();
     setTimeout(() => (s.querySelector('[aria-pressed="true"].card-opt, .mi, .btn, button') || s).focus({ preventScroll: true }), 30);
   }
@@ -46,7 +49,7 @@ export function createUI(game) {
   [...'TOWER'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[i % 5]; d.style.animationDelay = `${i * 0.08}s, ${i * 0.15}s`; $('#logoTop').appendChild(d); });
   [...'BLOXX'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[(i + 2) % 5]; d.style.animationDelay = `${0.4 + i * 0.08}s, ${0.7 + i * 0.15}s`; $('#logoBot').appendChild(d); });
   function renderTitleBest() {
-    const e = loadScores().endless?.[0];
+    const e = loadScores('kosice')[0];
     $('#titleBest').innerHTML = e ? `BEST TOWER <b>${e.score}</b> · ${e.floors} FL` : 'NO RECORDS YET. BE THE FIRST.';
   }
 
@@ -58,7 +61,7 @@ export function createUI(game) {
   for (const b of $$('.mi, .card-opt, .seg button, .tabs button')) b.addEventListener('pointerenter', () => { if (document.activeElement !== b) { b.focus({ preventScroll: true }); Sfx.ui(); } });
 
   // ── new game ──
-  let pickDiff = settings.difficulty;
+  let pickDiff = settings.difficulty, pickMode = 'level';
   const dc = $('#diffCards');
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
@@ -69,9 +72,23 @@ export function createUI(game) {
   }
   function syncNew() {
     for (const b of $$('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === pickDiff));
+    for (const b of $$('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === pickMode));
+    const k = levelById('kosice');
+    $('#modeNote').textContent = pickMode === 'level'
+      ? `1 star: reach ${k.target} floors. 2 stars: lose at most one life. 3 stars: at least half your landings perfect.`
+      : 'ENDLESS: one tower, as high as you can. Weather turns every 15 floors.';
   }
   syncNew();
-  $('#btnStart').onclick = () => startGame('endless', pickDiff);
+  // Mode cards: Kosice level (with its best stars) and Endless. The world map (ticket 20) will replace this.
+  function renderModes() {
+    const k = levelById('kosice'), best = loadProgress().levels[k.id];
+    $('#modeCards').innerHTML =
+      `<button type="button" class="card-opt" data-mode="level"><b>${k.city.toUpperCase()}</b><span class="sub">Level 1 · build ${k.target} floors</span><span>${[1, 2, 3].map((i) => STAR(i <= (best?.stars || 0))).join('')}</span></button>` +
+      `<button type="button" class="card-opt" data-mode="endless"><b>ENDLESS</b><span class="sub">No target, as high as you can</span></button>`;
+    for (const b of $$('[data-mode]')) b.onclick = () => { pickMode = b.dataset.mode; Sfx.ui(); syncNew(); };
+    syncNew();
+  }
+  $('#btnStart').onclick = () => startGame(pickMode, pickDiff);
   let starting = false;
   async function startGame(mode, diff, level = 'kosice') {
     if (starting) return; starting = true;
@@ -79,7 +96,7 @@ export function createUI(game) {
     if (game.levelId !== level) await loadLevel(level);
     clearDemo(); hideScreens();
     Music.setMood('game');
-    game.start(mode, diff);
+    game.start(mode, diff, level);
     starting = false;
   }
   // Loading screen with progress. A failed asset is named on screen and the game goes on with what it has.
@@ -133,9 +150,8 @@ export function createUI(game) {
   game.camMode = settings.camera;
 
   // ── scores ──
-  const scoreTab = 'endless';
-  function renderScores(el, mode) {
-    const list = (loadScores()[mode] || []).slice(0, 10);
+  function renderScores(el, cityId) {
+    const list = loadScores(cityId).slice(0, 10);
     el.innerHTML = list.length
       ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc((s.diff || 'normal').toUpperCase())}</span></td><td>${s.floors} fl</td><td class="sc">${s.score}</td></tr>`).join('')
       : '<tr><td class="empty">No scores yet. Your first tower goes here.</td></tr>';
@@ -187,7 +203,7 @@ export function createUI(game) {
     if (game.paused) { stack = []; show('sPause'); } else { hideScreens(); stack = []; }
   }
   $('#btnPause').onclick = togglePause; $('#btnResume').onclick = togglePause;
-  $('#btnRestart').onclick = () => { game.paused = false; startGame(game.mode, game.diffKey); };
+  $('#btnRestart').onclick = () => { game.paused = false; startGame(game.mode, game.diffKey, game.cityId); };
   function syncMute() { $('#muteX').hidden = !settings.muted; $('#muteWave').hidden = settings.muted; $('#btnMute').setAttribute('aria-label', settings.muted ? 'Unmute sound' : 'Mute sound'); }
   function toggleMute() { setSetting('muted', !settings.muted); syncMute(); }
   function cycleCam() { game.camMode = (game.camMode + 1) % 3; setSetting('camera', game.camMode); }
@@ -201,17 +217,19 @@ export function createUI(game) {
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
-  $('#btnAgain').onclick = () => startGame(game.mode, game.diffKey);
+  $('#btnAgain').onclick = () => startGame(game.mode, game.diffKey, game.cityId);
+  $('#btnRetry').onclick = () => startGame(game.mode, game.diffKey, game.cityId);
+  $('#btnContinue').onclick = () => { Sfx.uiBack(); toMenu(); };   // no level 2 yet: back to the menu
 
   // ── game over ──
   $('#saveForm').addEventListener('submit', (e) => {
     e.preventDefault();
     if (game.saved || !game.lastResult) return;
     const r = game.lastResult;
-    addScore(game.mode, { name: ($('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
+    addScore(game.cityId, { name: ($('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
     try { localStorage.setItem('tb3d_name', $('#name').value); } catch { /* storage blocked */ }
     game.saved = true; $('#btnSave').disabled = true; $('#btnSave').textContent = 'SAVED'; Sfx.uiOk();
-    renderScores($('#overHs'), game.mode);
+    renderScores($('#overHs'), game.cityId);
   });
 
   // ── HUD ──
@@ -235,6 +253,14 @@ export function createUI(game) {
       const c = $('#wxCard'); c.hidden = true; void c.offsetWidth; c.hidden = false; wxTimer = 3.2;
     },
     bumpFloor() { const el = $('#floorBig'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); },
+    levelDone(r, lv) {
+      $('#hud').hidden = true;
+      $('#doneTitle').textContent = `${lv.city.toUpperCase()} COMPLETE`;
+      $('#doneStars').innerHTML = [1, 2, 3].map((i) => STAR(i <= r.stars)).join('');
+      $('#doneStars').setAttribute('aria-label', `${r.stars} of 3 stars`);
+      $('#doneStats').innerHTML = `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">PERFECTS</span><b>${r.perfects}/${r.landings}</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
+      stack = []; show('sLevelDone');
+    },
     gameOver(r, record) {
       $('#hud').hidden = true;
       $('#overTitle').textContent = 'GAME OVER';
@@ -242,7 +268,7 @@ export function createUI(game) {
       $('#overStats').innerHTML = `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
       $('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
       try { $('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
-      renderScores($('#overHs'), game.mode);
+      renderScores($('#overHs'), game.cityId);
       stack = []; show('sOver');
       if (record) Sfx.fanfare();
     },
@@ -251,6 +277,7 @@ export function createUI(game) {
       if (bannerT > 0) { bannerT -= rdt; setText('banner', bannerText); } else setText('banner', '');
       if ($('#hud').hidden) return;
       const T = game.tower, n = T ? T.n : 0, ph = phaseAt(n), w = game.wind;
+      setText('hTarget', game.levelDef ? `TARGET ${n} / ${game.levelDef.target}` : '');
       setText('hScore', String(game.score));
       setText('hPop', String(game.pop));
       setText('floorBig', String(n));
