@@ -1,39 +1,29 @@
-// Bundles the game into one self-contained HTML file: dist/tower-bloxx-3d.html (works with a double-click, no server).
-// Also writes dist/artifact.html, the same page without <html>/<body> wrappers, for publishing as a claude.ai artifact.
-// Usage: npm install && npm run build
+// Builds the game into dist/: one bundled script, the stylesheet, the page and the asset folders (ADR 0001).
+// Usage: npm install && npm run build, then npm run preview (static server on dist/).
 import { build } from 'esbuild';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 
+// "three" and "three/addons/..." resolve to the vendored copies, as the import map does in development.
+const vendorThree = {
+  name: 'vendor-three',
+  setup(b) {
+    b.onResolve({ filter: /^three$/ }, () => ({ path: resolve('vendor/three.module.js') }));
+    b.onResolve({ filter: /^three\/addons\// }, (a) => ({ path: resolve('vendor/addons', a.path.slice('three/addons/'.length)) }));
+  },
+};
+
+rmSync('dist', { recursive: true, force: true });
+mkdirSync('dist/css', { recursive: true });
 const res = await build({
-  entryPoints: ['js/main.js'], bundle: true, format: 'esm', minify: true, write: false, target: 'es2020',
-  alias: { three: './vendor/three.module.js' }, legalComments: 'none',
+  entryPoints: ['js/main.js'], bundle: true, format: 'esm', minify: true, target: 'es2020', outfile: 'dist/game.js',
+  plugins: [vendorThree], legalComments: 'none', write: true, metafile: true,
 });
-const js = res.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
-const css = readFileSync('css/style.css', 'utf8');
-const html = readFileSync('index.html', 'utf8');
-const body = html.slice(html.indexOf('<!--BODY-->') + 11, html.indexOf('<!--/BODY-->')).trim();
-const fonts = '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">';
-
-mkdirSync('dist', { recursive: true });
-writeFileSync('dist/tower-bloxx-3d.html', `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tower Bloxx 3D</title>
-${fonts}
-<style>${css}</style>
-</head>
-<body>
-${body}
-<script type="module">${js}</script>
-</body>
-</html>
-`);
-writeFileSync('dist/artifact.html', `<title>Tower Bloxx 3D</title>
-${fonts}
-<style>${css}</style>
-${body}
-<script type="module">${js}</script>
-`);
-console.log(`built dist/tower-bloxx-3d.html (${(js.length / 1024).toFixed(0)} KB of JS)`);
+cpSync('css/style.css', 'dist/css/style.css');
+cpSync('assets', 'dist/assets', { recursive: true });
+const html = readFileSync('index.html', 'utf8')
+  .replace(/<script type="importmap">[\s\S]*?<\/script>\n?/, '')
+  .replace('<script type="module" src="js/main.js"></script>', '<script type="module" src="game.js"></script>');
+writeFileSync('dist/index.html', html);
+const kb = Object.values(res.metafile.outputs).reduce((s, o) => s + o.bytes, 0) / 1024;
+console.log(`built dist/ (${kb.toFixed(0)} KB of JS)`);

@@ -72,10 +72,34 @@ export function createUI(game) {
   }
   syncNew();
   $('#btnStart').onclick = () => startGame('endless', pickDiff);
-  function startGame(mode, diff) {
-    Sfx.init(); Sfx.uiOk(); clearDemo(); hideScreens(); stack = [];
+  let starting = false;
+  async function startGame(mode, diff, level = 'kosice') {
+    if (starting) return; starting = true;
+    Sfx.init(); Sfx.uiOk(); stack = [];
+    if (game.levelId !== level) await loadLevel(level);
+    clearDemo(); hideScreens();
     Music.setMood('game');
     game.start(mode, diff);
+    starting = false;
+  }
+  // Loading screen with progress. A failed asset is named on screen and the game goes on with what it has.
+  async function loadLevel(level) {
+    const bar = $('#loadBar'), fill = bar.querySelector('i'), text = $('#loadText');
+    const setP = (p) => { fill.style.width = `${(p * 100).toFixed(0)}%`; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); };
+    setP(0); text.classList.remove('err'); text.textContent = 'Fetching the city...';
+    show('sLoading', false);
+    try {
+      const errors = await game.loadLevel(level, setP);
+      if (errors.length) {
+        text.classList.add('err');
+        text.textContent = `Some files did not load (${errors.map((e) => e.url.split('/').pop()).join(', ')}). Playing without them.`;
+        await new Promise((r) => setTimeout(r, 1800));
+      }
+    } catch (e) {
+      text.classList.add('err');
+      text.textContent = `Could not load the city: ${e.message}. Playing the basic scene.`;
+      await new Promise((r) => setTimeout(r, 2200));
+    }
   }
 
   // ── settings ──

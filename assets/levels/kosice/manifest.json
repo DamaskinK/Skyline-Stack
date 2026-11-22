@@ -1,0 +1,7 @@
+{
+  "level": "kosice",
+  "assets": [
+    { "id": "sky", "type": "hdri", "url": "assets/levels/kosice/sky_1k.hdr", "bytes": 1435119 },
+    { "id": "bench", "type": "gltf", "url": "assets/kits/kaykit-city/bench.gltf", "bytes": 25733 }
+  ]
+}

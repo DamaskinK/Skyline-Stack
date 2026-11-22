@@ -4,24 +4,19 @@ A retro tower-stacking game in Three.js. Drop swinging floors from a crane and b
 
 ## Run it
 
-**Quickest:** open `dist/tower-bloxx-3d.html` with a double-click. It is a single file with everything inside.
-
-**From the source** (ES modules need a local web server, `file://` will not load them):
-
-```bash
-cd "Tower Bloxx Game"
-python3 -m http.server 8000      # or: npm run serve
-# open http://localhost:8000
-```
-
-The VS Code "Live Server" extension works too: right-click `index.html` → Open with Live Server.
-
-**Rebuild the single file** after changing the code (needs Node.js 18+):
+The game loads its models, textures and sounds per level, so it needs a web server (`file://` will not work).
+Node.js 18+:
 
 ```bash
 npm install
-npm run build       # writes dist/tower-bloxx-3d.html and dist/artifact.html
+npm run serve       # development, from the source: http://localhost:8000
+npm test            # simulation core tests
+npm run build       # static site in dist/ (bundled code, page, styles, assets)
+npm run preview     # serve dist/ at http://localhost:8001
 ```
+
+`dist/` can be put on any static host (for example GitHub Pages).
+`node scripts/vendor-addons.mjs <three@0.160.0 package>` refreshes the Three.js addons in `vendor/addons/`.
 
 ## Controls
 

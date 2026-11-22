@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
 <link rel="stylesheet" href="css/style.css">
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
 </head>
 <body>
 <!--BODY-->
@@ -156,6 +156,15 @@
         <ul class="keys" id="helpWeather"></ul>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ── loading a level ── -->
+<section class="screen dim" id="sLoading" hidden>
+  <div class="panel narrow">
+    <header><h2 id="loadTitle">LOADING</h2></header>
+    <div class="bar load" id="loadBar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+    <p class="note" id="loadText">Fetching the city...</p>
   </div>
 </section>
 

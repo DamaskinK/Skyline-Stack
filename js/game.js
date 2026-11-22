@@ -8,6 +8,8 @@ import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { settings, loadScores } from './settings.js';
+import { loadLevelAssets } from './assets.js';
+import { applyLevelAssets, level } from './level-scene.js';
 
 export class Game {
   constructor() {
@@ -34,6 +36,14 @@ export class Game {
   get perfects() { return this.run ? this.run.perfects : 0; }
   get focus() { return this.run ? this.run.focus : 1; }
   get drops() { return this.run ? this.run.drops : 0; }
+
+  get levelId() { return level.id; }
+  // Fetch a level's assets and put them in the scene. Resolves to the list of files that failed (may be empty).
+  async loadLevel(id, onProgress) {
+    const { assets, errors } = await loadLevelAssets(id, onProgress);
+    applyLevelAssets(id, assets);
+    return errors;
+  }
 
   start(mode = this.mode, diffKey = settings.difficulty) {
     this.clear();

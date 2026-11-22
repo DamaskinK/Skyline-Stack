@@ -7,10 +7,10 @@ loader, RGBE/EXR loader, post-processing passes) are vendored. ADR 0001.
 **Blocked by:** None (can start immediately).
 
 **Type:** feature
-**Status:** claimed
+**Status:** done
 **Read:** plan "Assets and build"; `docs/adr/0001-folder-build-with-per-level-assets.md`.
 
-- [ ] Single-file outputs removed; `dist/` runs with `npm run serve` style static hosting
-- [ ] A manifest for a test level with one CC0 HDRI and one CC0 GLB loads with a visible progress bar
-- [ ] A failed asset shows a readable error and the game falls back where a fallback exists
-- [ ] README run instructions updated; CREDITS has the test assets
+- [x] Single-file outputs removed; `dist/` runs with `npm run serve` style static hosting
+- [x] A manifest for a test level with one CC0 HDRI and one CC0 GLB loads with a visible progress bar
+- [x] A failed asset shows a readable error and the game falls back where a fallback exists
+- [x] README run instructions updated; CREDITS has the test assets

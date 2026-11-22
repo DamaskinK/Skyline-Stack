@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "game", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8000"], "port": 8000 }
+    { "name": "game", "runtimeExecutable": "npm", "runtimeArgs": ["run", "serve"], "port": 8000 },
+    { "name": "dist", "runtimeExecutable": "npm", "runtimeArgs": ["run", "preview"], "port": 8001 }
   ]
 }
