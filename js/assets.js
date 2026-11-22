@@ -1,5 +1,5 @@
 // Level assets: each level lists its files in assets/levels/<id>/manifest.json and they load on demand.
-// Manifest: { "level": "<id>", "assets": [{ "id", "type": "hdri" | "gltf" | "texture" | "audio", "url", "bytes", "required"? }] }
+// Manifest: { "level": "<id>", "assets": [{ "id", "type": "hdri" | "gltf" | "texture" | "audio" | "json", "url", "bytes", "required"? }] }
 // URLs are relative to the page. Loaded files are cached by URL, so a level loads only once per visit.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -14,6 +14,7 @@ function loadOne(a, onBytes) {
     case 'hdri': return rgbe.loadAsync(a.url, progress).then((t) => { t.mapping = THREE.EquirectangularReflectionMapping; return t; });
     case 'gltf': return gltf.loadAsync(a.url, progress).then((g) => g.scene);
     case 'texture': return tex.loadAsync(a.url, progress).then((t) => { t.colorSpace = THREE.SRGBColorSpace; return t; });
+    case 'json': return fetch(a.url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
     case 'audio': return fetch(a.url).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); }).then((b) => { onBytes(b.byteLength); return b; });
     default: return Promise.reject(new Error(`unknown asset type "${a.type}"`));
   }

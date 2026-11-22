@@ -2,6 +2,11 @@
   "level": "kosice",
   "assets": [
     { "id": "sky", "type": "hdri", "url": "assets/levels/kosice/sky_1k.hdr", "bytes": 1435119 },
-    { "id": "bench", "type": "gltf", "url": "assets/kits/kaykit-city/bench.gltf", "bytes": 25733 }
+    { "id": "osm", "type": "json", "url": "assets/levels/kosice/osm.json", "bytes": 188989 },
+    { "id": "bench", "type": "gltf", "url": "assets/kits/kaykit-city/bench.gltf", "bytes": 25733 },
+    { "id": "streetlight", "type": "gltf", "url": "assets/kits/kaykit-city/streetlight.gltf", "bytes": 10203 },
+    { "id": "bush", "type": "gltf", "url": "assets/kits/kaykit-city/bush.gltf", "bytes": 6078 },
+    { "id": "car_sedan", "type": "gltf", "url": "assets/kits/kaykit-city/car_sedan.gltf", "bytes": 66260 },
+    { "id": "car_hatchback", "type": "gltf", "url": "assets/kits/kaykit-city/car_hatchback.gltf", "bytes": 64516 }
   ]
 }

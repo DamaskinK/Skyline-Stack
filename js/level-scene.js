@@ -2,7 +2,8 @@
 // Everything here is replaced when the level changes.
 import * as THREE from 'three';
 import { CFG } from './config.js';
-import { scene, renderer, setEnvironment, GROUND_Y } from './world.js';
+import { scene, renderer, setEnvironment, setNearProcedural, GROUND_Y } from './world.js';
+import { buildNearRing } from './near-ring.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
 export const level = { id: null, env: null };
@@ -22,6 +23,9 @@ export function applyLevelAssets(id, assets) {
     envRT = pmrem.fromEquirectangular(assets.sky);
   }
   setEnvironment(envRT ? envRT.texture : null);
+  // a level with an OpenStreetMap near ring replaces the procedural city around the tower
+  setNearProcedural(!assets.osm);
+  if (assets.osm) group.add(buildNearRing(assets.osm, assets));
   if (assets.bench) {
     for (const s of [-1, 1]) {
       const b = assets.bench.clone(true);

@@ -75,6 +75,11 @@ const skyMat = new THREE.ShaderMaterial({
 });
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), skyMat); sky.renderOrder = -1; scene.add(sky);
 
+// Everything of the procedural city that the OpenStreetMap near ring replaces (see near-ring.js) lives in this group,
+// so a level with a near ring hides it as one.
+export const nearProc = new THREE.Group(); nearProc.name = 'procedural-near'; scene.add(nearProc);
+export function setNearProcedural(on) { nearProc.visible = on; traffic.enabled = on; traffic.setCount(traffic.want); }
+
 // ── ground, plaza, roads, sidewalks ──
 // No two ground surfaces share a plane: every layer has a real height step and strips are cut where they would cross.
 // Grass at 0, roads 2 cm up, markings 3.5 cm, plaza and sidewalks are 6 cm slabs with a curb. Shared geometry, so the
@@ -90,7 +95,7 @@ const ground = (mat, parts) => {
     for (let i = 0; i < p.count; i++) { const u = p.getX(i) / us, v = p.getZ(i) / vs; uv.setXY(i, swap ? v : u, swap ? u : v); }
     return g.index ? g.toNonIndexed() : g;
   });
-  const m = new THREE.Mesh(mergeGeos(geos), mat); m.receiveShadow = true; scene.add(m); return m;
+  const m = new THREE.Mesh(mergeGeos(geos), mat); m.receiveShadow = true; nearProc.add(m); return m;
 };
 function mergeGeos(geos) {
   const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
@@ -129,16 +134,16 @@ for (const s of [-1, 1]) for (let k = -LEN / 2; k < LEN / 2; k += 6) { dashes.pu
 // markings sit a real 1.5 cm above the road; the small depth bias only keeps distant ones crisp
 function groundLayer(mat, layer) { const m = mat.clone(); m.polygonOffset = true; m.polygonOffsetFactor = -layer; m.polygonOffsetUnits = -layer; return m; }
 const o3 = new THREE.Object3D();
-function instanced(geo, mat, list, place, shadow = false) {
+function instanced(geo, mat, list, place, shadow = false, parent = scene) {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
   list.forEach((it, i) => { o3.position.set(0, 0, 0); o3.rotation.set(0, 0, 0); o3.scale.set(1, 1, 1); place(it, o3, i); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); });
-  im.castShadow = shadow; im.receiveShadow = true; scene.add(im); return im;
+  im.castShadow = shadow; im.receiveShadow = true; parent.add(im); return im;
 }
-instanced(new THREE.PlaneGeometry(2.5, 0.3).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 1), dashes, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark, z); o.rotation.y = r; });
+instanced(new THREE.PlaneGeometry(2.5, 0.3).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 1), dashes, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark, z); o.rotation.y = r; }, false, nearProc);
 // zebra crossings at the four corners of the plaza
 const zebra = [];
 for (const s of [-1, 1]) for (const t of [-1, 1]) for (let k = -3; k <= 3; k++) { zebra.push([t * 20 + k * 1.2, s * ROAD, 0]); zebra.push([s * ROAD, t * 20 + k * 1.2, Math.PI / 2]); }
-instanced(new THREE.PlaneGeometry(0.7, ROAD_W - 1).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 2), zebra, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark + 0.004, z); o.rotation.y = r; });
+instanced(new THREE.PlaneGeometry(0.7, ROAD_W - 1).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 2), zebra, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark + 0.004, z); o.rotation.y = r; }, false, nearProc);
 
 // ── geometry helper: merge simple parts into one vertex-coloured mesh ──
 export function mergeColored(parts) {
@@ -165,18 +170,20 @@ const shopMats = Array.from({ length: 8 }, (_, i) => { const t = shopTex(i); con
 const roofProps = mergeColored([[box(1.6, 1, 1.2, 0, 0.5, 0), 0x9aa0a8], [cyl(0.7, 1.6, 2.2, 1.2, 1.4), 0x8a5a3a], [cyl(0.05, 3.5, -1.6, 1.75, -1), 0xcccccc]]);
 const roofPropMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
 const roofPropList = [], billboards = [];
+const blockCtx = { parent: nearProc, props: roofPropList, boards: billboards };
 function cityBlock(x, z, w, d, h, hex, variant, idx) {
+  const { parent, props, boards } = blockCtx;
   const fa = facade(hex, variant);
   const side = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 });
   sceneryMats.push(side);
   const m = new THREE.Mesh(storeyUV(new THREE.BoxGeometry(w, h, d), w, h, d), [side, side, topMat, topMat, side, side]);
-  m.position.set(x, CFG.H * 1.6 + h / 2, z); m.receiveShadow = true; scene.add(m);
+  m.position.set(x, CFG.H * 1.6 + h / 2, z); m.receiveShadow = true; parent.add(m);
   const sm = shopMats[idx % shopMats.length];
   const shop = new THREE.Mesh(storeyUV(new THREE.BoxGeometry(w + 0.4, CFG.H * 1.6, d + 0.4), (w + 0.4) * 0.62, CFG.H, (d + 0.4) * 0.62), [sm, sm, topMat, topMat, sm, sm]);
-  shop.position.set(x, CFG.H * 0.8, z); shop.receiveShadow = true; scene.add(shop);
+  shop.position.set(x, CFG.H * 0.8, z); shop.receiveShadow = true; parent.add(shop);
   const roofY = CFG.H * 1.6 + h;
-  roofPropList.push([x, roofY, z, rnd() * 6]);
-  if (idx % 5 === 0) billboards.push([x, roofY, z, w, idx]);
+  props.push([x, roofY, z, rnd() * 6]);
+  if (idx % 5 === 0) boards.push([x, roofY, z, w, idx]);
 }
 const isRoad = (x, z, pad) => Math.abs(Math.abs(x) - ROAD) < pad || Math.abs(Math.abs(z) - ROAD) < pad;
 for (let i = 0, made = 0; i < 160 && made < 84; i++) {
@@ -189,11 +196,28 @@ for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   const tall = r > 120 ? 20 + rnd() * 90 : 6 + rnd() * rnd() * 50;
   cityBlock(x, z, w, d, tall, palette[made % palette.length], made % 3, made); made++;
 }
-instanced(roofProps, roofPropMat, roofPropList, ([x, y, z, r], o) => { o.position.set(x, y, z); o.rotation.y = r; });
-for (const [x, y, z, w, i] of billboards) {
-  const bb = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, w * 0.3), new THREE.MeshStandardMaterial({ map: billboardTex(i), emissive: 0xffffff, emissiveMap: billboardTex(i), emissiveIntensity: 0.1, side: THREE.DoubleSide }));
-  sceneryMats.push(bb.material);
-  bb.position.set(x, y + w * 0.3, z); bb.lookAt(0, y + w * 0.3, 0); scene.add(bb);
+function finishBlocks(props, boards, parent) {
+  instanced(roofProps, roofPropMat, props, ([x, y, z, r], o) => { o.position.set(x, y, z); o.rotation.y = r; }, false, parent);
+  for (const [x, y, z, w, i] of boards) {
+    const bb = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, w * 0.3), new THREE.MeshStandardMaterial({ map: billboardTex(i), emissive: 0xffffff, emissiveMap: billboardTex(i), emissiveIntensity: 0.1, side: THREE.DoubleSide }));
+    sceneryMats.push(bb.material);
+    bb.position.set(x, y + w * 0.3, z); bb.lookAt(0, y + w * 0.3, 0); parent.add(bb);
+  }
+}
+finishBlocks(roofPropList, billboards, nearProc);
+// Far blocks beyond the near ring (r 310-480 m): always there, with their own random stream so the scene above stays as it was.
+// Ticket 13 replaces them.
+{
+  let st = 91; const fr = () => { st = (st * 16807) % 2147483647; return (st - 1) / 2147483646; };
+  const farProps = [], farBoards = [];
+  Object.assign(blockCtx, { parent: scene, props: farProps, boards: farBoards });
+  for (let i = 0; i < 30; i++) {
+    const a = fr() * Math.PI * 2, r = 310 + fr() * 170, x = Math.cos(a) * r, z = Math.sin(a) * r, w = 9 + fr() * 12, d = 9 + fr() * 12;
+    const along = (x * -9 + z * -22) / 23.8, across = Math.abs(x * 22 - z * 9) / 23.8;
+    if (along > 0 && across < 12 + Math.max(w, d) / 2) continue;
+    cityBlock(x, z, w, d, 20 + fr() * 90, palette[i % palette.length], i % 3, i + 100);
+  }
+  finishBlocks(farProps, farBoards, scene);
 }
 
 // ── street furniture ──
@@ -215,19 +239,19 @@ for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) for (let i = 
 
 const treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
 const treeGeos = [0x3f8f3a, 0x4fa548, 0x2f7a3a].map((c) => mergeColored([[cyl(0.3, 2, 0, 1, 0, 6), 0x7a5230], [new THREE.IcosahedronGeometry(1.7, 0).translate(0, 3.2, 0), c], [new THREE.IcosahedronGeometry(1.1, 0).translate(0.6, 4.3, 0.3), c]]));
-for (let t = 0; t < 3; t++) instanced(treeGeos[t], treeMat, trees.filter((q) => q[3] === t), ([x, z, s], o) => { o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = x; }, true);
-instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0x3d8a3a, flatShading: true, roughness: 1 }), bushes, ([x, z], o) => { o.position.set(x, 0.6, z); o.scale.set(1.4, 0.8, 1.4); }, true);
+for (let t = 0; t < 3; t++) instanced(treeGeos[t], treeMat, trees.filter((q) => q[3] === t), ([x, z, s], o) => { o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = x; }, true, nearProc);
+instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0x3d8a3a, flatShading: true, roughness: 1 }), bushes, ([x, z], o) => { o.position.set(x, 0.6, z); o.scale.set(1.4, 0.8, 1.4); }, true, nearProc);
 const flowerCols = [0xff5a6e, 0xffd34d, 0xff9be0, 0xffffff];
-for (let c = 0; c < 4; c++) instanced(new THREE.IcosahedronGeometry(0.28, 0), new THREE.MeshStandardMaterial({ color: flowerCols[c], roughness: 0.8 }), flowers.filter((f) => f[2] === c), ([x, z], o) => { o.position.set(x, 0.35, z); });
-for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) { const bed = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x6b4a2e })); bed.position.set(x, 0.2, z); bed.receiveShadow = true; scene.add(bed); }
+for (let c = 0; c < 4; c++) instanced(new THREE.IcosahedronGeometry(0.28, 0), new THREE.MeshStandardMaterial({ color: flowerCols[c], roughness: 0.8 }), flowers.filter((f) => f[2] === c), ([x, z], o) => { o.position.set(x, 0.35, z); }, false, nearProc);
+for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) { const bed = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x6b4a2e })); bed.position.set(x, 0.2, z); bed.receiveShadow = true; nearProc.add(bed); }
 const benchGeo = mergeColored([[box(2.2, 0.15, 0.7, 0, 0.55, 0), 0x9c6b3e], [box(2.2, 0.6, 0.12, 0, 0.9, -0.3), 0x9c6b3e], [box(0.12, 0.55, 0.6, -0.95, 0.27, 0), 0x333333], [box(0.12, 0.55, 0.6, 0.95, 0.27, 0), 0x333333]]);
-instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true);
+instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true, nearProc);
 const poleGeo = mergeColored([[cyl(0.1, 5.2, 0, 2.6, 0, 6), 0x2f3540], [box(0.12, 0.12, 1.4, 0, 5.1, 0.6), 0x2f3540]]);
-instanced(poleGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true);
+instanced(poleGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true, nearProc);
 const lampHeadMat = new THREE.MeshStandardMaterial({ color: 0xfff2c4, emissive: 0xffd27a, emissiveIntensity: 0 });
-instanced(box(0.5, 0.25, 0.7, 0, 4.95, 1.25), lampHeadMat, lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; });
+instanced(box(0.5, 0.25, 0.7, 0, 4.95, 1.25), lampHeadMat, lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, false, nearProc);
 const poolMat = new THREE.MeshBasicMaterial({ map: puffTex, color: 0xffc66a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-instanced(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), poolMat, lamps, ([x, z, r], o) => { o.position.set(x + Math.sin(r) * 1.25, GROUND_Y.walk + 0.05, z + Math.cos(r) * 1.25); });
+instanced(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), poolMat, lamps, ([x, z, r], o) => { o.position.set(x + Math.sin(r) * 1.25, GROUND_Y.walk + 0.05, z + Math.cos(r) * 1.25); }, false, nearProc);
 // traffic lights at the corners, cycling for show
 const tlights = [];
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -235,7 +259,7 @@ for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   const pole = new THREE.Mesh(cyl(0.1, 4, 0, 2, 0, 6), new THREE.MeshStandardMaterial({ color: 0x2f3540 }));
   const head = new THREE.Mesh(box(0.5, 1.4, 0.4, 0, 4.4, 0), new THREE.MeshStandardMaterial({ color: 0x1d1f24 }));
   const bulbs = [0xff3030, 0xffc020, 0x30ff60].map((c, i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), new THREE.MeshBasicMaterial({ color: c })); b.position.set(0, 4.85 - i * 0.45, 0.22); g.add(b); return b; });
-  g.add(pole, head); g.lookAt(0, 0, 0); scene.add(g); tlights.push({ bulbs, phase: (sx + sz + 2) % 4 });
+  g.add(pole, head); g.lookAt(0, 0, 0); nearProc.add(g); tlights.push({ bulbs, phase: (sx + sz + 2) % 4 });
 }
 
 // ── hills on the horizon (no fog; tinted toward the sky colour so they read as distance) ──
@@ -273,8 +297,8 @@ for (let i = 0; i < MAX_CARS; i++) {
   carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
 }
 export const traffic = {
-  count: 34,
-  setCount(n) { this.count = Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
+  count: 34, want: 34, enabled: true,
+  setCount(n) { this.want = n; this.count = this.enabled ? Math.min(MAX_CARS, n) : 0; carMesh.count = carLights.count = this.count; },
   update(dt) {
     for (let i = 0; i < this.count; i++) {
       const c = cars[i];
