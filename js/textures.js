@@ -20,8 +20,9 @@ export function toTex(c, repeat = false) {
 const facadeCache = new Map();
 const FACADE_H = Math.round(256 * CFG.H / CFG.W);   // canvas aspect = storey aspect (W x H), so windows are not stretched
 export function facade(hex, variant, opts = {}) {
-  const key = `${hex}-${variant}-${opts.gold ? 1 : 0}`;
+  const key = `${hex}-${variant}-${opts.gold ? 1 : 0}-${opts.style || ''}`;
   if (facadeCache.has(key)) return facadeCache.get(key);
+  if (opts.style === 'panel' && !opts.gold) { const res = panelFacade(variant); facadeCache.set(key, res); return res; }
   const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
   x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);   // layout is drawn on a 256x128 grid, stretched to the storey's aspect
   x.fillStyle = css(hex); x.fillRect(0, 0, 256, 128);
@@ -58,6 +59,41 @@ export function facade(hex, variant, opts = {}) {
   const res = { map: toTex(c, true), emis: toTex(ce, true) };
   facadeCache.set(key, res);
   return res;
+}
+
+// Slovak / Czechoslovak prefab panel house (panelak): light concrete panels, visible joints, regular windows,
+// a coloured loggia band under the windows. Drawn on the same 256x128 storey grid as the default facade.
+const PANEL_ACCENTS = ['#d9772b', '#2f8f9d', '#c9a227'];
+function panelFacade(variant) {
+  const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
+  x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);
+  const accent = PANEL_ACCENTS[variant % 3];
+  x.fillStyle = '#d4cfc4'; x.fillRect(0, 0, 256, 128);
+  for (let i = 0; i < 500; i++) { x.fillStyle = `rgba(${i % 3 ? '0,0,0' : '255,255,255'},${0.035 + ((i * 37) % 7) * 0.006})`; x.fillRect((i * 97) % 256, (i * 53) % 128, 2, 2); }
+  for (let i = 0; i < 4; i++) { x.fillStyle = (i + variant) % 2 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.05)'; x.fillRect(i * 64, 0, 64, 128); }   // each panel a slightly different tone
+  x.fillStyle = accent; x.fillRect(0, 88, 256, 20);   // loggia / spandrel band
+  x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(0, 88, 256, 3); x.fillRect(0, 105, 256, 3);
+  for (let i = 0; i < 8; i++) { x.fillStyle = 'rgba(255,255,255,.22)'; x.fillRect(i * 32 + 4, 93, 24, 2); }   // railing hint
+  x.fillStyle = '#6f6b63'; x.fillRect(0, 0, 256, 4); x.fillRect(0, 124, 256, 4);          // horizontal slab joints
+  x.fillStyle = 'rgba(40,38,34,.55)'; for (let i = 0; i < 4; i++) x.fillRect(i * 64 - 1.5, 4, 3, 120);   // vertical panel joints
+  x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(0, 4, 256, 2);
+  xe.fillStyle = '#000'; xe.fillRect(0, 0, 256, 128);
+  const lit = [[1, 0, 1, 1], [0, 1, 1, 0], [1, 1, 0, 1]][variant % 3];
+  for (let i = 0; i < 4; i++) {
+    const wx = i * 64 + 14, wy = 16, ww = 36, wh = 60;
+    x.fillStyle = '#f4f1e8'; x.fillRect(wx - 3, wy - 3, ww + 6, wh + 6);
+    const gl = x.createLinearGradient(wx, wy, wx + ww, wy + wh);
+    gl.addColorStop(0, '#b4d6ee'); gl.addColorStop(0.6, '#5f8db8'); gl.addColorStop(1, '#2f4f78');
+    x.fillStyle = gl; x.fillRect(wx, wy, ww, wh);
+    x.fillStyle = 'rgba(255,255,255,.3)'; x.beginPath(); x.moveTo(wx, wy + 24); x.lineTo(wx + 20, wy); x.lineTo(wx + 30, wy); x.lineTo(wx, wy + 36); x.fill();
+    if ((i + variant) % 3 === 1) { x.fillStyle = 'rgba(235,225,200,.85)'; x.fillRect(wx, wy, 10, wh); x.fillRect(wx + ww - 10, wy, 10, wh); }   // curtains
+    x.fillStyle = '#f4f1e8'; x.fillRect(wx + ww / 2 - 1.5, wy, 3, wh); x.fillRect(wx, wy + 20, ww, 3);
+    if (lit[i]) {
+      xe.fillStyle = (i + variant) % 2 ? '#ffcf6e' : '#ffe2a0'; xe.fillRect(wx, wy, ww, wh);
+      xe.fillStyle = '#000'; xe.fillRect(wx + ww / 2 - 1.5, wy, 3, wh); xe.fillRect(wx, wy + 20, ww, 3);
+    }
+  }
+  return { map: toTex(c, true), emis: toTex(ce, true) };
 }
 
 export const roofTex = (() => {

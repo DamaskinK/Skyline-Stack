@@ -5,6 +5,7 @@ import { CFG, BTYPES, specialFor } from '../config.js';
 import { weatherAt, nextWeather } from './weather.js';
 import { windAt, hookAt, Tower } from '../physics.js';
 import { starsFor } from './stars.js';
+import { applyTrait } from '../building-types.js';
 
 export const CALM_WIND = Object.freeze({ x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
 
@@ -13,14 +14,16 @@ export class Run {
   // (Endless on a city: no target, the city's weather segments loop with growing strength). No level at all = plain
   // Endless with the old global weather cycle and its quake every CFG.quakeEvery floors.
   // The level's `events` list decides which events can happen; core emits no other.
-  constructor(diff, { bx = 0, bz = 0, level = null, endless = false } = {}) {
-    this.diff = diff; this.level = level; this.endless = !!(level && endless); this.landings = 0;
+  constructor(diff, { bx = 0, bz = 0, level = null, endless = false, buildingType = null } = {}) {
+    // buildingType (Endless picks one) overrides the level's own; the trait multipliers are folded into the difficulty
+    this.buildingType = buildingType || (level && level.buildingType) || null;
+    this.diff = applyTrait(diff, this.buildingType); this.level = level; this.endless = !!(level && endless); this.landings = 0;
     this.allowedEvents = level ? level.events || [] : ['lightning', 'quake'];
     this.wx = weatherAt(level, 0, this.endless);
-    this.tower = new Tower(bx, bz, diff);
+    this.tower = new Tower(bx, bz, this.diff);
     this.t = 0; this.events = []; this.over = false; this.result = null;
     this.wind = CALM_WIND; this.hook = null; this.block = null;
-    this.lives = diff.lives; this.combo = 0; this.goldenNext = false;
+    this.lives = this.diff.lives; this.combo = 0; this.goldenNext = false;
     this.anchors = CFG.features.anchor ? 1 : 0;
     this.score = 0; this.pop = 0; this.perfects = 0; this.bestHeight = 0; this.drops = 0;
     this.focus = 1; this.focusIdle = 9;
@@ -102,7 +105,7 @@ export class Run {
     let type = specialFor(n + 1);
     if (this.goldenNext && CFG.features.golden) { type = 'golden'; this.goldenNext = false; }
     const bt = BTYPES[type];
-    this.block = { state: 'hang', type, m: bt.m, bouncy: !!bt.bouncy, golden: !!bt.golden, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lastVrx: 0, lastVrz: 0 };
+    this.block = { state: 'hang', type, m: bt.m * (this.diff.mass || 1), bouncy: !!bt.bouncy, golden: !!bt.golden, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lastVrx: 0, lastVrz: 0 };
     this.hangBlock();
     this.emit('spawn', { block: type, floor: n });
   }

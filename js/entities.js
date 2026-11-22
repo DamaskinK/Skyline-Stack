@@ -10,18 +10,18 @@ const warnMat = new THREE.LineBasicMaterial({ color: 0xff3344 });
 const topMat = new THREE.MeshStandardMaterial({ map: roofTex, roughness: 1 });
 
 // materials are shared per colour and facade variant
-function blockMaterial(hex, variant, gold) {
-  const key = `${hex}-${variant}-${gold}`;
+function blockMaterial(hex, variant, gold, style) {
+  const key = `${hex}-${variant}-${gold}-${style}`;
   if (blockMats.has(key)) return blockMats.get(key);
-  const fa = facade(hex, variant, { gold });
+  const fa = facade(hex, variant, { gold, style });
   const side = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: gold ? 0.3 : 0.75, metalness: gold ? 0.6 : 0 });
   side.userData.gold = gold;
   const arr = [side, side, topMat, topMat, side, side];
   blockMats.set(key, arr); return arr;
 }
-export function makeBlockMesh(hex, golden, variant = 0) {
+export function makeBlockMesh(hex, golden, variant = 0, style = '') {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(boxGeo, blockMaterial(hex, variant, !!golden)); body.castShadow = true; body.receiveShadow = true; g.add(body);
+  const body = new THREE.Mesh(boxGeo, blockMaterial(hex, variant, !!golden, style)); body.castShadow = true; body.receiveShadow = true; g.add(body);
   const warn = new THREE.LineSegments(warnGeo, warnMat); warn.visible = false; g.add(warn);
   g.userData.warn = warn;
   scene.add(g); return g;

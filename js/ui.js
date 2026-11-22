@@ -1,4 +1,5 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
+import { BUILDING_TYPES } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById } from './levels.js';
@@ -162,6 +163,7 @@ export function createUI(game) {
 
   // ── help ──
   $('#helpBlocks').innerHTML = Object.values(BTYPES).filter((b) => b.hint).map((b) => `<li><span class="swatch" style="background:${hex(b.color)}"></span><b>${b.label.toUpperCase()}</b>${b.hint}</li>`).join('');
+  $('#helpTypes').innerHTML = Object.values(BUILDING_TYPES).map((t) => `<li><b>${t.label.toUpperCase()}</b>${t.hint}</li>`).join('');
   $('#helpWeather').innerHTML = Object.values(WEATHER).map((p) => `<li>${WX_ICONS[p.name]}<b>${p.name.toUpperCase()}</b>${p.text}</li>`).join('') + '<li>Each city has its own weather by floor and its own events. A warning comes before every hit.</li>';
 
   // ── keyboard ──
@@ -308,7 +310,10 @@ export function createUI(game) {
       const nt = BTYPES[game.goldenNext ? 'golden' : specialFor(n + (game.block ? 2 : 1))];
       setHTML('hNext', `<span class="swatch" style="background:${hex(nt.color)}"></span><span class="mid">${nt.label}</span>`);
       const cb = game.block ? BTYPES[game.block.type] : null;
-      setText('nextHint', !settings.hints ? '' : cb && cb.hint ? `NOW: ${cb.hint}` : nt.hint ? `NEXT: ${nt.hint}` : '');
+      const bty = game.run && BUILDING_TYPES[game.run.buildingType];
+      setText('hType', bty ? bty.label.toUpperCase() : '');
+      $('#hType').title = bty ? bty.hint : '';
+      setText('nextHint', !settings.hints ? '' : cb && cb.hint ? `NOW: ${cb.hint}` : nt.hint ? `NEXT: ${nt.hint}` : bty && game.drops < 6 ? `${bty.label.toUpperCase()}: ${bty.hint}` : '');
       $('#hint').hidden = !(settings.hints && game.state === 'play' && game.drops < 3 && game.block && game.block.state === 'hang');
     },
   };

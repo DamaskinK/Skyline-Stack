@@ -75,6 +75,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--cyan); outl
 .swatch { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; border: 2px solid #000; margin-right: 6px; }
 #anchorBtn { pointer-events: auto; }
 #nextHint { font-size: 17px; color: var(--dim); max-width: 190px; text-align: right; line-height: 1.05; }
+.btype { font-size: 12px; letter-spacing: .08em; color: var(--dim); text-align: right; }
+.btype:empty { display: none; }
 #hint { position: fixed; left: 50%; top: calc(150px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); font-family: var(--f-disp); font-size: 11px; color: var(--ink); text-shadow: 2px 2px 0 #000; pointer-events: none; animation: breathe 1.4s ease-in-out infinite; text-align: center; max-width: 60vw; line-height: 1.6; }
 @keyframes breathe { 50% { opacity: .45 } }
 #banner { position: fixed; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); font-family: var(--f-disp); font-size: 11px; color: var(--warn); text-shadow: 2px 2px 0 #000; text-align: center; pointer-events: none; max-width: 90vw; line-height: 1.6; }

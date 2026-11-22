@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CFG, DIFFICULTY, BTYPES, ENDLESS_COLORS, phaseAt } from './config.js';
 import { Run, CALM_WIND } from './core/run.js';
 import { scene } from './world.js';
+import { BUILDING_TYPES } from './building-types.js';
 import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
@@ -84,7 +85,7 @@ export class Game {
       case 'spawn': {
         const bt = BTYPES[ev.block];
         const color = ev.block !== 'normal' ? bt.color : ENDLESS_COLORS[Math.floor(ev.floor / 5) % ENDLESS_COLORS.length];
-        this.blockView = { mesh: makeBlockMesh(color, bt.golden, ev.floor % 3), appear: 0 };
+        this.blockView = { mesh: makeBlockMesh(color, bt.golden, ev.floor % 3, ev.block === 'normal' ? this.facadeStyle() : ''), appear: 0 };
         break;
       }
       case 'drop': Sfx.drop(); break;
@@ -136,6 +137,9 @@ export class Game {
     else { this.ui.popup('RISKY', '#ff4d5e'); this.shake = Math.max(this.shake, 0.25); }
     if (ev.golden) { this.ui.popup('GOLDEN · CALM', '#ffd34d', true); Sfx.golden(); FX.ring(new THREE.Vector3(roof.x, roof.y + 0.05, roof.z), 0xffffff); }
   }
+
+  // Facade style of the current building type; special blocks keep their own colour and plain facade.
+  facadeStyle() { const t = BUILDING_TYPES[this.run && this.run.buildingType]; return t ? t.facade : ''; }
 
   blockToDebris(ev) {
     if (!this.blockView) return;
