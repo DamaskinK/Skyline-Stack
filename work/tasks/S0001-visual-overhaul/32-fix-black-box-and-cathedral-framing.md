@@ -10,7 +10,7 @@
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** ticket 14 and 06 `## Comments`; `docs/agents/model-routing.md`.
 
 - [ ] Cause of the black box found and named in Comments (reproduced first: which object, which pass, which preset)
