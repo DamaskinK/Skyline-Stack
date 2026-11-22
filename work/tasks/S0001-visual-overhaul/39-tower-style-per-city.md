@@ -7,7 +7,7 @@ antenna is not nice").
 **Blocked by:** None (can start immediately).
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Now:** the menu demo tower and Endless still use the old blue blocks with a flat roof, a water tank and an antenna;
 the lobby is the old shop-front with the old sign.
 
