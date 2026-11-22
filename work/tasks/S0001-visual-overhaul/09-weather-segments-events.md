@@ -7,7 +7,7 @@ happen only in the cities that list them, each with a warning before the hit. Th
 **Blocked by:** 08
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Weather", "Events"; brief decisions round 2-3.
 
 - [ ] Core tests: segment by floor per level; events only where listed; warning always before hit
