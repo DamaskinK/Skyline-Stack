@@ -1,7 +1,7 @@
 # S0001: Visual overhaul, six city levels and progression
 
 **Type:** improve
-**Status:** draft
+**Status:** approved
 <!-- draft -> approved (developer read it and agrees) -> done -->
 **Triage:** ready-for-agent
 **Source:** `docs/BRIEF.md` (goals, references and every grilling decision), ADRs 0001 and 0002.
