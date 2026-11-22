@@ -2,13 +2,16 @@
 
 | ID | Topic | Type | State |
 |----|-------|------|-------|
-| S0001 | Visual overhaul, six city levels and progression | improve | building: 01-07 done, 08 in progress |
+| S0001 | Visual overhaul, six city levels and progression | improve | 01-15 done (15 waits for music picks), 16 blocked on picks |
 
 ## In progress / next
-- S0001 08 (levels, stars, progress) with a Sonnet builder; then 09, 10, 11, 12 ... up to the Kosice review (17).
-- Developer to play: ticket 07 box "ten floors on Normal without unfair collapses".
+- Developer: pick tracks (docs/research/music-and-sfx.md) for ticket 16; play ticket 07 (ten floors) and look at the
+  Kosice landmarks (ticket 14 last box).
+- Fix: black rectangle next to the tower (see Known issues); cathedral is too close to the default camera (fills the
+  right half, spire cut off) - move the build site or the camera.
+- Then 16 (music), 17 (Kosice review, developer), 18-20 (rename, menu, world map).
 
 ## Known issues
-- The floor flicker the developer saw was not reproduced by the checks (ticket 04, 05 comments); ask the developer to look.
-- A dark rectangular shadow artifact next to the middle floors on High (seen before and after 07); check at the M1/M2 review.
-- Draw calls: ~380 on Low, ~670 on High (GTAO renders the scene twice); budget ~300 for the scene itself.
+- Black opaque rectangle next to the middle floors on High (seen in most screenshots since ticket 06/07).
+- The floor flicker the developer saw was not reproduced by the checks.
+- Draw calls: ~170 on Low, ~590 on High (passes counted).
