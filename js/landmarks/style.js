@@ -178,7 +178,7 @@ export function landmarkMaterials() {
     copper: flood(0x4f9a82, 0x1d4a3c, { roughness: 0.5, metalness: 0.25 }),
     copperDark: flood(0x3f7f6f, 0x153a30, { roughness: 0.5, metalness: 0.25 }),
     gold: flood(0xe3b34a, 0x7a5a14, { roughness: 0.35, metalness: 0.6 }),
-    redTile: flat(0xa9482e), dark: flat(0x23272c), glass: flood(0x2d4458, 0x6b4a20),
+    redTile: flat(0xa9482e), dark: flat(0x23272c), glass: flood(0x6f93b3, 0x6b4a20, { roughness: 0.3 }),
     water: flood(0x6fb1d6, 0x2a5a8a, { roughness: 0.2 }), column: flood(0xf6ecd0, 0x3a3020),
     stoneGrey: flood(0xa9a395, 0x25221a), bronze: flat(0x47594d),
   };

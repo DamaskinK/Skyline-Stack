@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const LEVELS = {
   kosice: {
-    site: { lat: 48.7206, lon: 21.2578 },   // keep in sync with js/levels.js
+    site: { lat: 48.72100, lon: 21.25755 },   // keep in sync with js/levels.js
     half: 300,                               // bbox half-size in metres
     keep: 290,                               // keep features that touch this square around the site (metres)
     landmarks: [                             // for orientation checks and later camera work

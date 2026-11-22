@@ -8,10 +8,10 @@ import { Parts, landmarkMaterials, lathe, box, cyl, extrude, archShape, roundArc
 export const hide = new Set(['Dóm svätej Alžbety', 'Kaplnka sv. Michala', 'Národné divadlo Košice']);
 // centre and rotation (about y; local +z turns to (sin, cos)) taken from the minimum-area rectangle of each footprint
 const AT = {
-  cathedral: { x: 29.1, z: 36.9, rot: 0 },                        // long axis east-west, apse to the east, towers at the west end
-  theatre: { x: -34.2, z: -127.1, rot: 18 * Math.PI / 180 },      // front faces +z local = south-south-east, towards the site
-  chapel: { x: 44.7, z: 76.1, rot: 13 * Math.PI / 180 },
-  urban: { x: -9, z: 44 },
+  cathedral: { x: 47.4, z: 81.4, rot: 0 },                        // long axis east-west, apse to the east, towers at the west end
+  theatre: { x: -15.9, z: -82.6, rot: 18 * Math.PI / 180 },      // front faces +z local = south-south-east, towards the site
+  chapel: { x: 63, z: 120.6, rot: 13 * Math.PI / 180 },
+  urban: { x: 9.3, z: 88.5 },
 };
 
 // ring of columns / half cylinders helper

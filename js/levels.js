@@ -6,7 +6,7 @@ export const LEVELS = [
   {
     id: 'kosice', city: 'Kosice', country: 'Slovakia', order: 1, target: 20, built: true,
     buildingType: 'panel',
-    site: { lat: 48.7206, lon: 21.2578 },
+    site: { lat: 48.72100, lon: 21.25755 },
     weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }],
     events: [],                                   // only listed events ever happen: 'lightning', 'quake', 'sandstormGust'
     dayArc: { start: 16.5, end: 20.5 },           // hours: late afternoon to just after sunset (sunset is 19.5 everywhere)
