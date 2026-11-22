@@ -10,7 +10,7 @@ export function css(hex, f = 1) {
 }
 export function toTex(c, repeat = false) {
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;   // sharper ground and facades at grazing angles, less shimmer
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }

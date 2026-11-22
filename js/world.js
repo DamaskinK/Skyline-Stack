@@ -14,7 +14,7 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(PHASES[0].bot, 110, 320);
-export const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1200);
+export const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 1200);   // near 0.5: 5x the depth precision of 0.1
 
 export const hemi = new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 1.0); scene.add(hemi);
 export const sun = new THREE.DirectionalLight(0xfff3dc, 1.7);
@@ -76,40 +76,69 @@ const skyMat = new THREE.ShaderMaterial({
 const sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), skyMat); sky.renderOrder = -1; scene.add(sky);
 
 // ── ground, plaza, roads, sidewalks ──
-// Ground layers can be only 0.001 units apart. Give each overlay a depth bias
-// so roads, sidewalks and markings stay stable as the menu camera orbits.
-function groundLayer(mat, layer) {
-  const m = mat.clone();
-  m.polygonOffset = true;
-  m.polygonOffsetFactor = -layer;
-  m.polygonOffsetUnits = -layer * 2;
-  return m;
+// No two ground surfaces share a plane: every layer has a real height step and strips are cut where they would cross.
+// Grass at 0, roads 2 cm up, markings 3.5 cm, plaza and sidewalks are 6 cm slabs with a curb. Shared geometry, so the
+// whole ground is a handful of draw calls.
+const ROAD = 44, ROAD_W = 9, LEN = 640, SW = 3;
+export const GROUND_Y = { road: 0.02, mark: 0.035, walk: 0.06 };
+const ground = (mat, parts) => {
+  // parts: [x0, x1, z0, z1, top, uScale, vScale, swapUV] -> one merged mesh with world-space UVs
+  const geos = parts.map(([x0, x1, z0, z1, top, us, vs, swap]) => {
+    const g = top > 0.03 ? new THREE.BoxGeometry(x1 - x0, top, z1 - z0).translate((x0 + x1) / 2, top / 2, (z0 + z1) / 2)
+      : new THREE.PlaneGeometry(x1 - x0, z1 - z0).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, top, (z0 + z1) / 2);
+    const p = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < p.count; i++) { const u = p.getX(i) / us, v = p.getZ(i) / vs; uv.setXY(i, swap ? v : u, swap ? u : v); }
+    return g.index ? g.toNonIndexed() : g;
+  });
+  const m = new THREE.Mesh(mergeGeos(geos), mat); m.receiveShadow = true; scene.add(m); return m;
+};
+function mergeGeos(geos) {
+  const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
+  for (const [name, size] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+    const arr = new Float32Array(n * size); let off = 0;
+    for (const g of geos) { arr.set(g.attributes[name].array, off); off += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
+  }
+  return out;
 }
-const flat = (w, d, mat, x, z, y, layer = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), layer ? groundLayer(mat, layer) : mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m; };
+const flat = (w, d, mat, x, z, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m; };
 flat(2400, 2400, new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }), 0, 0, 0);
-flat(76, 76, new THREE.MeshStandardMaterial({ map: pavingTex, roughness: 0.95 }), 0, 0, 0.02, 1);
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x3b3e46, roughness: 1 });
-const swTexA = sidewalkTex.clone(); swTexA.repeat.set(200, 1); swTexA.needsUpdate = true;
-const swTexB = sidewalkTex.clone(); swTexB.repeat.set(1, 200); swTexB.needsUpdate = true;
-const swA = new THREE.MeshStandardMaterial({ map: swTexA, roughness: 1 }), swB = new THREE.MeshStandardMaterial({ map: swTexB, roughness: 1 });
-const ROAD = 44, ROAD_W = 9, LEN = 640;
-const dashes = [];
+const tile = (t) => { const c = t.clone(); c.repeat.set(1, 1); c.needsUpdate = true; return c; };
+const swMat = new THREE.MeshStandardMaterial({ map: tile(sidewalkTex), roughness: 1 });
+const pavingMat = new THREE.MeshStandardMaterial({ map: tile(pavingTex), roughness: 0.95 });
+// pieces of a line along one axis, cut out where the crossing roads are
+const cuts = (pad) => [[-LEN / 2, -ROAD - pad], [-ROAD + pad, ROAD - pad], [ROAD + pad, LEN / 2]];
+const IN = ROAD - ROAD_W / 2 - SW;   // inner edge of the inner sidewalks = edge of the plaza
+const { road: yR, walk: yW } = GROUND_Y;
+const roadParts = [], walkParts = [];
 for (const s of [-1, 1]) {
-  flat(LEN, ROAD_W, roadMat, 0, s * ROAD, 0.03, 2); flat(ROAD_W, LEN, roadMat, s * ROAD, 0, 0.031, 3);
-  for (const o of [-1, 1]) { flat(LEN, 3, swA, 0, s * ROAD + o * (ROAD_W / 2 + 1.5), 0.05, 4); flat(3, LEN, swB, s * ROAD + o * (ROAD_W / 2 + 1.5), 0, 0.051, 5); }
-  for (let k = -LEN / 2; k < LEN / 2; k += 6) { dashes.push([k, s * ROAD, 0]); dashes.push([s * ROAD, k, Math.PI / 2]); }
+  roadParts.push([-LEN / 2, LEN / 2, s * ROAD - ROAD_W / 2, s * ROAD + ROAD_W / 2, yR, 9, 9]);                  // along x, full
+  for (const [a, b] of cuts(ROAD_W / 2)) roadParts.push([s * ROAD - ROAD_W / 2, s * ROAD + ROAD_W / 2, a, b, yR, 9, 9]);   // along z, cut
+  for (const o of [-1, 1]) {
+    const c = s * ROAD + o * (ROAD_W / 2 + SW / 2);
+    for (const [a, b] of cuts(ROAD_W / 2)) walkParts.push([a, b, c - SW / 2, c + SW / 2, yW, SW, SW]);                       // along x, cut at roads
+    for (const [a, b] of cuts(ROAD_W / 2 + SW)) walkParts.push([c - SW / 2, c + SW / 2, a, b, yW, SW, SW, true]);            // along z, cut at roads and walks
+  }
 }
+ground(roadMat, roadParts);
+ground(swMat, walkParts);
+ground(pavingMat, [[-IN, IN, -IN, IN, yW, 7.6, 7.6]]);
+const dashes = [];
+for (const s of [-1, 1]) for (let k = -LEN / 2; k < LEN / 2; k += 6) { dashes.push([k, s * ROAD, 0]); dashes.push([s * ROAD, k, Math.PI / 2]); }
+// markings sit a real 1.5 cm above the road; the small depth bias only keeps distant ones crisp
+function groundLayer(mat, layer) { const m = mat.clone(); m.polygonOffset = true; m.polygonOffsetFactor = -layer; m.polygonOffsetUnits = -layer; return m; }
 const o3 = new THREE.Object3D();
 function instanced(geo, mat, list, place, shadow = false) {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
   list.forEach((it, i) => { o3.position.set(0, 0, 0); o3.rotation.set(0, 0, 0); o3.scale.set(1, 1, 1); place(it, o3, i); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); });
   im.castShadow = shadow; im.receiveShadow = true; scene.add(im); return im;
 }
-instanced(new THREE.PlaneGeometry(2.5, 0.3).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 6), dashes, ([x, z, r], o) => { o.position.set(x, 0.045, z); o.rotation.y = r; });
+instanced(new THREE.PlaneGeometry(2.5, 0.3).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 1), dashes, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark, z); o.rotation.y = r; });
 // zebra crossings at the four corners of the plaza
 const zebra = [];
 for (const s of [-1, 1]) for (const t of [-1, 1]) for (let k = -3; k <= 3; k++) { zebra.push([t * 20 + k * 1.2, s * ROAD, 0]); zebra.push([s * ROAD, t * 20 + k * 1.2, Math.PI / 2]); }
-instanced(new THREE.PlaneGeometry(0.7, ROAD_W - 1).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 7), zebra, ([x, z, r], o) => { o.position.set(x, 0.046, z); o.rotation.y = r; });
+instanced(new THREE.PlaneGeometry(0.7, ROAD_W - 1).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 2), zebra, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark + 0.004, z); o.rotation.y = r; });
 
 // ── geometry helper: merge simple parts into one vertex-coloured mesh ──
 export function mergeColored(parts) {
@@ -192,13 +221,13 @@ const flowerCols = [0xff5a6e, 0xffd34d, 0xff9be0, 0xffffff];
 for (let c = 0; c < 4; c++) instanced(new THREE.IcosahedronGeometry(0.28, 0), new THREE.MeshStandardMaterial({ color: flowerCols[c], roughness: 0.8 }), flowers.filter((f) => f[2] === c), ([x, z], o) => { o.position.set(x, 0.35, z); });
 for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) { const bed = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x6b4a2e })); bed.position.set(x, 0.2, z); bed.receiveShadow = true; scene.add(bed); }
 const benchGeo = mergeColored([[box(2.2, 0.15, 0.7, 0, 0.55, 0), 0x9c6b3e], [box(2.2, 0.6, 0.12, 0, 0.9, -0.3), 0x9c6b3e], [box(0.12, 0.55, 0.6, -0.95, 0.27, 0), 0x333333], [box(0.12, 0.55, 0.6, 0.95, 0.27, 0), 0x333333]]);
-instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, 0, z); o.rotation.y = r; }, true);
+instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true);
 const poleGeo = mergeColored([[cyl(0.1, 5.2, 0, 2.6, 0, 6), 0x2f3540], [box(0.12, 0.12, 1.4, 0, 5.1, 0.6), 0x2f3540]]);
-instanced(poleGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), lamps, ([x, z, r], o) => { o.position.set(x, 0, z); o.rotation.y = r; }, true);
+instanced(poleGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true);
 const lampHeadMat = new THREE.MeshStandardMaterial({ color: 0xfff2c4, emissive: 0xffd27a, emissiveIntensity: 0 });
-instanced(box(0.5, 0.25, 0.7, 0, 4.95, 1.25), lampHeadMat, lamps, ([x, z, r], o) => { o.position.set(x, 0, z); o.rotation.y = r; });
+instanced(box(0.5, 0.25, 0.7, 0, 4.95, 1.25), lampHeadMat, lamps, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; });
 const poolMat = new THREE.MeshBasicMaterial({ map: puffTex, color: 0xffc66a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
-instanced(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), poolMat, lamps, ([x, z, r], o) => { o.position.set(x + Math.sin(r) * 1.25, 0.07, z + Math.cos(r) * 1.25); });
+instanced(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), poolMat, lamps, ([x, z, r], o) => { o.position.set(x + Math.sin(r) * 1.25, GROUND_Y.walk + 0.05, z + Math.cos(r) * 1.25); });
 // traffic lights at the corners, cycling for show
 const tlights = [];
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
