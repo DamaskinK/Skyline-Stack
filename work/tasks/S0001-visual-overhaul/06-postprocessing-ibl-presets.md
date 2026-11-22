@@ -7,7 +7,7 @@ AO, bloom and prop density.
 **Blocked by:** 03, 04
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Rendering", "Quality presets".
 
 - [ ] Glowing windows and lights bloom at night (Storm phase in the current game)
