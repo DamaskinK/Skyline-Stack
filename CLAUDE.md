@@ -36,3 +36,8 @@ npm test             # Vitest: simulation core (tests/core)
 - Original work only: no name, art, music, levels or rules copied from existing tower-stacking games.
 - Quality presets (Low / Medium / High) stay; Low must run on a phone.
 - UI text in English, kept in one place for later translation.
+
+## Agents and models
+The main session (Opus) talks to the developer, grills, plans, reviews and picks what is next; it does not build.
+Each ticket is built by a fresh `skyline-builder` (Sonnet); milestone reviews by `skyline-reviewer` (Opus); checks and
+recipes by `skyline-runner` (Haiku); repo searches by `skyline-scout` (Haiku). Details: `docs/agents/model-routing.md`.
