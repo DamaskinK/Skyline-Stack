@@ -7,7 +7,7 @@ between tracks; menu track. Recorded CC0 sound effects replace the synth ones; t
 **Blocked by:** 03, 08, 15
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Audio"; user stories 57-67.
 
 - [ ] Kosice track and menu track play from files loaded with the level
