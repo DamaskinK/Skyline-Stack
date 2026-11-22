@@ -2,7 +2,8 @@
 const KEY = 'tb3d_settings_v2';
 const PROGRESS = 'tb3d_progress_v3';
 import { sanitize, recordLevel, recordEndless } from './core/stars.js';
-import { LEVELS } from './levels.js';
+import { LEVELS, levelById, cityById } from './levels.js';
+import { sanitizeDistrict, recordCityPlot, migrateFromLevels, cityProgress } from './core/district-progress.js';
 
 const DEFAULTS = { difficulty: 'normal', sfx: 0.7, music: 0.35, quality: 'high', shake: true, hints: true, muted: false, camera: 0 };
 
@@ -22,3 +23,17 @@ export function saveLevelResult(levelId, stars, height) { return saveProgress(re
 export function loadScores(cityId = 'kosice') { return loadProgress().endless[cityId] || []; }
 export function addScore(cityId, entry) { return saveProgress(recordEndless(loadProgress(), cityId, entry)).endless[cityId]; }
 export function resetScores() { const p = loadProgress(); p.endless = {}; saveProgress(p); }
+
+// District progress (S0002): per city, per plot. Own versioned key; the S0001 key above stays as it is (Endless scores
+// and level stars still live there). The first load without district data carries Kosice level progress onto its last plot.
+const DISTRICT = 'tb3d_district_v1';
+export function loadDistrictProgress() {
+  const p = sanitizeDistrict(read(DISTRICT));
+  return migrateFromLevels(p, loadProgress(), 'kosice', levelById('kosice').district);
+}
+export function saveDistrictResult(cityId, plotId, result) {
+  const city = cityById(cityId);
+  const next = recordCityPlot(loadDistrictProgress(), cityId, city.district, plotId, result);
+  write(DISTRICT, next);
+  return cityProgress(next, cityId);
+}
