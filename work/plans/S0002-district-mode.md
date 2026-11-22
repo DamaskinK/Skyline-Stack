@@ -1,7 +1,7 @@
 # S0002: District mode and the fictional city
 
 **Type:** feature
-**Status:** draft
+**Status:** approved
 **Triage:** ready-for-agent
 **Source:** `work/instructions/S0002-district-mode.md` (decisions of two grilling rounds), S0001 plan, ADR 0002.
 
