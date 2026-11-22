@@ -244,3 +244,15 @@ and open the next one. Endless stays on any opened city. City mode is removed.
   tower-stacking games.
 - **Seams to confirm with the developer:** the simulation core as the main tested seam, and browser scripts for
   looks and speed.
+
+## Changes after build
+
+Changes dated 2026-11-22 (ticket 07, tall floors):
+- `CFG.H` 1.6 -> 2.8 (floor is W 4 x H 2.8 x D 4).
+- `CFG.ropeLen` 14 -> 17 (longer rope: crane jib sits higher, block tilt angle follows the rope).
+- `CFG.dropGap` stays 3.5: the simulation does not depend on H, and with gap 3.5 the fall time and every core result match the old balance exactly (gap 4.5 made Hard worse).
+- `CFG.METERS_PER_FLOOR` stays 3.2; `FOUND_H` stays 2.4.
+- Sway mode shape `(y/H)^2` and collapse thresholds stay: they use the ratio y/(H*n), so they are height-independent. Tilt slope per floor falls with H, matching the same sway displacement.
+- Camera offsets (`camOffsets` in `js/main.js`): (9,4,22) / (22,4,9) / (0,19,9) -> (12,6,30) / (30,6,12) / (0,26,12); camera target height `topY + 2.5` -> `topY + 4.5`.
+- Facade texture canvas 256x128 -> 256x179 (aspect of W x H), layout stretched vertically so windows are not squashed.
+- Menu demo tower 18 floors -> 10 floors (`DEMO_FLOORS`); menu camera look height 17 -> 19.

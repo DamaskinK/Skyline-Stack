@@ -178,13 +178,14 @@ export class Game {
 
 // Tower shown behind the main menu.
 let demo = [];
+const DEMO_FLOORS = 10;   // floors are 2.8 tall now, so fewer of them fill the same skyline
 export function buildDemo() {
   clearDemo();
   demo.push(makeFoundation(0, 0));
-  for (let i = 0; i < 18; i++) {
-    const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], i === 9, i % 3);
+  for (let i = 0; i < DEMO_FLOORS; i++) {
+    const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], i === 5, i % 3);
     m.position.set(Math.sin(i * 1.7) * 0.25, CFG.FOUND_H + CFG.H * (i + 0.5), Math.cos(i * 1.3) * 0.2); demo.push(m);
   }
-  demo.push(makeRoof(new THREE.Vector3(0, CFG.FOUND_H + CFG.H * 18, 0)));
+  demo.push(makeRoof(new THREE.Vector3(0, CFG.FOUND_H + CFG.H * DEMO_FLOORS, 0)));
 }
 export function clearDemo() { for (const o of demo) scene.remove(o); demo = []; }

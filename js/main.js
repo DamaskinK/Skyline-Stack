@@ -23,7 +23,7 @@ onSettings((k) => { if (k === 'quality') { applyQuality(); applyPostQuality(); }
 window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
-const camOffsets = [new THREE.Vector3(9, 4, 22), new THREE.Vector3(22, 4, 9), new THREE.Vector3(0, 19, 9)];
+const camOffsets = [new THREE.Vector3(12, 6, 30), new THREE.Vector3(30, 6, 12), new THREE.Vector3(0, 26, 12)];
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
 let clock = 0, camY = 8;
@@ -46,7 +46,7 @@ function render(rdt) {
 
   // crane follows the tower top; in the menu it idles over the demo tower
   const cx = T ? T.bx : 0, cz = T ? T.bz : 0;
-  const craneY = playing ? game.craneY : CFG.FOUND_H + CFG.H * 18;
+  const craneY = playing ? game.craneY : CFG.FOUND_H + CFG.H * 10;
   const jibY = craneY + CFG.dropGap + CFG.H + CFG.ropeLen;
   const hx = playing && game.hook ? game.hook.x : cx + Math.sin(clock * 1.2) * 2;
   const hz = playing && game.hook ? game.hook.z : cz;
@@ -61,9 +61,9 @@ function render(rdt) {
     // slow orbit; on wide screens the tower sits right of centre, clear of the menu
     const a = clock * 0.08, k = camera.aspect > 1.1 ? 10 : 0;
     camPos.lerp(tmpTarget.set(Math.cos(a) * 44, 24, Math.sin(a) * 44), Math.min(1, rdt * 2));
-    tmpLook.set(-k * Math.sin(a), 17, k * Math.cos(a));
+    tmpLook.set(-k * Math.sin(a), 19, k * Math.cos(a));
   } else {
-    const targetY = T ? T.topY() + 2.5 : 8;
+    const targetY = T ? T.topY() + 4.5 : 8;
     camY += (targetY - camY) * Math.min(1, rdt * 2.5);
     const off = !T ? tmpOff.set(30, 34, 44) : camOffsets[game.camMode];
     camPos.lerp(tmpTarget.set(cx, camY, cz).add(off), Math.min(1, rdt * 3));

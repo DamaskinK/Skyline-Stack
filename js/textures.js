@@ -18,10 +18,12 @@ export function toTex(c, repeat = false) {
 // One storey: wall, slab bands, four framed windows, balconies on some variants.
 // A second canvas holds only the lit windows and becomes the emissive map at night.
 const facadeCache = new Map();
+const FACADE_H = Math.round(256 * CFG.H / CFG.W);   // canvas aspect = storey aspect (W x H), so windows are not stretched
 export function facade(hex, variant, opts = {}) {
   const key = `${hex}-${variant}-${opts.gold ? 1 : 0}`;
   if (facadeCache.has(key)) return facadeCache.get(key);
-  const [c, x] = canvas2d(256, 128), [ce, xe] = canvas2d(256, 128);
+  const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
+  x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);   // layout is drawn on a 256x128 grid, stretched to the storey's aspect
   x.fillStyle = css(hex); x.fillRect(0, 0, 256, 128);
   const g = x.createLinearGradient(0, 0, 0, 128); g.addColorStop(0, 'rgba(255,255,255,.16)'); g.addColorStop(1, 'rgba(0,0,0,.2)');
   x.fillStyle = g; x.fillRect(0, 0, 256, 128);

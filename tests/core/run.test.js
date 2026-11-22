@@ -121,3 +121,36 @@ describe('slow-mo', () => {
     expect(run.focus).toBeGreaterThan(low);
   });
 });
+
+describe('tall floors', () => {
+  it('stacks floors of height H on the foundation', () => {
+    expect(CFG.H).toBe(2.8);
+    const run = new Run(DIFFICULTY.easy);
+    for (let i = 0; i < 60 / CFG.DT && !run.over && run.tower.n < 5; i++) {
+      const b = run.block, T = run.tower;
+      if (b && b.state === 'hang') {
+        const top = T.n ? T.top() : { x: T.bx, z: T.bz };
+        if (Math.abs(b.x - top.x) < 0.15 && Math.abs(b.z - top.z) < 0.15) run.drop();
+        expect(b.y).toBeCloseTo(Math.max(run.craneY, T.topY()) + CFG.dropGap + CFG.H / 2, 9);
+      }
+      run.step(CFG.DT); run.drain();
+    }
+    const T = run.tower;
+    expect(T.n).toBeGreaterThanOrEqual(5);
+    expect(T.topY()).toBeCloseTo(CFG.FOUND_H + CFG.H * T.n, 9);
+    expect(T.yc(0)).toBeCloseTo(CFG.FOUND_H + CFG.H / 2, 9);
+  });
+
+  it('reaches ten floors on Normal with a bot that drops when the hook is over the tower', () => {
+    const run = new Run(DIFFICULTY.normal);
+    for (let i = 0; i < 180 / CFG.DT && !run.over && run.bestHeight < 10; i++) {
+      const b = run.block, T = run.tower;
+      if (b && b.state === 'hang') {
+        const top = T.n ? T.top() : { x: T.bx, z: T.bz };
+        if (Math.abs(b.x - top.x) < 0.1 && Math.abs(b.z - top.z) < 0.1) run.drop();
+      }
+      run.step(CFG.DT); run.drain();
+    }
+    expect(run.bestHeight).toBeGreaterThanOrEqual(10);
+  });
+});

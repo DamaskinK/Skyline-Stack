@@ -1,9 +1,9 @@
 // All balance numbers live here. Difficulty presets scale a few of them at runtime.
 
 export const CFG = {
-  W: 4, D: 4, H: 1.6, FOUND_H: 2.4, G: 30, DT: 1 / 120,
+  W: 4, D: 4, H: 2.8, FOUND_H: 2.4, G: 30, DT: 1 / 120,
   METERS_PER_FLOOR: 3.2,
-  dropGap: 3.5, ropeLen: 14,
+  dropGap: 3.5, ropeLen: 17,
   perfect: 0.08, good: 0.25, risky: 0.5,          // fractions of block width
   lives: 3, collapseDelay: 0.3, collapseEndsGame: false,
   inherit: 0.35,                                   // how much hook velocity the released block keeps
