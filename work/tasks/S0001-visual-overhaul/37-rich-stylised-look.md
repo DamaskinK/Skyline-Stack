@@ -6,7 +6,7 @@ playtest, 2026-11-22: "rich stylised", not semi-realistic PBR). It becomes the a
 **Blocked by:** 34, 35
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Now:** smooth single-colour walls, windows only painted in a texture, single-colour ground, simple trees, flat light.
 
 - [ ] Facades with real depth on the near-ring houses and the panel-block floors: cornices, window frames/sills and
