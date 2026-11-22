@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { calmFacade, STOREY_W, STOREY_H, roofTex, tileRoofTex, sidewalkTex, canvas2d, toTex } from './textures.js';
 import { glowMats, GROUND_Y } from './world.js';
+import { buildStreetLife } from './street-life.js';
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
@@ -14,7 +15,7 @@ const CLEAR = 24;                  // no buildings closer than this to the origi
 
 // ground heights: every layer a real step above the one below, plus a depth bias for the far distance
 const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, path: 0.045, plaza: GROUND_Y.walk };
-const BIAS = { urban: 1, park: 2, water: 3, road: 4, path: 5, plaza: 7, basin: 9 };   // the plaza top always wins over the flat layers around it
+const BIAS = { urban: 1, park: 2, water: 3, road: 4, path: 5, plaza: 7, basin: 9, bike: 6, mark: 8 };   // the plaza top always wins over the flat layers around it
 // park grass: soft green with random specks (the shared grass texture has specks on a lattice that read as dashed lines)
 const parkGrass = (() => {
   const [c, x] = canvas2d(128, 128); x.fillStyle = '#76a35e'; x.fillRect(0, 0, 128, 128);
@@ -97,7 +98,7 @@ export function hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 4375
 export const insideRing = (p, x, z) => { let c = false; for (let i = 0, n = p.length / 2, j = n - 1; i < n; j = i++) { const xi = p[2 * i], zi = p[2 * i + 1], xj = p[2 * j], zj = p[2 * j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
 
 export function material(map, o = {}) { const m = new THREE.MeshStandardMaterial({ map, roughness: 1, ...o }); return m; }
-function layerMat(map, key, o = {}) {
+export function layerMat(map, key, o = {}) {
   const m = material(map, o); m.polygonOffset = true; m.polygonOffsetFactor = -BIAS[key]; m.polygonOffsetUnits = -BIAS[key]; return m;
 }
 export const tile = (t, rep = 1) => { const c = t.clone(); c.repeat.set(rep, rep); c.needsUpdate = true; return c; };
@@ -321,16 +322,20 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   instanceKit(kit.streetlight, lamps, 6, group);
   instanceKit(kit.car_sedan, cars.filter((_, i) => i % 2 === 0), 0, group, { lengthFit: 4.4 });
   instanceKit(kit.car_hatchback, cars.filter((_, i) => i % 2 === 1), 0, group, { lengthFit: 4.0 });
+  // street furniture, bike lanes, seats and standing spots for the people (js/street-life.js)
+  const life = buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn });
+  group.userData.life = life;
   group.userData.carRoutes = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street') && r.w >= 6).map((r) => r.p);
   group.userData.walkRoutes = osm.roads.filter((r) => r.k === 'walk' || r.k === 'path').map((r) => {
     let d = 1e9; for (let i = 0; i < r.p.length; i += 2) d = Math.min(d, Math.hypot(r.p[i], r.p[i + 1]));
     let len = 0; for (let i = 2; i < r.p.length; i += 2) len += Math.hypot(r.p[i] - r.p[i - 2], r.p[i + 1] - r.p[i - 1]);
     return { p: r.p, off: 0.5, d, len };
   }).filter((r) => r.len > 30 && r.d > 18 && r.d < 160).sort((a, b) => a.d - b.d).slice(0, 24);
+  group.userData.walkRoutes.life = life;      // People.setRoutes picks the life data (seats, bike routes, basins) up from here
   return group;
 }
 
-function mergeParts(parts) {
+export function mergeParts(parts) {
   const pos = [], nor = [], col = [];
   for (const [g0, c] of parts) {
     const g = g0.index ? g0.toNonIndexed() : g0, color = new THREE.Color(c);

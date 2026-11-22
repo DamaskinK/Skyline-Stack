@@ -128,12 +128,17 @@ export function updateBolt(dt) {
 // ── people ──
 // Figures live in js/people/: clothing data per city (styles.js) and the low-poly figure with swinging limbs (figure.js).
 let city = 'kosice', cold = false;
-function dress() {
+function dress(extra = null) {
   const st = styleFor(city), skins = skinFor(city);
-  let sum = 0; for (const o of st.outfits) sum += o.w;
-  let r = Math.random() * sum, o = st.outfits[0];
-  for (const c of st.outfits) { r -= c.w; if (r <= 0) { o = c; break; } }
+  let o;
+  for (let tries = 0; tries < 6; tries++) {
+    let sum = 0; for (const c of st.outfits) sum += c.w;
+    let r = Math.random() * sum; o = st.outfits[0];
+    for (const c of st.outfits) { r -= c.w; if (r <= 0) { o = c; break; } }
+    if (!(extra?.noRobe && o.garment === 'robe')) break;            // riders do not wear robes
+  }
   if (cold) o = dressForCold(o, Math.random);
+  if (extra?.sit) o = { ...o, sit: true };
   return { geo: buildFigure(o, skins[Math.floor(Math.random() * skins.length)]), scale: o.scale ?? 1 };
 }
 const umbrellaTexs = [[0xe74c3c, 0xffffff], [0x3498db, 0xffffff], [0xf1c40f, 0xe67e22], [0x2ecc71, 0xffffff], [0x9b59b6, 0xffd34d]].map(([a, b]) => {
@@ -146,37 +151,130 @@ const handleGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.9, 4).translate(0.22,
 const umbrellaMats = umbrellaTexs.map((t) => new THREE.MeshStandardMaterial({ map: t, side: THREE.DoubleSide, roughness: 0.7 }));
 const handleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
 
-function makePerson(withUmbrella) {
+function makePerson(withUmbrella, extra = null) {
   const g = new THREE.Group();
-  const { geo, scale } = dress(), mat = makeFigureMaterial();
+  const { geo, scale } = dress(extra), mat = makeFigureMaterial();
   const body = new THREE.Mesh(geo, mat); body.castShadow = true; body.scale.setScalar(scale); g.add(body);
   const um = new THREE.Group();
   const canopy = new THREE.Mesh(umbrellaGeo, umbrellaMats[Math.floor(Math.random() * umbrellaMats.length)]); canopy.position.x = 0.22;
   um.add(canopy, new THREE.Mesh(handleGeo, handleMat)); um.visible = withUmbrella; g.add(um);
   mat.userData.u.uAmp.value = geo.userData.amp * 0.6; mat.userData.u.uRaise.value = withUmbrella ? 1 : 0;
-  g.userData.umbrella = um; g.userData.body = body; g.userData.u = mat.userData.u; g.userData.baseAmp = geo.userData.amp;
+  g.userData.extra = extra; g.userData.umbrella = um; g.userData.body = body; g.userData.u = mat.userData.u; g.userData.baseAmp = geo.userData.amp;
   g.scale.setScalar(1.25); scene.add(g); return g;
 }
 function removePerson(p) { scene.remove(p); p.userData.body.geometry.dispose(); p.userData.body.material.dispose(); }
 // New outfits for the people already standing around (a new city or a change in the cold).
 function redress(p) {
-  const old = p.userData.body, { geo, scale } = dress();
+  const old = p.userData.body, { geo, scale } = dress(p.userData.extra);
   old.geometry.dispose(); old.geometry = geo; old.scale.setScalar(scale);
   p.userData.baseAmp = geo.userData.amp;
 }
 
+
+// ── city life: people sitting and standing, dog walkers, cyclists (spots come from js/street-life.js through setRoutes) ──
+const SEAT = 0.5, SIT_DROP = SEAT - 0.475 * 1.25;            // seat height of the benches, and how far a sitting figure sinks so its thighs rest on it
+const rnd = (a) => a[Math.floor(Math.random() * a.length)];
+function bar(parts, [x0, y0, z0], [x1, y1, z1], r, c) {
+  const d = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0), g = new THREE.CylinderGeometry(r, r, d.length(), 5);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize())); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); parts.push([g, c]);
+}
+function mergeCol(parts) {
+  const pos = [], nor = [], col = [];
+  for (const [g0, c] of parts) { const g = g0.index ? g0.toNonIndexed() : g0, k = new THREE.Color(c); pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); for (let i = 0; i < g.attributes.position.count; i++) col.push(k.r, k.g, k.b); }
+  const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); o.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return o;
+}
+const bikeGeos = {};
+function bikeGeo(color) {
+  if (bikeGeos[color]) return bikeGeos[color];
+  const P = [], R = 0.3, tyre = 0x23252b;
+  for (const z of [-0.46, 0.46]) P.push([new THREE.TorusGeometry(R, 0.028, 4, 14).rotateY(Math.PI / 2).translate(0, R, z), tyre], [new THREE.TorusGeometry(R * 0.8, 0.006, 3, 10).rotateY(Math.PI / 2).translate(0, R, z), 0xb8bcc2]);
+  bar(P, [0, R, -0.46], [0, 0.55, -0.12], 0.022, color); bar(P, [0, 0.55, -0.12], [0, 0.62, 0.34], 0.022, color); bar(P, [0, R, -0.46], [0, 0.62, 0.34], 0.018, color);
+  bar(P, [0, 0.3, 0.02], [0, 0.55, -0.12], 0.022, color); bar(P, [0, R, 0.46], [0, 0.66, 0.36], 0.022, 0x3a3d44); bar(P, [-0.2, 0.7, 0.35], [0.2, 0.7, 0.35], 0.016, 0x3a3d44);
+  P.push([new THREE.BoxGeometry(0.1, 0.04, 0.22).translate(0, 0.7, -0.16), 0x2a2a2a], [new THREE.BoxGeometry(0.04, 0.05, 0.16).translate(0.12, 0.3, 0.02), 0x2a2a2a], [new THREE.BoxGeometry(0.04, 0.05, 0.16).translate(-0.12, 0.3, 0.02), 0x2a2a2a]);
+  return (bikeGeos[color] = mergeCol(P));
+}
+const BIKE_COLORS = [0x2f6fb0, 0xc6483c, 0x3f8f4a, 0x222428, 0xe0a52a, 0x8a4aa8];
+const bikeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
+let dogGeo = null;
+function dog() {
+  if (!dogGeo) {
+    const c = rnd([0xb07a45, 0x2a2622, 0xe8dcc4, 0x8a8f94]), P = [[new THREE.BoxGeometry(0.22, 0.2, 0.5).translate(0, 0.33, 0), c], [new THREE.BoxGeometry(0.17, 0.17, 0.2).translate(0, 0.42, 0.33), c], [new THREE.BoxGeometry(0.08, 0.06, 0.08).translate(0, 0.4, 0.45), 0x222222], [new THREE.BoxGeometry(0.04, 0.12, 0.04).translate(0.07, 0.54, 0.3), c], [new THREE.BoxGeometry(0.04, 0.12, 0.04).translate(-0.07, 0.54, 0.3), c], [new THREE.BoxGeometry(0.05, 0.05, 0.22).rotateX(-0.6).translate(0, 0.42, -0.3), c]];
+    for (const x of [-0.07, 0.07]) for (const z of [-0.18, 0.18]) P.push([new THREE.BoxGeometry(0.06, 0.24, 0.06).translate(x, 0.12, z), c]);
+    dogGeo = mergeCol(P);
+  }
+  const m = new THREE.Mesh(dogGeo, bikeMat); m.castShadow = true; m.scale.setScalar(1.3); scene.add(m); return m;
+}
+function inBasin(blockers, x, z) {                        // inside a fountain / pool basin or within 1.2 m of its rim
+  for (const b of blockers) {
+    if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue;
+    const p = b.p; let c = false;
+    for (let i = 0, n = p.length / 2, j = n - 1; i < n; j = i++) {
+      const xi = p[2 * i], zi = p[2 * i + 1], xj = p[2 * j], zj = p[2 * j + 1];
+      if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c;
+      const dx = xj - xi, dz = zj - zi, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - xi) * dx + (z - zi) * dz) / l2));
+      if (Math.hypot(x - xi - dx * t, z - zi - dz * t) < 1.2) return true;
+    }
+    if (c) return true;
+  }
+  return false;
+}
+function polyRoute(p) {
+  const cum = [0]; for (let i = 2; i < p.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
+  return { p, cum, len: cum[cum.length - 1] };
+}
+function nearestS(r, i) {                                // start a cyclist near the square, not out at the far end of the route
+  let best = 0, bd = 1e9; for (let k = 0; k < r.p.length / 2; k++) { const d = Math.hypot(r.p[2 * k], r.p[2 * k + 1]); if (d < bd) { bd = d; best = k; } }
+  return Math.max(0, Math.min(r.len, r.cum[best] + (((i * 0.37) % 1) - 0.5) * 70));
+}
+function along(r, s) {                                    // point and unit direction on a route at distance s
+  let k = 1; while (k < r.cum.length - 1 && r.cum[k] < s) k++;
+  const l = r.cum[k] - r.cum[k - 1] || 1, f = Math.max(0, Math.min(1, (s - r.cum[k - 1]) / l)), x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
+  return [x0 + (x1 - x0) * f, z0 + (z1 - z0) * f, (x1 - x0) / l, (z1 - z0) / l];
+}
+
 const _right = new THREE.Vector3(), _p = new THREE.Vector3();
 export const People = {
-  flyers: [], walkers: [], side: 1, routes: [],
+  flyers: [], walkers: [], side: 1, routes: [], life: null, folk: [], cyclists: [], blockers: [],
   // OpenStreetMap levels: street walkers follow the real streets and footpaths (items { p: flat [x, z, ...], off: metres from the centre line }) instead of the procedural grid.
   setRoutes(list) {
+    this.life = list.life || null;          // seats, standing spots, bike routes and basins from the near ring (street-life.js)
+    this.blockers = (this.life?.basins || []).map((p) => { let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (let i = 0; i < p.length; i += 2) { x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); z0 = Math.min(z0, p[i + 1]); z1 = Math.max(z1, p[i + 1]); } return { p, x0: x0 - 1.3, x1: x1 + 1.3, z0: z0 - 1.3, z1: z1 + 1.3 }; });
+    this.buildLife();
     this.routes = list.map(({ p, off }) => {
       const cum = [0]; for (let i = 2; i < p.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
       return { p, off, cum, len: cum[cum.length - 1] };
     }).filter((r) => r.len > 25);
   },
   // The city whose clothes people wear (a level id from levels.js); people already walking get new outfits.
-  setCity(id) { if (id === city) return; city = id; for (const w of this.walkers) redress(w.p); },
+  setCity(id) { if (id === city) return; city = id; for (const w of this.walkers) redress(w.p); for (const f of this.folk) redress(f.p); for (const c of this.cyclists) redress(c.rider); },
+  // People who sit on benches, stand and chat, and cyclists on the bike lanes; counts follow the quality preset.
+  buildLife() {
+    this.clearLife();
+    const L = this.life; if (!L) return;
+    const lo = settings.quality === 'low', pick = (a, n) => a.filter((q) => Math.hypot(q.x, q.z) < 130).sort((u, v) => Math.hypot(u.x, u.z) - Math.hypot(v.x, v.z)).filter((_, i) => i % 2 === 0 || n > 6).slice(0, n);
+    const place = (spot, sit) => {
+      const p = makePerson(false, sit ? { sit: true } : null); p.userData.u.uAmp.value = 0; p.userData.u.uPhase.value = 0;
+      p.position.set(spot.x, (spot.y ?? 0.05) + (sit ? SIT_DROP : 0), spot.z); p.rotation.y = spot.rot; this.folk.push({ p }); return p;
+    };
+    for (const s of pick(L.sit, lo ? 3 : 8)) place(s, true);
+    for (const s of pick(L.stand, lo ? 3 : 7)) {
+      place({ ...s, y: 0.05 }, false);
+      if (s.mate) { const q = place({ x: s.x + Math.sin(s.rot) * 0.9, z: s.z + Math.cos(s.rot) * 0.9, rot: s.rot + Math.PI, y: 0.05 }, false); q.rotation.y += (Math.random() - 0.5) * 0.5; }
+    }
+    const routes = L.bikeRoutes.map((r) => ({ ...polyRoute(r.p), d: r.d })).filter((r) => r.len > 20 && r.d < 150).sort((a, b) => a.d - b.d);
+    const nb = lo ? 3 : 7;
+    for (let i = 0; routes.length && i < nb; i++) {
+      const r = routes[i % routes.length], g = new THREE.Group(), bike = new THREE.Mesh(bikeGeo(rnd(BIKE_COLORS)), bikeMat); bike.castShadow = true; g.add(bike);
+      const rider = makePerson(false, { noRobe: true }), pivot = new THREE.Group(); rider.scale.setScalar(1); rider.position.set(0, -0.62, 0); rider.userData.body.castShadow = true;
+      rider.userData.u.uAmp.value = 0.5; pivot.position.set(0, 0.8, -0.14); pivot.rotation.x = 0.35; pivot.add(rider); g.add(pivot);
+      g.scale.setScalar(1.2); scene.add(g);
+      this.cyclists.push({ g, rider, r, s: nearestS(r, i), d: i % 2 ? 1 : -1, v: 3 + (i % 3) * 0.6, ph: Math.random() * 6 });
+    }
+  },
+  clearLife() {
+    for (const f of this.folk) removePerson(f.p); this.folk = [];
+    for (const c of this.cyclists) { scene.remove(c.g); c.rider.userData.body.geometry.dispose(); c.rider.userData.body.material.dispose(); } this.cyclists = [];
+  },
   // Residents glide in with umbrellas from the upper left or right, away from the drop zone, and step in through the side of the new floor.
   arrive(floorMesh, count, camera) {
     _right.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
@@ -189,13 +287,15 @@ export const People = {
     }
   },
   setWalkers(radius) {
-    for (const w of this.walkers) removePerson(w.p);
-    this.walkers = [];
+    for (const w of this.walkers) { removePerson(w.p); if (w.dog) scene.remove(w.dog); }
+    this.walkers = []; let dogs = 0;
+    this.buildLife();
     const n = settings.quality === 'low' ? 12 : 26;
     for (let i = 0; i < n; i++) {
       const p = makePerson(false);
       const kind = i % 3 === 0 ? 'street' : 'plaza';
-      this.walkers.push({ p, kind, a: Math.random() * Math.PI * 2, r: radius + Math.random() * 4, sp: (0.15 + Math.random() * 0.2) * (i % 2 ? 1 : -1), ph: Math.random() * 6,
+      const dogW = kind === 'street' && this.routes.length && dogs < (settings.quality === 'low' ? 1 : 3) ? (dogs++, dog()) : null;
+      this.walkers.push({ p, dog: dogW, kind, a: Math.random() * Math.PI * 2, r: radius + Math.random() * 4, sp: (0.15 + Math.random() * 0.2) * (i % 2 ? 1 : -1), ph: Math.random() * 6,
         rt: i, road: i % 4, pos: (Math.random() - 0.5) * 200, off: (i % 2 ? 1 : -1) * 6, v: (1.2 + Math.random()) * (i % 2 ? 1 : -1) });
     }
   },
@@ -223,22 +323,28 @@ export const People = {
       if (k >= 1) f.done = 0.0001;
       return true;
     });
+    this.updateLife(dt, raining);
     for (const w of this.walkers) {
       w.ph += dt * 8;
       if (w.kind === 'plaza') {
-        w.a += w.sp * dt * 0.5;
+        let na = w.a + w.sp * dt * 0.5;
+        if (this.blockers.length && inBasin(this.blockers, Math.cos(w.a) * w.r, Math.sin(w.a) * w.r)) { for (let k = 0; k < 80 && inBasin(this.blockers, Math.cos(w.a) * w.r, Math.sin(w.a) * w.r); k++) w.a += Math.sign(w.sp) * 0.03; na = w.a; }   // started inside a basin: step out
+        else if (this.blockers.length && inBasin(this.blockers, Math.cos(na) * w.r, Math.sin(na) * w.r) && !inBasin(this.blockers, Math.cos(w.a) * w.r, Math.sin(w.a) * w.r)) w.sp = -w.sp;   // never walk into a basin: turn around
+        else w.a = na;
         w.p.position.set(Math.cos(w.a) * w.r, Math.abs(Math.sin(w.ph)) * 0.06, Math.sin(w.a) * w.r);
         w.p.rotation.y = -w.a + (w.sp > 0 ? Math.PI : 0);
       } else if (this.routes.length) {
         const r = this.routes[w.rt % this.routes.length];
         w.s ??= (w.rt * 0.37 % 1) * r.len; w.d ??= w.v > 0 ? 1 : -1;
-        w.s += w.d * Math.abs(w.v) * 0.6 * dt;
+        const off = r.off * (w.rt % 2 ? 1 : -1), at = (sv, dv) => { const [x, z, ux, uz] = along(r, sv); return [x - uz * dv * off, z + ux * dv * off, ux * dv, uz * dv]; };
+        if (this.blockers.length) { for (let k = 0; k < 60; k++) { const q = at(w.s, w.d); if (!inBasin(this.blockers, q[0], q[1])) break; w.s = Math.max(0, Math.min(r.len, w.s + w.d * 0.8)); } }   // started inside a basin: step out
+        const s0 = w.s; w.s += w.d * Math.abs(w.v) * 0.6 * dt;
         if (w.s > r.len) { w.s = r.len; w.d = -1; } else if (w.s < 0) { w.s = 0; w.d = 1; }
-        let k = 1; while (k < r.cum.length - 1 && r.cum[k] < w.s) k++;
-        const l = r.cum[k] - r.cum[k - 1] || 1, f = (w.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
-        const tx = (x1 - x0) / l * w.d, tz = (z1 - z0) / l * w.d, off = r.off * (w.rt % 2 ? 1 : -1);
-        w.p.position.set(x0 + (x1 - x0) * f - tz * off, 0.06 + Math.abs(Math.sin(w.ph)) * 0.06, z0 + (z1 - z0) * f + tx * off);
+        if (this.blockers.length) { const q = at(w.s, w.d), q0 = at(s0, w.d); if (inBasin(this.blockers, q[0], q[1]) && !inBasin(this.blockers, q0[0], q0[1])) { w.s = s0; w.d = -w.d; } }
+        const [px, pz, tx, tz] = at(w.s, w.d);
+        w.p.position.set(px, 0.06 + Math.abs(Math.sin(w.ph)) * 0.06, pz);
         w.p.rotation.y = Math.atan2(tx, tz);
+        if (w.dog) { w.dog.position.set(px - tx * 1.1 - tz * 0.5, 0.05 + Math.abs(Math.sin(w.ph * 1.3)) * 0.04, pz - tz * 1.1 + tx * 0.5); w.dog.rotation.y = Math.atan2(tx, tz); w.dog.visible = true; }
       } else {
         w.pos += w.v * dt; if (w.pos > 120) w.pos -= 240; if (w.pos < -120) w.pos += 240;
         const s = w.road < 2 ? (w.road ? 1 : -1) : (w.road === 2 ? 1 : -1), base = 44 * s + w.off;
@@ -248,6 +354,15 @@ export const People = {
       }
       const u = w.p.userData.u; u.uPhase.value = w.ph; u.uAmp.value = w.p.userData.baseAmp * 0.6; u.uRaise.value = raining ? 1 : 0;
       w.p.userData.umbrella.visible = raining;
+    }
+  },
+  updateLife(dt, raining) {
+    for (const f of this.folk) f.p.userData.umbrella.visible = raining && !f.p.userData.extra?.sit;
+    for (const c of this.cyclists) {
+      c.s += c.d * c.v * dt; c.ph += dt * c.v * 2.4;
+      if (c.s > c.r.len) { c.s = c.r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
+      const [x, z, ux, uz] = along(c.r, c.s);
+      c.g.position.set(x, 0.06, z); c.g.rotation.y = Math.atan2(ux * c.d, uz * c.d); c.rider.userData.u.uPhase.value = c.ph;
     }
   },
   clear() { for (const f of this.flyers) removePerson(f.p); this.flyers = []; },

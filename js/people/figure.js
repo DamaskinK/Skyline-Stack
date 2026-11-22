@@ -20,8 +20,13 @@ export function buildFigure(o, skin, rnd = Math.random) {
   const longSleeves = (o.sleeves || 'long') === 'long' || coat !== 'none';
   const ampScale = garment === 'robe' ? 0.2 : coat === 'long' ? 0.45 : garment === 'skirt' ? 0.7 : 1;
 
-  // legs and shoes
+  // legs and shoes (o.sit: thighs forward, shins down, no swing)
   for (const [sx, limb] of [[-1, 3], [1, 4]]) {
+    if (o.sit && garment !== 'robe') {
+      const legC = garment === 'skirt' ? col(o.tights ?? skin, rnd) : bottom;
+      add(box(0.11, 0.11, 0.42, sx * 0.075, 0.53, 0.2), legC, 0); add(box(0.1, 0.5, 0.1, sx * 0.075, 0.28, 0.4), legC, 0); add(box(0.12, 0.07, 0.19, sx * 0.075, 0.035, 0.44), shoes, 0);
+      continue;
+    }
     if (garment === 'robe') add(box(0.12, 0.07, 0.19, sx * 0.07, 0.035, 0.03), shoes, 0);
     else {
       const legC = garment === 'skirt' ? col(o.tights ?? skin, rnd) : bottom;
