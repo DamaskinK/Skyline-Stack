@@ -1,6 +1,7 @@
 // Shared look and builder helpers for the hand-built landmarks of every city: one low-poly material set, a few canvas
 // textures (stone, glazed tiles, plaster), and a Parts collector that merges everything into one mesh per material.
 // Frame as in the rings: 1 unit = 1 m, y up. A landmark is built in its own local frame and placed by the city module.
+import { surface } from '../surfaces.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvas2d } from '../textures.js';
@@ -169,7 +170,7 @@ export function landmarkMaterials() {
   const flat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...o });
   const flood = (color, emissive, o = {}) => { const m = flat(color, { emissive, emissiveIntensity: 0, ...o }); glowMats.push(m); return m; };   // floodlit parts: warm self-light at night
   const tiles = glazedTiles();
-  const gothic = lit(gothicBay()), tower = lit(towerStone()), cream = lit(creamFacade()), wing = lit(plainCream());
+  const gothic = lit(gothicBay(), surface('stone', [1.5, 3], 0.9)), tower = lit(towerStone(), surface('stone', [2, 3], 0.9)), cream = lit(creamFacade()), wing = lit(plainCream());
   set = {
     gothic, tower, cream, wing,
     tiles: (() => { const m = new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.55, metalness: 0.05, emissive: 0x3a2e12, emissiveIntensity: 0 }); glowMats.push(m); return m; })(),

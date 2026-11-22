@@ -275,14 +275,14 @@ for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2 + rnd() * 0.2; hil
 instanced(new THREE.ConeGeometry(1, 1, 7, 1).translate(0, 0.5, 0), hillMat, hills, ([x, z, w, h], o) => { o.position.set(x, -2, z); o.scale.set(w, h, w * 0.8); o.rotation.y = x; }, false, backdrop);
 
 // ── 3D clouds at every height, so a tall tower climbs through them ──
-const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92 });
+const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.94 });   // smooth shading: sun side bright, underside shaded, so puffs have volume
 const clouds = [], PUFFS = 6;
 for (let i = 0; i < 40; i++) {
   const a = rnd() * Math.PI * 2, r = 40 + rnd() * 170, sc = 1 + rnd() * 1.5;
   const puffs = Array.from({ length: PUFFS }, (_, k) => ({ x: (k - 2.5) * 2.2 * sc, y: rnd() * 1.4 * sc, z: rnd() * 2 * sc, s: (1.6 + rnd() * 1.8) * sc }));
   clouds.push({ p: new THREE.Vector3(Math.cos(a) * r, 30 + rnd() * 260, Math.sin(a) * r), puffs, sp: 0.6 + rnd() * 0.8 });
 }
-const cloudMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), cloudMat, clouds.length * PUFFS); cloudMesh.frustumCulled = false; scene.add(cloudMesh);
+const cloudMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), cloudMat, clouds.length * PUFFS); cloudMesh.frustumCulled = false; scene.add(cloudMesh);
 
 // ── traffic ──
 const carGeo = mergeColored([
@@ -439,6 +439,7 @@ function timeOfDay(hour) {
   return m;
 }
 // Weather darkens and greys the time-of-day look; it does not replace it, so rain at dusk is a dark orange-grey dusk.
+const WARM_SUN = new THREE.Color(1.0, 0.95, 0.86), WHITE = new THREE.Color(1, 1, 1);
 const wx = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color() };
 const tgt = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color(), sunI: 1, hemiI: 1, night: 0, dusk: 0 };
 const DAY_NOW = { hour: 14.5, grade: null };
@@ -472,10 +473,12 @@ export function updateWorld(dt, ph, wind, focus, flash, day = DAY_NOW) {
   // with the real middle and far ring the clear-weather fog is pushed out to ~1.8 km; thick fog and rain keep their short range
   const fogK = realRings ? Math.min(1, Math.max(0, (atm.fogFar - 48) / 272)) : 0;
   scene.fog.near = atm.fogNear * (1 + 1.4 * fogK); scene.fog.far = atm.fogFar * (1 + 4.5 * fogK);
-  sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.55 : 1);
+  // warmer, more contrasted sun and a bluer fill: shadows pick up the sky colour instead of just going grey
+  sun.color.copy(atm.sunCol).multiply(WARM_SUN); sun.intensity = atm.sunI * 1.15; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.5 : 0.9);
+  hemi.color.copy(atm.top).lerp(WHITE, 0.65);
   updateEnvIntensity((1 - 0.85 * atm.night) * 0.35);
   aimSun(focus);
-  cloudMat.color.copy(atm.cloud); cloudMat.emissive.copy(atm.cloud).multiplyScalar(0.5 - 0.25 * atm.night);   // self-lit so dusk and rain do not turn the puffs into black blobs
+  cloudMat.color.copy(atm.cloud).lerp(WHITE, 0.8 * (1 - atm.night)); cloudMat.emissive.copy(atm.cloud).lerp(WHITE, 0.5 * (1 - atm.night)).multiplyScalar(0.5 - 0.28 * atm.night);   // self-lit so dusk and rain do not turn the puffs into black blobs
   // hills ignore fog, so fade them into the horizon colour at night and in fog instead of letting them turn into black cut-outs
   hillMat.color.setHex(0x5f8f6e).lerp(atm.bot, Math.min(0.94, 0.5 + 0.42 * atm.night + 0.45 * Math.max(0, 1 - atm.fogFar / 220)));
   hillMat.opacity = Math.min(1, Math.max(0, (atm.fogFar - 60) / 90)); hillMat.visible = hillMat.opacity > 0.02;   // thick fog swallows the horizon
@@ -491,7 +494,7 @@ export function updateWorld(dt, ph, wind, focus, flash, day = DAY_NOW) {
     if (c.p.z > 230) c.p.z -= 460; if (c.p.z < -230) c.p.z += 460;
   }
   clouds.forEach((c, i) => c.puffs.forEach((p, j) => {
-    o3.position.set(c.p.x + p.x, c.p.y + p.y, c.p.z + p.z); o3.rotation.set(0, 0, 0); o3.scale.setScalar(p.s); o3.updateMatrix();
+    o3.position.set(c.p.x + p.x, c.p.y + p.y, c.p.z + p.z); o3.rotation.set(0, 0, 0); o3.scale.set(p.s, p.s * 0.72, p.s); o3.updateMatrix();
     cloudMesh.setMatrixAt(i * PUFFS + j, o3.matrix);
   }));
   cloudMesh.instanceMatrix.needsUpdate = true;

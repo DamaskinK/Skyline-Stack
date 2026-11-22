@@ -1,0 +1,4 @@
+app http://localhost:8000 · level kosice · quality low · 2560x1440 dpr 2 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
+perf p50 16.7 ms · p90 16.7 ms (budget 18) · 60 fps · 209 draw calls · 541252 triangles PASS
+console errors: none
+RESULT PASS

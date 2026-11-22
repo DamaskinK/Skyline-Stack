@@ -48,8 +48,8 @@ function build(q) {
   composer.addPass(new RenderPass(scene, camera));
   if (q === 'high') {
     gtao = new GTAOPass(scene, camera, size.x, size.y);
-    gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.6, thickness: 2, scale: 1, samples: 12, distanceFallOff: 1 });
-    gtao.blendIntensity = 0.9;
+    gtao.updateGtaoMaterial({ radius: 1.5, distanceExponent: 1.5, thickness: 2, scale: 1.5, samples: 12, distanceFallOff: 1 });   // stronger contact shadows under eaves, trees and benches
+    gtao.blendIntensity = 1.0;
     // AO is soft by nature: compute it at half resolution (a quarter of the pixels)
     const gtaoSetSize = gtao.setSize.bind(gtao);
     gtao.setSize = (w, h) => gtaoSetSize(Math.max(1, w >> 1), Math.max(1, h >> 1));

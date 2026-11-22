@@ -23,6 +23,11 @@ Every external file used by the game, with its source and licence. Add a row whe
 | Sound "Wind through trees (loop)" | NomadApe | https://freesound.org/people/NomadApe/sounds/444921/ | CC0 | wind loop (`wind-loop.mp3`) |
 | Sound "Rain Loop 2" | richwise | https://freesound.org/people/richwise/sounds/584944/ | CC0 | rain loop (`rain-loop.mp3`) |
 | Sound "City Ambiance (New York)" | knufds | https://freesound.org/people/knufds/sounds/345948/ | CC-BY 4.0 | city ambience in clear weather (`city-loop.mp3`) |
+| Texture "Asphalt 02" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/asphalt_02 | CC0 | Kosice roads (`assets/textures/`) |
+| Texture "Cobblestone Floor 02" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/cobblestone_floor_02 | CC0 | Kosice paving and plaza (`assets/textures/`) |
+| Texture "White Plaster Rough 01" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/white_plaster_rough_01 | CC0 | Kosice house walls (`assets/textures/`) |
+| Texture "Roof Tiles 14" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/roof_tiles_14 | CC0 | Kosice pitched roofs (`assets/textures/`) |
+| Texture "Sandstone Blocks 08" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/sandstone_blocks_08 | CC0 | St Elisabeth cathedral stone (`assets/textures/`) |
 
 ## Credit lines to show on the credits screen (CC-BY 4.0)
 

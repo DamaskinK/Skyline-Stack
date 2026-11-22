@@ -1,5 +1,6 @@
 // Meshes the game creates and moves: floor blocks, the lobby, roofs and the tower crane.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from './config.js';
 import { scene, blockMats, glowMats } from './world.js';
 import { BUILDING_TYPES } from './building-types.js';
@@ -20,9 +21,36 @@ function blockMaterial(hex, variant, gold, style) {
   const arr = [side, side, topMat, topMat, side, side];
   blockMats.set(key, arr); return arr;
 }
+// Relief of a prefab panel floor, shared by every floor: window sills and lintels, a loggia slab with its railing under the
+// windows and a slab-edge ledge, on all four faces. Positions follow the panel facade texture (4 windows per face, see textures.js).
+let panelReliefGeo = null;
+const reliefMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+function panelRelief() {
+  if (panelReliefGeo) return panelReliefGeo;
+  const parts = [], H = CFG.H;
+  const add = (w, h, d, x, y, z, ry, hex) => {   // x/y/z in the face's frame: z = out of the wall (face at z = half depth)
+    const g = new THREE.BoxGeometry(w, h, d).translate(x, y, z).rotateY(ry), c = new THREE.Color(hex), n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { col[3 * i] = c.r; col[3 * i + 1] = c.g; col[3 * i + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.deleteAttribute('uv'); parts.push(g);
+  };
+  const fy = (f) => -H / 2 + f * H;                          // height fraction from the floor's underside
+  for (let face = 0; face < 4; face++) {
+    const ry = face * Math.PI / 2, half = (face % 2 ? CFG.D : CFG.W) * 0.985 / 2, wide = half * 2;
+    for (let i = 0; i < 4; i++) {
+      const x = (-0.375 + i * 0.25) * wide;
+      add(0.7, 0.07, 0.15, x, fy(0.406) - 0.02, half + 0.07, ry, 0xf2eee4);        // sill
+      add(0.64, 0.08, 0.1, x, fy(0.875) + 0.03, half + 0.045, ry, 0xf2eee4);       // lintel
+    }
+    add(wide * 0.94, 0.07, 0.34, 0, fy(0.18), half + 0.15, ry, 0xcfc9bb);          // loggia slab
+    add(wide * 0.94, 0.3, 0.05, 0, fy(0.18) + 0.18, half + 0.31, ry, 0xe6e1d4);    // railing
+    add(wide, 0.06, 0.07, 0, fy(1) - 0.04, half + 0.035, ry, 0xb8b3a6);            // slab edge
+  }
+  panelReliefGeo = mergeGeometries(parts); return panelReliefGeo;
+}
 export function makeBlockMesh(hex, golden, variant = 0, style = '') {
   const g = new THREE.Group();
   const body = new THREE.Mesh(boxGeo, blockMaterial(hex, variant, !!golden, style)); body.castShadow = true; body.receiveShadow = true; g.add(body);
+  if (style === 'panel' && !golden) { const rel = new THREE.Mesh(panelRelief(), reliefMat); rel.castShadow = true; rel.receiveShadow = true; g.add(rel); }
   const warn = new THREE.LineSegments(warnGeo, warnMat); warn.visible = false; g.add(warn);
   g.userData.warn = warn;
   scene.add(g); return g;

@@ -6,6 +6,9 @@ import * as THREE from 'three';
 import { calmFacade, STOREY_W, STOREY_H, roofTex, tileRoofTex, sidewalkTex, canvas2d, toTex } from './textures.js';
 import { glowMats, GROUND_Y } from './world.js';
 import { buildStreetLife } from './street-life.js';
+import { surface } from './surfaces.js';
+import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
+import { settings } from './settings.js';
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
@@ -128,11 +131,12 @@ export function instanceKit(src, list, targetHeight, group, { shadow = true, len
 
 const calmMats = new Map();
 // shared by the near and middle ring: one material per kind / colour / lit-window variant
-export function calmMat(hex, kind, v = 0) {
-  const k = `${hex}-${kind}-${v}`;
+export function calmMat(hex, kind, v = 0, vc = false) {
+  const k = `${hex}-${kind}-${v}-${vc ? 1 : 0}`;
   if (!calmMats.has(k)) {
     const fa = calmFacade(hex, kind, v);
-    const m = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9 });
+    // plaster relief from a CC0 normal map; vc: the mesh carries a small per-building tint in its vertex colours
+    const m = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9, vertexColors: vc, ...surface('plaster', [3, 2], 0.7) });
     glowMats.push(m); calmMats.set(k, m);
   }
   return calmMats.get(k);
@@ -151,7 +155,7 @@ function hullArea(p) {
 }
 const convexish = (p, area) => area > 12 && area / Math.max(1, hullArea(p)) > 0.86;
 // hip roof over a roughly convex footprint: the ridge runs along the long axis, eave ring at height h
-export function pitchedRoof(b, p, h, color, rhFixed = 0) {
+export function pitchedRoof(b, p, h, color, rhFixed = 0, eave = 0) {
   const n = p.length / 2; let cx = 0, cz = 0, sxx = 0, szz = 0, sxz = 0;
   for (let i = 0; i < n; i++) { cx += p[2 * i]; cz += p[2 * i + 1]; } cx /= n; cz /= n;
   for (let i = 0; i < n; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
@@ -160,10 +164,16 @@ export function pitchedRoof(b, p, h, color, rhFixed = 0) {
   for (let i = 0; i < n; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; hu = Math.max(hu, Math.abs(dx * c + dz * s)); hv = Math.max(hv, Math.abs(-dx * s + dz * c)); }
   let ax = [c, s]; if (hv > hu) { ax = [-s, c]; [hu, hv] = [hv, hu]; }
   const rh = rhFixed || Math.min(5.5, Math.max(1.6, hv * 0.7)), rl = Math.max(0, hu - hv);
-  const E = [], T = [];
+  const E = [], T = [], sg = polyArea(p) >= 0 ? 1 : -1;
   for (let i = 0; i < n; i++) {
     const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz, u = Math.max(-rl, Math.min(rl, dx * ax[0] + dz * ax[1]));
-    E.push([p[2 * i], h, p[2 * i + 1]]); T.push([cx + ax[0] * u, h + rh, cz + ax[1] * u]);
+    let ox = 0, oz = 0, oy = h;
+    if (eave) {                                   // eaves: the eave ring is pushed out along the mitred edge normals and dips a little
+      const q = (i + n - 1) % n, j = (i + 1) % n;
+      for (const [a, c] of [[q, i], [i, j]]) { const ex = p[2 * c] - p[2 * a], ez = p[2 * c + 1] - p[2 * a + 1], l = Math.hypot(ex, ez) || 1; ox += ez / l * sg; oz += -ex / l * sg; }
+      const ml = Math.hypot(ox, oz) || 1, k = eave / Math.max(0.55, ml / 2); ox = ox / ml * k; oz = oz / ml * k; oy = h - eave * 0.3;
+    }
+    E.push([p[2 * i] + ox, oy, p[2 * i + 1] + oz]); T.push([cx + ax[0] * u, h + rh, cz + ax[1] * u]);
   }
   const uvf = (q) => [q[0] / 4, q[2] / 4];
   for (let i = 0; i < n; i++) {
@@ -175,8 +185,32 @@ export function pitchedRoof(b, p, h, color, rhFixed = 0) {
       if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
       b.tri(A, B, C, [nx / l, ny / l, nz / l], uvf, color);
     }
+    if (eave) {                                   // fascia board under the eave edge, a shade darker
+      const d = color.clone().multiplyScalar(0.72), ex = E[j][0] - E[i][0], ez = E[j][2] - E[i][2], l = Math.hypot(ex, ez) || 1, nn = [ez / l * sg, 0, -ex / l * sg];
+      const lo = (q) => [q[0], q[1] - 0.28, q[2]];
+      b.tri(E[i], E[j], lo(E[j]), nn, uvf, d); b.tri(E[i], lo(E[j]), lo(E[i]), nn, uvf, d);
+    }
   }
 }
+
+// A box that sticks out of a wall: `u0..u1` along the wall from its start (unit vector t), `y0..y1` up, `out` metres along the outward normal n.
+// Five faces (the one against the wall is hidden), vertex-coloured; merged by the caller into one relief mesh.
+const NO_UV = () => [0, 0];
+function wallBox(b, x0, z0, t, n, u0, u1, y0, y1, out, color) {
+  const P = (u, y, o) => [x0 + t[0] * u + n[0] * o, y, z0 + t[1] * u + n[2] * o];
+  const quad = (A, B, C, D, nn) => { b.tri(A, B, C, nn, NO_UV, color); b.tri(A, C, D, nn, NO_UV, color); };
+  quad(P(u0, y0, out), P(u1, y0, out), P(u1, y1, out), P(u0, y1, out), n);
+  quad(P(u0, y1, 0), P(u0, y1, out), P(u1, y1, out), P(u1, y1, 0), UP);
+  quad(P(u0, y0, 0), P(u1, y0, 0), P(u1, y0, out), P(u0, y0, out), [0, -1, 0]);
+  quad(P(u0, y0, 0), P(u0, y0, out), P(u0, y1, out), P(u0, y1, 0), [-t[0], 0, -t[1]]);
+  quad(P(u1, y0, 0), P(u1, y1, 0), P(u1, y1, out), P(u1, y0, out), [t[0], 0, t[1]]);
+}
+// Window frame layout of the two calm facade kinds (matches calmFacade in textures.js): sill and lintel boxes and side jambs.
+// Fractions of one storey tile; two windows at 1/4 and 3/4 of the tile width.
+const WIN = {
+  old:   { w: 1.4, sillY: 0.62, sillH: 0.13, sillOut: 0.2, lintelY: 2.62, lintelH: 0.16, lintelOut: 0.16, jamb: 0.1, jambY0: 0.75, jambY1: 2.6, jambOut: 0.07 },
+  plain: { w: 2.05, sillY: 0.8, sillH: 0.11, sillOut: 0.15, lintelY: 2.49, lintelH: 0.12, lintelOut: 0.1, jamb: 0.09, jambY0: 0.9, jambY1: 2.48, jambOut: 0.05 },
+};
 
 export function buildNearRing(osm, kit = {}, hide = null) {
   const group = new THREE.Group(); group.name = 'near-ring';
@@ -215,8 +249,8 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   mesh(urban, layerMat(null, 'urban', { color: 0x77736b }), group);
   mesh(park, layerMat(tile(parkGrass), 'park', { color: 0x9bb584 }), group);
   mesh(water, layerMat(null, 'water', { color: 0x3b79a8, roughness: 0.15, metalness: 0.1 }), group);
-  mesh(road, layerMat(null, 'road', { color: 0x24262a }), group);
-  mesh(path, layerMat(tile(sidewalkTex), 'path', { color: 0x9b968c }), group);
+  mesh(road, layerMat(null, 'road', { color: 0x2b2d31, ...surface('asphalt', 3, 0.9) }), group);
+  mesh(path, layerMat(tile(sidewalkTex), 'path', { color: 0x9b968c, ...surface('cobble', 1.5, 1.1) }), group);
   mesh(curbs, layerMat(null, 'basin', { vertexColors: true, roughness: 0.95 }), group, true);
   mesh(basinWater, layerMat(null, 'basin', { color: 0x4f8fb5, roughness: 0.12, metalness: 0.1 }), group);
 
@@ -225,13 +259,15 @@ export function buildNearRing(osm, kit = {}, hide = null) {
     const g = new THREE.BoxGeometry(PLAZA_HALF * 2, LAYER.plaza, PLAZA_HALF * 2).translate(0, LAYER.plaza / 2, 0);
     const uv = g.attributes.uv, p = g.attributes.position;
     for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 3, p.getZ(i) / 3);       // same stone and scale as the paths around it
-    const m = new THREE.Mesh(g, layerMat(tile(sidewalkTex), 'plaza', { color: 0x9b968c })); m.receiveShadow = true; group.add(m);
+    const m = new THREE.Mesh(g, layerMat(tile(sidewalkTex), 'plaza', { color: 0x9b968c, ...surface('cobble', 1.5, 1.1) })); m.receiveShadow = true; group.add(m);
   }
 
   // ── buildings: walls grouped by facade kind and colour, pitched tile roofs and flat roofs in two meshes ──
   // Historic centre (small footprints, no tall height tag): 2-4 storey baroque / classicist houses, pastel plaster, red hip roofs.
   // Everything larger or taller: plain calm facade, flat roof.
-  const walls = new Map(), tiles = new Builder(), flats = new Builder(), kept = [];
+  const walls = new Map(), tiles = new Builder(), flats = new Builder(), relief = new Builder(), kept = [];
+  const frameR = settings.quality === 'low' ? 75 : 150;     // window frames only where the camera can see them; cornices and plinths everywhere
+  const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   const wallB = (kind, v) => { const k = kind + v; if (!walls.has(k)) walls.set(k, { kind, v, b: new Builder() }); return walls.get(k).b; };
   for (const bd of osm.buildings) {
     const p = bd.p, n = p.length / 2;
@@ -251,6 +287,10 @@ export function buildNearRing(osm, kit = {}, hide = null) {
     kept.push(p);
     const v = Math.floor(hv * 1000) % OLD_PALETTE.length;
     const W = old ? wallB('old', bd.k === 'church' ? 99 : v) : wallB('plain', Math.floor(hv * 977) % PLAIN_PALETTE.length);
+    const pitched = old && area < 1500 && convexish(p, area), wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
+    const shade = 0.93 + 0.13 * hash(cx * 3.1, cz * 1.7), warm = (hash(cz, cx * 2.3) - 0.5) * 0.06;     // slight plaster variation per building
+    tint.setRGB(shade * (1 + warm), shade, shade * (1 - warm));
+    band.setHex(bd.k === 'church' ? 0xdad3c3 : old ? OLD_PALETTE[v] : PLAIN_PALETTE[Math.floor(hv * 977) % PLAIN_PALETTE.length]).multiplyScalar(1.06 * shade);
     const sign = polyArea(p) >= 0 ? 1 : -1;                    // outward normal of edge d is (dz, -dx) for counter-clockwise rings
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n, x0 = p[2 * i], z0 = p[2 * i + 1], x1 = p[2 * j], z1 = p[2 * j + 1], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz);
@@ -258,20 +298,45 @@ export function buildNearRing(osm, kit = {}, hide = null) {
       const nn = [dz / l * sign, 0, -dx / l * sign], reps = Math.max(1, Math.round(l / STOREY_W));   // whole windows per wall, none cut
       const uf = (q) => [Math.hypot(q[0] - x0, q[2] - z0) / l * reps, q[1] / STOREY_H];
       const A = [x0, 0, z0], B = [x1, 0, z1], C = [x1, h, z1], D = [x0, h, z0];
-      W.tri(A, B, C, nn, uf); W.tri(A, C, D, nn, uf);
+      W.tri(A, B, C, nn, uf, tint); W.tri(A, C, D, nn, uf, tint);
+      // relief: plinth, cornice (or a thin stringcourse under the eaves), window sills / lintels / jambs
+      const t = [dx / l, dz / l];
+      wallBox(relief, x0, z0, t, nn, 0, l, 0, 0.7, 0.1, PLINTH);
+      if (pitched) wallBox(relief, x0, z0, t, nn, 0, l, h - 0.55, h - 0.38, 0.1, band);
+      else { wallBox(relief, x0, z0, t, nn, 0, l, h - 0.42, h, 0.3, band); wallBox(relief, x0, z0, t, nn, 0, l, h - 0.62, h - 0.46, 0.14, band); }
+      if (dist < frameR && l > 2.2) {
+        const F = WIN[wk], tw = l / reps;
+        for (let r = 0; r < reps; r++) for (const f of [0.25, 0.75]) {
+          const uc = (r + f) * tw, hw = F.w / 2;
+          if (uc - hw < 0.05 || uc + hw > l - 0.05) continue;
+          for (let s2 = 0; s2 < storeys; s2++) {
+            const y = s2 * STOREY_H;
+            wallBox(relief, x0, z0, t, nn, uc - hw - 0.04, uc + hw + 0.04, y + F.sillY, y + F.sillY + F.sillH, F.sillOut, SILL);
+            wallBox(relief, x0, z0, t, nn, uc - hw, uc + hw, y + F.lintelY, y + F.lintelY + F.lintelH, F.lintelOut, SILL);
+            if (settings.quality !== 'low') {
+              wallBox(relief, x0, z0, t, nn, uc - hw, uc - hw + F.jamb, y + F.jambY0, y + F.jambY1, F.jambOut, SILL);
+              wallBox(relief, x0, z0, t, nn, uc + hw - F.jamb, uc + hw, y + F.jambY0, y + F.jambY1, F.jambOut, SILL);
+            }
+          }
+        }
+      }
     }
-    if (old && area < 1500 && convexish(p, area)) pitchedRoof(tiles, p, h, ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length]);
-    else fillPoly(flats, p, h, 8);
+    if (pitched) pitchedRoof(tiles, p, h, ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], 0, 0.5);
+    else {
+      fillPoly(flats, p, h, 8);
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; stripe(relief, p[2 * i], p[2 * i + 1], p[2 * j], p[2 * j + 1], 0.22, h, h + 0.5, band); }   // parapet
+    }
   }
   for (const { kind, v, b } of walls.values()) {
     if (b.empty) continue;
-    mesh(b, calmMat(v === 99 ? 0xdad3c3 : kind === 'old' ? OLD_PALETTE[v] : PLAIN_PALETTE[v], kind, v), group, true);
+    mesh(b, calmMat(v === 99 ? 0xdad3c3 : kind === 'old' ? OLD_PALETTE[v] : PLAIN_PALETTE[v], kind, v, true), group, true);
   }
-  mesh(tiles, material(tile(tileRoofTex), { vertexColors: true }), group, true);
+  mesh(tiles, material(tile(tileRoofTex), { vertexColors: true, ...surface('roof', 3, 1.1) }), group, true);
+  mesh(relief, material(null, { vertexColors: true, roughness: 0.9 }), group, false);   // no shadow casting: the details are too small to show in the shadow map
   mesh(flats, material(tile(roofTex), { color: 0xb8b8b8 }), group);
 
   // ── trees in parks, bushes on park corners, street lights, parked cars ──
-  const trees = [], bushes = [], lamps = [], cars = [];
+  const trees = [], bushes = [], lamps = [], cars = [], hedges = [], beds = [];
   const inBuilding = (x, z) => { for (const p of kept) if (insideRing(p, x, z)) return true; return false; };
   const clearPlaza = (x, z) => Math.abs(x) < PLAZA_HALF + 2 && Math.abs(z) < PLAZA_HALF + 2;
   for (const g of osm.parks) {
@@ -285,6 +350,32 @@ export function buildNearRing(osm, kit = {}, hide = null) {
       trees.push([jx, jz, 0.8 + hash(jx, jz) * 0.7, Math.floor(hash(jz, jx) * 3)]);
     }
     for (let i = 0; i < g.p.length; i += 12) if (bushes.length < 70 && bbIn(g.p[i], g.p[i + 1], 10) && !clearPlaza(g.p[i], g.p[i + 1])) bushes.push([g.p[i], g.p[i + 1]]);
+  }
+  // hedge rows: lumps 1.3 m apart, half a metre inside the kerb, on about every second long edge of the bigger parks
+  for (const g of osm.parks) {
+    if (g.k === 'pitch' || Math.abs(polyArea(g.p)) < 200) continue;
+    const sg = polyArea(g.p) >= 0 ? 1 : -1;
+    for (let i = 0, n = g.p.length / 2; i < n; i++) {
+      const j = (i + 1) % n, x0 = g.p[2 * i], z0 = g.p[2 * i + 1], dx = g.p[2 * j] - x0, dz = g.p[2 * j + 1] - z0, l = Math.hypot(dx, dz);
+      if (l < 6 || hash(x0, z0) < 0.5 || hedges.length > 420) continue;
+      const nx = -dz / l * sg, nz = dx / l * sg, gap = 1.25;
+      for (let s = 0.8; s < l - 0.8; s += gap) {
+        const x = x0 + dx / l * s + nx * 0.55, z = z0 + dz / l * s + nz * 0.55;
+        if (bbIn(x, z, 10) && !clearPlaza(x, z) && insideRing(g.p, x, z) && !inBuilding(x, z)) hedges.push([x, z, Math.atan2(dx, dz) + Math.PI / 2, 0.85 + hash(x, z) * 0.3]);
+      }
+    }
+  }
+  for (const g of osm.parks) {   // flower beds: a few per bigger park, away from the trees
+    if (g.k === 'pitch' || g.k === 'wood' || Math.abs(polyArea(g.p)) < 250) continue;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, got = 0;
+    for (let i = 0; i < g.p.length; i += 2) { x0 = Math.min(x0, g.p[i]); x1 = Math.max(x1, g.p[i]); z0 = Math.min(z0, g.p[i + 1]); z1 = Math.max(z1, g.p[i + 1]); }
+    for (let k = 0; k < 60 && got < 2 && beds.length < 36; k++) {
+      const x = x0 + hash(k, x0) * (x1 - x0), z = z0 + hash(z0, k) * (z1 - z0), r = hash(x, z) * Math.PI;
+      if (!bbIn(x, z, 12) || clearPlaza(x, z) || inBuilding(x, z)) continue;
+      const ok = [[2.2, 0], [-2.2, 0], [0, 1.2], [0, -1.2]].every(([u, v]) => insideRing(g.p, x + u * Math.cos(r) + v * Math.sin(r), z - u * Math.sin(r) + v * Math.cos(r)));
+      if (!ok || trees.some((q) => Math.hypot(q[0] - x, q[1] - z) < 3.2) || beds.some((q) => Math.hypot(q[0] - x, q[1] - z) < 8)) continue;
+      beds.push([x, z, r, 3.6, 1.7]); got++;
+    }
   }
   let carN = 0;
   for (const r of osm.roads) {
@@ -308,16 +399,10 @@ export function buildNearRing(osm, kit = {}, hide = null) {
       acc = ((acc - l) % gap + gap) % gap;
     }
   }
-  // trees: same simple look as the procedural ones, three variants, instanced
-  const treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
-  for (let t = 0; t < 3; t++) {
-    const list = trees.filter((q) => q[3] === t); if (!list.length) continue;
-    const col = [0x3f8f3a, 0x4fa548, 0x2f7a3a][t];
-    const parts = [[new THREE.CylinderGeometry(0.3, 0.3, 2, 6).translate(0, 1, 0), 0x7a5230], [new THREE.IcosahedronGeometry(1.7, 0).translate(0, 3.2, 0), col], [new THREE.IcosahedronGeometry(1.1, 0).translate(0.6, 4.3, 0.3), col]];
-    const g = mergeParts(parts), im = new THREE.InstancedMesh(g, treeMat, list.length), o = new THREE.Object3D();
-    list.forEach(([x, z, s], i) => { o.position.set(x, LAYER.park, z); o.scale.setScalar(s); o.rotation.y = x; o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
-    im.castShadow = true; im.receiveShadow = true; group.add(im);
-  }
+  // trees (several canopy lumps, tints, wind sway), hedge rows along park kerbs, flower beds (js/vegetation.js)
+  addTrees(group, trees, LAYER.park);
+  addHedges(group, hedges, LAYER.park);
+  addFlowerBeds(group, beds, LAYER.park);
   instanceKit(kit.bush, bushes.map(([x, z]) => [x, LAYER.park, z, hash(x, z) * 6]), 1.1, group, { shadow: false });
   instanceKit(kit.streetlight, lamps, 6, group);
   instanceKit(kit.car_sedan, cars.filter((_, i) => i % 2 === 0), 0, group, { lengthFit: 4.4 });
