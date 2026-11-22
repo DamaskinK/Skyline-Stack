@@ -2,7 +2,7 @@
 
 | ID | Topic | Type | State |
 |----|-------|------|-------|
-| S0001 | Visual overhaul, six city levels and progression | improve | 01-15 done (15 waits for music picks), 16 blocked on picks |
+| S0001 | Visual overhaul, six city levels and progression | improve | M1 + M2 built (01-16, 32, 33); 17 Kosice review waits for the developer |
 
 ## In progress / next
 - Developer: pick tracks (docs/research/music-and-sfx.md) for ticket 16; play ticket 07 (ten floors) and look at the
