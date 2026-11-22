@@ -1,7 +1,7 @@
-// Game rules: spawning, dropping, scoring, lives, weather events and both modes (Endless and City).
+// Game rules: spawning, dropping, scoring, lives and weather events for an Endless run.
 // The game never touches the DOM; it reports to `this.ui`, which main.js connects to the interface.
 import * as THREE from 'three';
-import { CFG, DIFFICULTY, BTYPES, BUILDINGS, ENDLESS_COLORS, PHASE_LEN, phaseAt, specialFor } from './config.js';
+import { CFG, DIFFICULTY, BTYPES, ENDLESS_COLORS, PHASE_LEN, phaseAt, specialFor } from './config.js';
 import { windAt, hookAt, Tower } from './physics.js';
 import { scene } from './world.js';
 import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
@@ -15,7 +15,7 @@ export class Game {
     this.objects = []; this.debris = []; this.keys = {}; this.camMode = 0;
     this.wind = { x: 0, z: 0, speed: 0, angle: 0, trend: 0 };
     this.flashV = 0; this.shake = 0; this.t = 0; this.focus = 1; this.focusIdle = 9;
-    this.lives = 3; this.combo = 0; this.anchors = 0; this.score = 0; this.pop = 0; this.buildPop = 0;
+    this.lives = 3; this.combo = 0; this.anchors = 0; this.score = 0; this.pop = 0;
     this.diffKey = settings.difficulty; this.diff = DIFFICULTY[this.diffKey];
     this.ui = null; this.camera = null;
   }
@@ -23,14 +23,11 @@ export class Game {
   start(mode = this.mode, diffKey = settings.difficulty) {
     this.clear();
     this.mode = mode; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
-    this.t = 0; this.score = 0; this.pop = 0; this.focus = 1; this.focusIdle = 9; this.totalFloors = 0; this.bestHeight = 0; this.perfects = 0;
+    this.t = 0; this.score = 0; this.pop = 0; this.focus = 1; this.focusIdle = 9; this.bestHeight = 0; this.perfects = 0;
     this.prevBest = (loadScores()[mode] || [])[0]?.score || 0;
     this.state = 'play'; this.paused = false; this.saved = false; this.lastPhase = 0; this.drops = 0;
-    People.setWalkers(mode === 'city' ? 31 : 9);
-    if (mode === 'city') {
-      this.plots = Array.from({ length: 9 }, (_, i) => ({ i, type: null, floors: 0, pop: 0, done: false }));
-      this.state = 'city'; this.ui.showCity();
-    } else this.beginTower(0, 0, null);
+    People.setWalkers(9);
+    this.beginTower(0, 0);
   }
   clear() {
     if (this.tower) for (const f of this.tower.f) scene.remove(f.mesh);
@@ -38,14 +35,13 @@ export class Game {
     for (const d of this.debris) scene.remove(d.mesh);
     if (this.block) scene.remove(this.block.mesh);
     People.clear();
-    this.objects = []; this.debris = []; this.block = null; this.tower = null; this.plot = null;
+    this.objects = []; this.debris = []; this.block = null; this.tower = null;
   }
-  plotPos(i) { return { x: ((i % 3) - 1) * 16, z: (Math.floor(i / 3) - 1) * 16 }; }
-  beginTower(bx, bz, plot) {
+  beginTower(bx, bz) {
     this.tower = new Tower(bx, bz, this.diff);
     this.objects.push(makeFoundation(bx, bz));
-    this.plot = plot; this.lives = this.diff.lives; this.combo = 0; this.goldenNext = false;
-    this.anchors = CFG.features.anchor ? 1 : 0; this.buildPop = 0;
+    this.lives = this.diff.lives; this.combo = 0; this.goldenNext = false;
+    this.anchors = CFG.features.anchor ? 1 : 0;
     this.spawnT = 0.4; this.block = null; this.ltT = 0; this.ltWarned = false;
     this.craneY = CFG.FOUND_H; this.lastPhase = 0;
     this.state = 'play';
@@ -56,7 +52,7 @@ export class Game {
     let type = specialFor(n + 1);
     if (this.goldenNext && CFG.features.golden) { type = 'golden'; this.goldenNext = false; }
     const bt = BTYPES[type];
-    const color = type !== 'normal' ? bt.color : this.plot ? BUILDINGS[this.plot.type].color : ENDLESS_COLORS[Math.floor(n / 5) % ENDLESS_COLORS.length];
+    const color = type !== 'normal' ? bt.color : ENDLESS_COLORS[Math.floor(n / 5) % ENDLESS_COLORS.length];
     const mesh = makeBlockMesh(color, bt.golden, n % 3);
     this.block = { state: 'hang', type, m: bt.m, bouncy: !!bt.bouncy, golden: !!bt.golden, mesh, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lastVrx: 0, lastVrz: 0, appear: 0 };
     this.hangBlock();
@@ -167,10 +163,8 @@ export class Game {
     else this.combo = 0;
     const mult = Math.min(5, 1 + 0.5 * this.combo);
     const gm = golden ? 2 : 1;
-    const bonus = this.plot ? BUILDINGS[this.plot.type].bonus : 1;
     this.score += Math.round((10 + (perfect ? 15 : 0)) * mult * gm * this.diff.score);
-    const people = Math.round((perfect ? 25 : 10) * mult * gm * bonus * this.diff.score);
-    if (this.plot) this.buildPop += people; else this.pop += people;
+    this.pop += Math.round((perfect ? 25 : 10) * mult * gm * this.diff.score);
 
     const roof = { x: b.mesh.position.x, y: T.topY(), z: b.mesh.position.z };
     FX.dust({ x: roof.x, y: roof.y - CFG.H, z: roof.z }, perfect ? 0.7 : 1);
@@ -184,15 +178,14 @@ export class Game {
     else { this.ui.popup('RISKY', '#ff4d5e'); this.shake = Math.max(this.shake, 0.25); }
     if (golden) { this.ui.popup('GOLDEN · CALM', '#ffd34d', true); Sfx.golden(); FX.ring(new THREE.Vector3(roof.x, roof.y + 0.05, roof.z), 0xffffff); }
     if (perfect && this.combo > 0 && this.combo % CFG.goldenEvery === 0) { this.goldenNext = true; this.ui.banner('Golden block next', 2); }
-    const n = T.n, record = this.plot || n > this.bestHeight;
-    if (!this.plot) this.bestHeight = Math.max(this.bestHeight, n);
+    const n = T.n, record = n > this.bestHeight;
+    this.bestHeight = Math.max(this.bestHeight, n);
     if (CFG.features.anchor && record && n > 0 && n % CFG.anchorEvery === 0) { this.anchors++; this.ui.banner('+1 anchor', 2); }
     if (n % PHASE_LEN === 0 && n > 0 && Math.floor(n / PHASE_LEN) !== this.lastPhase) { this.lastPhase = Math.floor(n / PHASE_LEN); this.ui.weather(phaseAt(n)); Sfx.whoosh(); }
-    if (CFG.features.quake && !this.plot) {
+    if (CFG.features.quake) {
       if (n % CFG.quakeEvery === CFG.quakeEvery - 2) this.ui.banner(`Earthquake at floor ${n + 2}`, 3);
       if (n > 0 && n % CFG.quakeEvery === 0) { T.quake(); this.shake = CFG.quakeTime; this.ui.banner('EARTHQUAKE', CFG.quakeTime); Sfx.crash(); }
     }
-    if (this.plot && n >= BUILDINGS[this.plot.type].target) this.finishBuilding(true);
   }
   onCollapse(col) {
     for (const it of col.items) this.addDebris(it);
@@ -200,38 +193,19 @@ export class Game {
     if (col.items[0]) FX.dust(col.items[0].p, 2);
     Sfx.crash();
     this.ui.popup(`COLLAPSE −${col.count}`, '#ff4d5e');
-    if (CFG.collapseEndsGame && !this.plot) { this.lives = 0; this.endTower(); return; }
+    if (CFG.collapseEndsGame) { this.lives = 0; this.gameOver(); return; }
     this.loseLife(null);
   }
   loseLife(msg) {
     if (msg) this.ui.popup(msg, '#ff4d5e');
     this.lives--;
-    if (this.lives <= 0) this.endTower();
-  }
-  endTower() { if (this.plot) this.finishBuilding(false); else this.gameOver(); }
-  finishBuilding(done) {
-    const T = this.tower, p = this.plot;
-    if (this.block) { scene.remove(this.block.mesh); this.block = null; }
-    T.freeze();
-    for (const f of T.f) { this.objects.push(f.mesh); f.mesh.userData.warn.visible = false; }
-    p.floors = T.n; p.done = true;
-    p.pop = Math.round(this.buildPop * (done ? 1.5 : 1));
-    if (done && T.n) {
-      const top = T.f[T.n - 1].mesh.position;
-      this.objects.push(makeRoof(new THREE.Vector3(top.x, top.y + CFG.H / 2, top.z)));
-      FX.confetti({ x: top.x, y: top.y + 1, z: top.z }); Sfx.fanfare();
-    }
-    this.pop += p.pop; this.score = this.pop; this.totalFloors += T.n;
-    this.ui.popup(done ? `COMPLETE +${p.pop}` : `CLOSED +${p.pop}`, done ? '#5dff9b' : '#ffd84a');
-    this.tower = null; this.plot = null; this.state = 'city';
-    if (this.plots.every((q) => q.done)) { setTimeout(() => this.gameOver(), 1500); return; }
-    setTimeout(() => { if (this.state === 'city') this.ui.showCity(); }, 1500);
+    if (this.lives <= 0) this.gameOver();
   }
   gameOver() {
     if (this.state === 'over' || this.state === 'menu') return;
     this.state = 'over';
-    const floors = this.mode === 'city' ? this.totalFloors : Math.max(this.bestHeight, this.tower ? this.tower.n : 0);
-    this.lastResult = { score: this.mode === 'city' ? this.pop : this.score, floors, pop: this.pop, perfects: this.perfects, diff: this.diffKey };
+    const floors = Math.max(this.bestHeight, this.tower ? this.tower.n : 0);
+    this.lastResult = { score: this.score, floors, pop: this.pop, perfects: this.perfects, diff: this.diffKey };
     Sfx.over();
     setTimeout(() => { if (this.state === 'over') this.ui.gameOver(this.lastResult, this.lastResult.score > this.prevBest && this.lastResult.score > 0); }, 1400);
   }

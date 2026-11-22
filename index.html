@@ -96,17 +96,7 @@
 <section class="screen" id="sNew" hidden>
   <div class="panel wide">
     <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>NEW GAME</h2></header>
-    <h3>MODE</h3>
-    <div class="cards two" role="group" aria-label="Mode">
-      <button type="button" class="card-opt" data-mode="endless">
-        <svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2"><rect x="12" y="28" width="16" height="9" fill="#4f7cff"/><rect x="13" y="19" width="16" height="9" fill="#4f7cff"/><rect x="11" y="10" width="16" height="9" fill="#e86f4f"/><rect x="12" y="1" width="16" height="9" fill="#ffc531"/></g></svg>
-        <b>ENDLESS</b><span>One tower, as high as you can. Weather turns every 15 floors.</span>
-      </button>
-      <button type="button" class="card-opt" data-mode="city">
-        <svg viewBox="0 0 40 40" aria-hidden="true"><g stroke="#000" stroke-width="2"><rect x="2" y="22" width="10" height="16" fill="#4f7cff"/><rect x="15" y="8" width="10" height="30" fill="#3fd07a"/><rect x="28" y="16" width="10" height="22" fill="#ff5a5a"/></g></svg>
-        <b>CITY</b><span>Fill a 3×3 block with buildings. Score is the number of residents.</span>
-      </button>
-    </div>
+    <p class="note">ENDLESS: one tower, as high as you can. Weather turns every 15 floors.</p>
     <h3>DIFFICULTY</h3>
     <div class="cards three" role="group" aria-label="Difficulty" id="diffCards"></div>
     <div class="actions"><button type="button" class="btn big" id="btnStart">START ▶</button></div>
@@ -134,7 +124,6 @@
 <section class="screen" id="sScores" hidden>
   <div class="panel">
     <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>HIGH SCORES</h2></header>
-    <div class="tabs" role="tablist"><button type="button" role="tab" data-tab="endless">ENDLESS</button><button type="button" role="tab" data-tab="city">CITY</button></div>
     <table class="hs" id="hsTable"></table>
   </div>
 </section>
@@ -167,17 +156,6 @@
         <ul class="keys" id="helpWeather"></ul>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ── city plot picker ── -->
-<section class="screen side" id="sCity" hidden>
-  <div class="panel">
-    <header><h2 id="cityTitle">CITY</h2></header>
-    <div class="grid3" id="plots"></div>
-    <div class="types" id="types"></div>
-    <p class="note" id="cityInfo"></p>
-    <div class="actions"><button type="button" class="btn ghost sm" id="btnCityQuit">QUIT TO MENU</button></div>
   </div>
 </section>
 

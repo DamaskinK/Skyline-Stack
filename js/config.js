@@ -60,12 +60,6 @@ export const BTYPES = {
   golden: { m: 1, color: 0xffc531, label: 'Golden', golden: true, hint: 'Double points and calms the tower for 5 s.' },
 };
 
-export const BUILDINGS = {
-  residential: { label: 'Residential', color: 0x4f7cff, css: '#4f7cff', target: 10, bonus: 1, needs: [] },
-  commercial: { label: 'Commercial', color: 0xff5a5a, css: '#ff5a5a', target: 15, bonus: 1.5, needs: ['residential'] },
-  office: { label: 'Office', color: 0x3fd07a, css: '#3fd07a', target: 20, bonus: 2, needs: ['residential', 'commercial'] },
-  luxury: { label: 'Luxury', color: 0xffc531, css: '#ffc531', target: 30, bonus: 3, needs: ['residential', 'commercial', 'office'] },
-};
 export const ENDLESS_COLORS = [0x4f7cff, 0x4f7cff, 0xf0eadb, 0x4f7cff, 0x4f7cff, 0xe86f4f];
 
 export function phaseAt(n) {

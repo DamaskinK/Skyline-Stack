@@ -60,7 +60,7 @@ function render(rdt) {
   } else {
     const targetY = T ? T.topY() + 2.5 : 8;
     camY += (targetY - camY) * Math.min(1, rdt * 2.5);
-    const off = game.state === 'city' || !T ? tmpOff.set(30, 34, 44) : camOffsets[game.camMode];
+    const off = !T ? tmpOff.set(30, 34, 44) : camOffsets[game.camMode];
     camPos.lerp(tmpTarget.set(cx, camY, cz).add(off), Math.min(1, rdt * 3));
     tmpLook.set(cx, camY - (T ? 0.5 : 6), cz);
   }
@@ -101,7 +101,7 @@ let last = performance.now(), acc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const rdt = Math.min(0.1, (now - last) / 1000); last = now;
-  if ((game.state === 'play' || game.state === 'over' || game.state === 'city') && !game.paused) {
+  if ((game.state === 'play' || game.state === 'over') && !game.paused) {
     acc += rdt * (game.state === 'play' ? game.timeScale(rdt) : 1);
     let steps = 0;
     while (acc >= CFG.DT && steps < 24) { game.step(CFG.DT); acc -= CFG.DT; steps++; }

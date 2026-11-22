@@ -1,5 +1,5 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
-import { CFG, DIFFICULTY, BTYPES, BUILDINGS, PHASES, PHASE_LEN, phaseAt, specialFor } from './config.js';
+import { CFG, DIFFICULTY, BTYPES, PHASES, PHASE_LEN, phaseAt, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores } from './settings.js';
 import { Sfx, Music } from './audio.js';
 import { People } from './fx.js';
@@ -46,10 +46,8 @@ export function createUI(game) {
   [...'TOWER'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[i % 5]; d.style.animationDelay = `${i * 0.08}s, ${i * 0.15}s`; $('#logoTop').appendChild(d); });
   [...'BLOXX'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[(i + 2) % 5]; d.style.animationDelay = `${0.4 + i * 0.08}s, ${0.7 + i * 0.15}s`; $('#logoBot').appendChild(d); });
   function renderTitleBest() {
-    const s = loadScores(), e = s.endless?.[0], c = s.city?.[0];
-    $('#titleBest').innerHTML = e || c
-      ? `${e ? `BEST TOWER <b>${e.score}</b> · ${e.floors} FL<br>` : ''}${c ? `BEST CITY <b>${c.score}</b> RESIDENTS` : ''}`
-      : 'NO RECORDS YET. BE THE FIRST.';
+    const e = loadScores().endless?.[0];
+    $('#titleBest').innerHTML = e ? `BEST TOWER <b>${e.score}</b> · ${e.floors} FL` : 'NO RECORDS YET. BE THE FIRST.';
   }
 
   // ── navigation ──
@@ -60,7 +58,7 @@ export function createUI(game) {
   for (const b of $$('.mi, .card-opt, .seg button, .tabs button')) b.addEventListener('pointerenter', () => { if (document.activeElement !== b) { b.focus({ preventScroll: true }); Sfx.ui(); } });
 
   // ── new game ──
-  let pickMode = 'endless', pickDiff = settings.difficulty;
+  let pickDiff = settings.difficulty;
   const dc = $('#diffCards');
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
@@ -69,13 +67,11 @@ export function createUI(game) {
     b.onclick = () => { pickDiff = k; Sfx.ui(); syncNew(); };
     dc.appendChild(b);
   }
-  for (const b of $$('[data-mode]')) b.onclick = () => { pickMode = b.dataset.mode; Sfx.ui(); syncNew(); };
   function syncNew() {
-    for (const b of $$('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === pickMode));
     for (const b of $$('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === pickDiff));
   }
   syncNew();
-  $('#btnStart').onclick = () => startGame(pickMode, pickDiff);
+  $('#btnStart').onclick = () => startGame('endless', pickDiff);
   function startGame(mode, diff) {
     Sfx.init(); Sfx.uiOk(); clearDemo(); hideScreens(); stack = [];
     Music.setMood('game');
@@ -113,10 +109,8 @@ export function createUI(game) {
   game.camMode = settings.camera;
 
   // ── scores ──
-  let scoreTab = 'endless';
-  for (const t of $$('[data-tab]')) t.onclick = () => { scoreTab = t.dataset.tab; Sfx.ui(); renderScores($('#hsTable'), scoreTab); };
+  const scoreTab = 'endless';
   function renderScores(el, mode) {
-    for (const t of $$('[data-tab]')) t.setAttribute('aria-selected', String(t.dataset.tab === scoreTab));
     const list = (loadScores()[mode] || []).slice(0, 10);
     el.innerHTML = list.length
       ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc((s.diff || 'normal').toUpperCase())}</span></td><td>${s.floors} fl</td><td class="sc">${s.score}</td></tr>`).join('')
@@ -183,7 +177,6 @@ export function createUI(game) {
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
-  $('#btnCityQuit').onclick = () => { Sfx.uiBack(); if (game.pop > 0) game.gameOver(); else toMenu(); };
   $('#btnAgain').onclick = () => startGame(game.mode, game.diffKey);
 
   // ── game over ──
@@ -194,40 +187,8 @@ export function createUI(game) {
     addScore(game.mode, { name: ($('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
     try { localStorage.setItem('tb3d_name', $('#name').value); } catch { /* storage blocked */ }
     game.saved = true; $('#btnSave').disabled = true; $('#btnSave').textContent = 'SAVED'; Sfx.uiOk();
-    scoreTab = game.mode; renderScores($('#overHs'), game.mode);
+    renderScores($('#overHs'), game.mode);
   });
-
-  // ── city plot picker ──
-  const neighbours = (i) => { const x = i % 3, y = Math.floor(i / 3), out = []; if (x > 0) out.push(i - 1); if (x < 2) out.push(i + 1); if (y > 0) out.push(i - 3); if (y < 2) out.push(i + 3); return out; };
-  const allowed = (i, type) => { const types = new Set(neighbours(i).map((j) => game.plots[j].type).filter(Boolean)); return BUILDINGS[type].needs.every((t) => types.has(t)); };
-  function renderCity() {
-    const left = game.plots.filter((p) => !p.done).length;
-    $('#cityTitle').textContent = `CITY · ${game.pop}`;
-    const wrap = $('#plots'); wrap.innerHTML = '';
-    game.plots.forEach((p) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'plot' + (p.done ? ' built' : '');
-      b.setAttribute('aria-pressed', String(game.selPlot === p.i));
-      if (p.done) { b.style.background = BUILDINGS[p.type].css; b.style.color = '#0b1026'; b.innerHTML = `<span>${p.floors} fl · ${p.pop}</span><span class="t">${BUILDINGS[p.type].label.toUpperCase()}</span>`; }
-      else b.innerHTML = '<span>empty</span><span class="t">BUILD</span>';
-      b.onclick = () => { if (!p.done) { game.selPlot = p.i; Sfx.ui(); renderCity(); } };
-      wrap.appendChild(b);
-    });
-    const tw = $('#types'); tw.innerHTML = '';
-    for (const [k, t] of Object.entries(BUILDINGS)) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'card-opt';
-      b.disabled = !(game.selPlot !== null && allowed(game.selPlot, k));
-      const need = t.needs.length ? 'Next to ' + t.needs.map((n) => BUILDINGS[n].label).join(' + ') : 'Anywhere';
-      b.innerHTML = `<b><span class="swatch" style="background:${t.css}"></span>${t.label.toUpperCase()}</b>${t.target} floors · ×${t.bonus} people<small style="color:var(--dim)">${need}</small>`;
-      b.onclick = () => {
-        const p = game.plots[game.selPlot]; p.type = k; Sfx.uiOk(); hideScreens(); stack = [];
-        const pos = game.plotPos(p.i); game.beginTower(pos.x, pos.z, p);
-      };
-      tw.appendChild(b);
-    }
-    $('#cityInfo').textContent = game.selPlot === null
-      ? `${left} plot${left === 1 ? '' : 's'} left. Pick an empty plot, then a building type. Taller buildings hold more people but reach worse weather.`
-      : 'Neighbours count left, right, above and below.';
-  }
 
   // ── HUD ──
   const hudCache = {};
@@ -239,7 +200,6 @@ export function createUI(game) {
   const ui = {
     show, toMenu,
     showHud() { hideScreens(); $('#hud').hidden = false; const d = DIFFICULTY[game.diffKey]; $('#hDiff').textContent = d.label; $('#hDiff').className = 'tag ' + game.diffKey; },
-    showCity() { $('#hud').hidden = true; game.selPlot = null; renderCity(); stack = []; show('sCity'); },
     popup(text, color, small) {
       const el = document.createElement('div'); el.className = 'pop' + (small ? ' small' : ''); el.textContent = text; el.style.color = color;
       el.style.marginTop = `${$('#popups').childElementCount * 36}px`;
@@ -253,15 +213,12 @@ export function createUI(game) {
     bumpFloor() { const el = $('#floorBig'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); },
     gameOver(r, record) {
       $('#hud').hidden = true;
-      $('#overTitle').textContent = game.mode === 'city' ? 'CITY FINISHED' : 'GAME OVER';
+      $('#overTitle').textContent = 'GAME OVER';
       $('#newRecord').hidden = !record;
-      const dl = DIFFICULTY[r.diff].label;
-      $('#overStats').innerHTML = game.mode === 'city'
-        ? `<div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div><div><span class="lbl">FLOORS</span><b>${r.floors}</b></div><div><span class="lbl">DIFFICULTY</span><b>${dl}</b></div>`
-        : `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
+      $('#overStats').innerHTML = `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
       $('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
       try { $('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
-      scoreTab = game.mode; renderScores($('#overHs'), game.mode);
+      renderScores($('#overHs'), game.mode);
       stack = []; show('sOver');
       if (record) Sfx.fanfare();
     },
@@ -270,17 +227,14 @@ export function createUI(game) {
       if (bannerT > 0) { bannerT -= rdt; setText('banner', bannerText); } else setText('banner', '');
       if ($('#hud').hidden) return;
       const T = game.tower, n = T ? T.n : 0, ph = phaseAt(n), w = game.wind;
-      setText('hScoreLbl', game.mode === 'city' ? 'CITY' : 'SCORE');
-      setText('hScore', String(game.mode === 'city' ? game.pop : game.score));
-      setText('hPopLbl', game.mode === 'city' ? 'THIS BUILDING' : 'RESIDENTS');
-      setText('hPop', String(game.mode === 'city' ? game.buildPop : game.pop));
+      setText('hScore', String(game.score));
+      setText('hPop', String(game.pop));
       setText('floorBig', String(n));
       setText('hMeters', `${Math.round(n * CFG.METERS_PER_FLOOR)} M`);
       const pipsOn = game.goldenNext ? 5 : game.combo % CFG.goldenEvery;
       setHTML('pips', Array.from({ length: 5 }, (_, i) => `<i class="${i < pipsOn ? 'on' : ''}"></i>`).join(''));
       $('#pips').classList.toggle('gold', !!game.goldenNext);
       setText('hCombo', game.combo > 0 ? `COMBO ×${Math.min(5, 1 + 0.5 * game.combo)}` : game.goldenNext ? 'GOLDEN NEXT' : '');
-      setText('hTarget', game.plot ? `${BUILDINGS[game.plot.type].label.toUpperCase()} ${n}/${BUILDINGS[game.plot.type].target}` : '');
       setHTML('hLives', Array.from({ length: game.diff.lives }, (_, i) => HEART(i < game.lives)).join(''));
       setText('hWind', `${w.speed.toFixed(1)} m/s`);
       setText('hTrend', w.trend > 0.08 ? 'GUSTING ▲' : w.trend < -0.08 ? 'EASING ▼' : 'STEADY');

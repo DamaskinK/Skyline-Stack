@@ -6,10 +6,10 @@ high-score tab are gone; Endless plays exactly as before. Prefactor that makes t
 **Blocked by:** None (can start immediately).
 
 **Type:** improve
-**Status:** claimed
+**Status:** done
 **Read:** plan sections "Solution", "Interface"; `docs/adr/0002-remove-city-mode.md`.
 
-- [ ] New Game screen has no mode choice for City; Start goes to Endless
-- [ ] Plot state, building types with neighbour rules and the city picker screen are removed from code and markup
-- [ ] High scores show Endless only; saved City scores in storage do not break loading
-- [ ] Endless run, game over, save score and play again still work (checked in the browser, no console errors)
+- [x] New Game screen has no mode choice for City; Start goes to Endless
+- [x] Plot state, building types with neighbour rules and the city picker screen are removed from code and markup
+- [x] High scores show Endless only; saved City scores in storage do not break loading
+- [x] Endless run, game over, save score and play again still work (checked in the browser, no console errors)

@@ -191,16 +191,6 @@ kbd { font-family: var(--f-disp); font-size: 9px; color: var(--ink); background:
 .stats b { display: block; font-family: var(--f-disp); font-size: 14px; color: var(--amber); margin-top: 8px; }
 .record { font-family: var(--f-disp); font-size: 10px; color: var(--night); background: var(--ok); padding: 6px 8px; align-self: flex-start; animation: breathe 1s infinite; }
 
-/* city picker */
-#sCity .panel { margin-right: max(0px, 3vw); width: min(460px, 100%); }
-.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.plot { aspect-ratio: 1.3; background: var(--panel-2); border: 0; box-shadow: inset 0 0 0 2px var(--line); color: var(--ink); font-family: var(--f-ui); font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; cursor: pointer; }
-.plot[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--amber); }
-.plot.built { cursor: default; box-shadow: inset 0 0 0 2px #000; }
-.plot .t { font-family: var(--f-disp); font-size: 8px; margin-top: 4px; }
-.types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.types .card-opt { padding: 10px; font-size: 17px; gap: 4px; }
-.types .card-opt b { font-size: 10px; }
 
 .desk { }
 @media (pointer: coarse) { #touch { display: flex; } .desk { display: none; } }
@@ -220,7 +210,6 @@ kbd { font-family: var(--f-disp); font-size: 9px; color: var(--ink); background:
   #compass { width: 46px; height: 46px; }
   .stats { grid-template-columns: 1fr 1fr; }
   #nextHint { display: none; }
-  #sCity { place-items: center; }
   .tl { flex-direction: row; gap: 6px; }
   .tl .box { padding: 6px 8px; } .tl .chip svg { width: 18px; height: 18px; } .chip .v { font-size: 12px; }
   .tc { top: calc(62px + env(safe-area-inset-top, 0px)); }
