@@ -331,6 +331,19 @@ let clock = 0;
 export const blockMats = new Map();
 export const glowMats = sceneryMats;
 
+// Image-based light from the level's sky HDRI (set by level-scene.js). Three r160 has no scene-wide env intensity,
+// so the standard materials are collected now and then and dimmed together as night falls.
+const envMats = new Set(); let envScan = 0;
+export function setEnvironment(tex) { scene.environment = tex; envScan = 0; }
+function updateEnvIntensity(v) {
+  if (!scene.environment) return;
+  if (--envScan <= 0) {
+    envScan = 60; envMats.clear();
+    scene.traverse((o) => { const m = o.material; if (m) for (const x of Array.isArray(m) ? m : [m]) if (x.isMeshStandardMaterial) envMats.add(x); });
+  }
+  for (const m of envMats) m.envMapIntensity = v;
+}
+
 // Point the sun (and its shadow frustum) at the area around `focus`.
 export function aimSun(focus) {
   sun.position.copy(focus).addScaledVector(atm.sunDir, 60); sun.target.position.copy(focus);
@@ -349,7 +362,8 @@ export function updateWorld(dt, ph, wind, focus, flash) {
   u.time.value = clock; u.cover.value = atm.cover; u.wind.value.set(wind.x, wind.z); u.night.value = atm.night;
   sky.position.copy(camera.position);
   scene.fog.color.copy(atm.bot); scene.fog.near = atm.fogNear; scene.fog.far = atm.fogFar;
-  sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = atm.hemiI + flash * 2.5;
+  sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.55 : 1);
+  updateEnvIntensity((1 - 0.85 * atm.night) * 0.35);
   aimSun(focus);
   cloudMat.color.copy(atm.cloud);
   // hills ignore fog, so fade them into the horizon colour at night and in fog instead of letting them turn into black cut-outs

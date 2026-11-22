@@ -9,6 +9,7 @@ import { settings, onSettings } from './settings.js';
 import { Game, buildDemo } from './game.js';
 import { createUI } from './ui.js';
 import { installDebug } from './debug.js';
+import { applyPostQuality, resizePost, renderFrame, post } from './post.js';
 
 const game = new Game();
 game.camera = camera;
@@ -16,9 +17,10 @@ game.ui = createUI(game);
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
 installDebug({ renderer, scene, camera });
 
-applyQuality(); resize();
-window.addEventListener('resize', resize);
-onSettings((k) => { if (k === 'quality') applyQuality(); });
+applyQuality(); resize(); applyPostQuality();
+window.addEventListener('resize', () => { resize(); resizePost(); });
+onSettings((k) => { if (k === 'quality') { applyQuality(); applyPostQuality(); } });
+window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
 const camOffsets = [new THREE.Vector3(9, 4, 22), new THREE.Vector3(22, 4, 9), new THREE.Vector3(0, 19, 9)];
@@ -95,7 +97,7 @@ function render(rdt) {
   Sfx.ambience(game.wind, ph, game.state === 'play' && !game.paused);
   Music.tension = Math.min(1, n / 60);
   Music.update();
-  renderer.render(scene, camera);
+  renderFrame();
   game.ui.update(rdt, Math.atan2(camera.position.z - camLook.z, camera.position.x - camLook.x));
 }
 
