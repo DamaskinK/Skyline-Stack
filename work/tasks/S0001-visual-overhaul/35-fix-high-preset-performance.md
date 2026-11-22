@@ -5,7 +5,7 @@
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 **Now:** the developer reports High as "very unoptimised" on their screen (about 2000 px wide, Retina, devicePixelRatio
 2). Our checks ran at 1280x720 where High holds 60 fps; at full Retina resolution GTAO, bloom and MSAA run on 4x the
 pixels.
