@@ -1,6 +1,6 @@
 // Browser checks on the running game (Playwright + the system Chrome, real GPU).
 //   node tests/browser/check.mjs [all|shots|perf|flicker] [--app URL] [--quality low|medium|high] [--level kosice]
-//                                [--budget 18] [--headed] [--out tests/browser/out]
+//                                [--budget 18] [--viewport 2560x1440] [--dpr 2] [--headed] [--out tests/browser/out]
 // Needs the game served (npm run serve, or npm run preview with --app http://localhost:8001).
 // Prints a short report, writes it and the screenshots to the out folder, and exits 1 if a check fails.
 import { chromium } from 'playwright';
@@ -23,7 +23,7 @@ const POSES = {
 mkdirSync(out, { recursive: true });
 const lines = [], fails = [];
 const log = (s) => { lines.push(s); console.log(s); };
-const tag = `${level}-${quality}`;
+const tag = `${level}-${quality}${opt('dpr', 1) != 1 ? '-dpr' + opt('dpr', 1) : ''}`;
 
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const browser = await chromium.launch({
@@ -31,7 +31,8 @@ const browser = await chromium.launch({
   executablePath: process.env.PW_PATH || (existsSync(chrome) ? chrome : undefined),
   args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-renderer-backgrounding', '--disable-background-timer-throttling'],
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const [vw, vh] = opt('viewport', '1280x720').split('x').map(Number);
+const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: Number(opt('dpr', 1)) });
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(e.message));
@@ -43,7 +44,7 @@ await page.goto(app, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });
 await page.waitForTimeout(800);
 const info = await page.evaluate(() => window.__debug.info());
-log(`app ${app} · level ${level} · quality ${quality} · GPU ${info.gpu}`);
+log(`app ${app} · level ${level} · quality ${quality} · ${vw}x${vh} dpr ${opt('dpr', 1)} · GPU ${info.gpu}`);
 
 if (cmd === 'all' || cmd === 'flicker') {
   for (const kind of ['depth', 'shadow']) {

@@ -23,9 +23,12 @@ Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, n
 sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 
+// Render scale per quality level (pixels per CSS pixel, capped by the screen's own ratio). On a Retina screen at full
+// ratio the passes run on 4x the pixels, so High tops out at 1.5 and post.js lowers it further if frames run slow.
+export function maxPixelRatio(q = settings.quality) { return Math.min(q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5, window.devicePixelRatio || 1); }
 export function applyQuality() {
   const q = settings.quality;
-  renderer.setPixelRatio(Math.min(q === 'low' ? 1 : q === 'medium' ? 1.5 : 2, window.devicePixelRatio || 1));
+  renderer.setPixelRatio(maxPixelRatio(q));
   sun.castShadow = q !== 'low';
   const size = q === 'high' ? 2048 : 1024;
   if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }

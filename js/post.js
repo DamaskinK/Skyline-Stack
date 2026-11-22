@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { renderer, scene, camera, atm } from './world.js';
+import { renderer, scene, camera, atm, maxPixelRatio } from './world.js';
 import { settings } from './settings.js';
 
 // Grade in display space, after tone mapping: lift / gain tint, contrast, saturation, vignette.
@@ -41,7 +41,8 @@ function build(q) {
   composer = null; gtao = null; bloom = null; grade = null;
   if (q === 'low') return;
   renderer.getSize(size);
-  const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+  // MSAA is the costliest part on a big screen: 2 samples on a Retina-class render scale look as clean as 4 at ratio 1
+  const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: maxPixelRatio(q) >= 1.25 ? 2 : 4 });
   composer = new EffectComposer(renderer, target);
   composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(size.x, size.y);
   composer.addPass(new RenderPass(scene, camera));
@@ -49,6 +50,10 @@ function build(q) {
     gtao = new GTAOPass(scene, camera, size.x, size.y);
     gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.6, thickness: 2, scale: 1, samples: 12, distanceFallOff: 1 });
     gtao.blendIntensity = 0.9;
+    // AO is soft by nature: compute it at half resolution (a quarter of the pixels)
+    const gtaoSetSize = gtao.setSize.bind(gtao);
+    gtao.setSize = (w, h) => gtaoSetSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
+    gtao.setSize(size.x * renderer.getPixelRatio(), size.y * renderer.getPixelRatio());
     // GTAO's normal/depth pass draws sprites and depthWrite:false meshes (dust, rings, glass) as solid squares: hide them there
     const hide = (o) => o.isSprite || (o.material && !Array.isArray(o.material) && o.material.transparent && o.material.depthWrite === false);
     const baseOverride = gtao.overrideVisibility.bind(gtao);
@@ -75,7 +80,7 @@ export function setGrade(g) {
   u.contrast.value = currentGrade.contrast; u.saturation.value = currentGrade.saturation; u.vignette.value = currentGrade.vignette;
 }
 
-export function applyPostQuality() { if (mode !== settings.quality) { mode = settings.quality; build(mode); } }
+export function applyPostQuality() { if (mode !== settings.quality) { mode = settings.quality; build(mode); slow = 0; fast = 0; lastT = 0; } }
 export function resizePost() { if (!composer) return; renderer.getSize(size); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(size.x, size.y); }
 // renderer.info counts the whole frame (all passes), not only the last full-screen pass
 renderer.info.autoReset = false;
@@ -89,5 +94,18 @@ function tuneFrame() {
   u.saturation.value = g.saturation * (1 + 0.08 * d);
   bloom.strength = 0.55 + 0.15 * atm.night; bloom.threshold = 0.82 - 0.06 * atm.night;
 }
-export function renderFrame() { renderer.info.reset(); tuneFrame(); if (composer) composer.render(); else renderer.render(scene, camera); }
+// Dynamic resolution: if frames keep missing 60 fps, step the render scale down (to 1.0 at the lowest); after a long
+// stretch of comfortable frames step it back up, waiting longer each time it had to come down again.
+let slow = 0, fast = 0, lastT = 0, holdUp = 4;
+function tuneResolution() {
+  const now = performance.now(), dt = now - lastT; lastT = now;
+  if (settings.quality === 'low' || dt > 250 || dt <= 0) { slow = 0; fast = 0; return; }   // tab hidden, loading hitch: ignore
+  const pr = renderer.getPixelRatio(), cap = maxPixelRatio();
+  if (dt > 21) { slow++; fast = 0; } else if (dt < 12.5) { fast += dt; slow = 0; } else { slow = Math.max(0, slow - 1); }
+  let next = pr;
+  if (slow >= 8 && pr > 1) { next = Math.max(1, pr - 0.25); holdUp = Math.min(30, holdUp * 2); }
+  else if (fast > holdUp * 1000 && pr < cap) next = Math.min(cap, pr + 0.25);
+  if (next !== pr) { slow = 0; fast = 0; renderer.setPixelRatio(next); resizePost(); }
+}
+export function renderFrame() { tuneResolution(); renderer.info.reset(); tuneFrame(); if (composer) composer.render(); else renderer.render(scene, camera); }
 export const post = { get passes() { return composer ? composer.passes.map((p) => p.constructor.name) : []; } };
