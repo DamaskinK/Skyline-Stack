@@ -6,7 +6,7 @@ low-poly figures whose clothes fit the city and its culture.
 **Blocked by:** None (can start immediately).
 
 **Type:** change
-**Status:** ready-for-agent
+**Status:** claimed
 **Now:** people are simple capsules with a head and an umbrella (js/fx.js People), the same in every city.
 
 - [ ] A shared figure: head with hair, torso, arms and legs that swing when walking, simple hands and shoes; 150-400
