@@ -2,7 +2,8 @@
 import { BUILDING_TYPES } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
-import { levelById } from './levels.js';
+import { levelById, DISTRICT_CITIES } from './levels.js';
+import { createDistrictMap } from './district-map.js';
 import { Sfx } from './audio.js';
 import { People } from './fx.js';
 import { buildDemo, clearDemo } from './game.js';
@@ -91,7 +92,15 @@ export function createUI(game) {
       `<button type="button" class="card-opt" data-mode="endless"><b>ENDLESS</b><span class="sub">No target, as high as you can</span></button>`;
     for (const b of $$('[data-mode]')) b.onclick = () => { pickMode = b.dataset.mode; Sfx.ui(); syncNew(); };
     syncNew();
+    $('#districtCards').innerHTML = DISTRICT_CITIES.filter((c) => c.built).map((c) =>
+      `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${c.district.goal} residents</span></button>`).join('');
+    for (const b of $$('[data-district]')) b.onclick = () => { Sfx.init(); Sfx.uiOk(); districtMap.render(b.dataset.district); show('sMap'); };
   }
+  // District map (S0002 05). Play on a plot starts the existing Kosice level run until ticket 04 wires per-plot scenes.
+  const districtMap = createDistrictMap({
+    onPlay: (cityId) => { if (cityId === 'kosice') startGame('level', pickDiff, 'kosice'); },
+    onBack: back,
+  });
   $('#btnStart').onclick = () => startGame(pickMode, pickDiff);
   let starting = false;
   async function startGame(mode, diff, level = 'kosice') {

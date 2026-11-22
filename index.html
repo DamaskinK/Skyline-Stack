@@ -101,9 +101,25 @@
     <h3>MODE</h3>
     <div class="cards three" role="group" aria-label="Mode" id="modeCards"></div>
     <p class="note" id="modeNote"></p>
+    <h3>DISTRICT MODE</h3>
+    <div class="cards two" role="group" aria-label="Districts" id="districtCards"></div>
     <h3>DIFFICULTY</h3>
     <div class="cards three" role="group" aria-label="Difficulty" id="diffCards"></div>
     <div class="actions"><button type="button" class="btn big" id="btnStart">START ▶</button></div>
+  </div>
+</section>
+
+<!-- ── district map ── -->
+<section class="screen" id="sMap" hidden>
+  <div class="panel wide map">
+    <header><button type="button" class="back" id="mapBack" aria-label="Back">◀</button><div><h2 id="mapTitle">DISTRICT</h2><p class="note" id="mapSub"></p></div></header>
+    <div class="mapgrid">
+      <div class="mapcol">
+        <div id="mapRes" class="resbox"></div>
+        <div class="mapbox" id="mapArt"></div>
+      </div>
+      <div class="plotcol" id="plotCards"></div>
+    </div>
   </div>
 </section>
 
