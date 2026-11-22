@@ -377,6 +377,7 @@ const balloon = new THREE.Group();
 export const atm = {
   top: new THREE.Color(PHASES[0].top), bot: new THREE.Color(PHASES[0].bot), sunCol: new THREE.Color(PHASES[0].sunCol), cloud: new THREE.Color(0xffffff),
   sunDir: new THREE.Vector3(...PHASES[0].sunDir).normalize(), night: 0, sunI: 1.7, hemiI: 1, cover: 0.35, fogNear: 110, fogFar: 320,
+  skySun: new THREE.Vector3(...PHASES[0].sunDir).normalize(), dusk: 0, grade: null,
 };
 const tc = new THREE.Color(), tv = new THREE.Vector3();
 let clock = 0;
@@ -402,15 +403,66 @@ export function aimSun(focus) {
   sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
 }
 
-export function updateWorld(dt, ph, wind, focus, flash) {
+// ── time of day ──
+// Look of the light by "m", the hours of sun left before it sets (or since it rose): 0 = on the horizon. The hour
+// of day comes from the level's arc (core/dayarc.js); sunrise 6:00, sunset 19:30 everywhere.
+const SUNRISE = 6, SUNSET = 19.5;
+const KEYS = [   // m, sky top, sky horizon, cloud, sun colour, sun, hemi, night (windows), dusk (warm glow)
+  { m: 4.5, top: 0x2f86e0, bot: 0xc4e6ff, cloud: 0xffffff, sunCol: 0xfff3dc, sun: 1.7, hemi: 1.0, night: 0, dusk: 0 },
+  { m: 2.2, top: 0x3f7fcc, bot: 0xf6dcb4, cloud: 0xfff0dc, sunCol: 0xffd9a0, sun: 1.55, hemi: 0.92, night: 0, dusk: 0.3 },
+  { m: 0.7, top: 0x4b5f9a, bot: 0xf7a35e, cloud: 0xffb98a, sunCol: 0xff9d58, sun: 1.2, hemi: 0.78, night: 0.12, dusk: 0.85 },
+  { m: 0, top: 0x4a4b86, bot: 0xe9795a, cloud: 0xd8838a, sunCol: 0xff7f4a, sun: 0.85, hemi: 0.66, night: 0.42, dusk: 1 },
+  { m: -0.6, top: 0x24294f, bot: 0x8a5a7e, cloud: 0x5d5578, sunCol: 0x9fb2ff, sun: 0.35, hemi: 0.5, night: 0.85, dusk: 0.5 },
+  { m: -1.3, top: 0x0b0f1c, bot: 0x2a3247, cloud: 0x2c3242, sunCol: 0x9fb2ff, sun: 0.25, hemi: 0.42, night: 1, dusk: 0 },
+];
+const tk = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color(), a: new THREE.Color(), b: new THREE.Color() };
+const base = { sun: 0, hemi: 0, night: 0, dusk: 0 };
+const MOON = new THREE.Vector3(-0.4, 0.5, -0.7).normalize();
+const sunTrue = new THREE.Vector3(), sunLight = new THREE.Vector3();
+// The sun's place for an hour: it rises in the east (+x), crosses south, sets in the west; z stays behind the tower from the camera.
+function timeOfDay(hour) {
+  const m = hour < (SUNRISE + SUNSET) / 2 ? hour - SUNRISE : SUNSET - hour;
+  let i = 0; while (i < KEYS.length - 2 && m < KEYS[i + 1].m) i++;
+  const a = KEYS[i], b = KEYS[i + 1], f = Math.min(1, Math.max(0, (m - a.m) / (b.m - a.m)));
+  const w = f;
+  tk.top.setHex(a.top).lerp(tk.a.setHex(b.top), w); tk.bot.setHex(a.bot).lerp(tk.b.setHex(b.bot), w);
+  tk.cloud.setHex(a.cloud).lerp(tk.a.setHex(b.cloud), w); tk.sunCol.setHex(a.sunCol).lerp(tk.b.setHex(b.sunCol), w);
+  for (const k of ['sun', 'hemi', 'night', 'dusk']) base[k] = a[k] + (b[k] - a[k]) * w;
+  const fr = Math.min(1, Math.max(0, (hour - SUNRISE) / (SUNSET - SUNRISE))), az = Math.PI * (1 - fr);
+  const el = Math.sin(Math.PI * fr) * 0.85;
+  sunTrue.set(Math.cos(az) * 0.9, el, -0.55).normalize();            // for the sky shader: reaches the horizon at sunset
+  const day = Math.min(1, Math.max(0, (m + 0.4) / 0.9));             // 0 once the sun is down: moonlight takes over
+  sunLight.set(sunTrue.x, Math.max(sunTrue.y, 0.24), sunTrue.z).normalize().lerp(MOON, 1 - day).normalize();   // never low: keeps the shadow frustum stable
+  return m;
+}
+// Weather darkens and greys the time-of-day look; it does not replace it, so rain at dusk is a dark orange-grey dusk.
+const wx = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color() };
+const tgt = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color(), sunI: 1, hemiI: 1, night: 0, dusk: 0 };
+const DAY_NOW = { hour: 14.5, grade: null };
+
+export function updateWorld(dt, ph, wind, focus, flash, day = DAY_NOW) {
   clock += dt;
   const k = Math.min(1, dt * 1.2);
-  atm.top.lerp(tc.setHex(ph.top), k); atm.bot.lerp(tc.setHex(ph.bot), k); atm.sunCol.lerp(tc.setHex(ph.sunCol), k); atm.cloud.lerp(tc.setHex(ph.cloud), k);
-  atm.sunDir.lerp(tv.set(...ph.sunDir).normalize(), k * 0.5).normalize();
-  atm.night += (ph.night - atm.night) * k; atm.sunI += (ph.sun - atm.sunI) * k; atm.hemiI += (ph.hemi - atm.hemiI) * k; atm.cover += (ph.cover - atm.cover) * k;
-  atm.fogNear += (ph.fog[0] - atm.fogNear) * k; atm.fogFar += (ph.fog[1] - atm.fogFar) * k;
+  timeOfDay(day.hour);
+  const o = Math.min(1, Math.max(0, (ph.cover - 0.35) / 0.55));   // how overcast the weather is
+  const bright = 1 - 0.85 * base.night;                           // how much daylight is left to be grey
+  const grey = (c, w, col, lightK) => { c.copy(w).multiplyScalar(lightK); return c.lerp(col, 0.22); };
+  wx.top.setHex(ph.top); wx.bot.setHex(ph.bot); wx.cloud.setHex(ph.cloud);
+  tgt.top.copy(tk.top).lerp(grey(tc, wx.top, tk.top, bright), 0.85 * o);
+  tgt.bot.copy(tk.bot).lerp(grey(tc, wx.bot, tk.bot, 0.35 + 0.65 * bright), 0.85 * o);
+  tgt.cloud.copy(tk.cloud).lerp(grey(tc, wx.cloud, tk.cloud, 0.3 + 0.7 * bright), 0.9 * o);
+  tgt.sunCol.copy(tk.sunCol); if (ph.sunCol !== undefined) tgt.sunCol.lerp(tc.setHex(ph.sunCol), 0.35 * o);
+  tgt.sunI = base.sun * Math.min(1.2, Math.max(0.15, ph.sun / 1.7)); tgt.hemiI = base.hemi * ph.hemi;
+  tgt.night = Math.max(base.night, ph.night); tgt.dusk = base.dusk * (1 - 0.5 * o);
+  atm.top.lerp(tgt.top, k); atm.bot.lerp(tgt.bot, k); atm.sunCol.lerp(tgt.sunCol, k); atm.cloud.lerp(tgt.cloud, k);
+  atm.sunDir.lerp(sunLight, k * 0.5).normalize(); atm.skySun.lerp(sunTrue, k * 0.5).normalize();
+  atm.night += (tgt.night - atm.night) * k; atm.sunI += (tgt.sunI - atm.sunI) * k; atm.hemiI += (tgt.hemiI - atm.hemiI) * k; atm.cover += (ph.cover - atm.cover) * k;
+  atm.dusk += (tgt.dusk - atm.dusk) * k; atm.grade = day.grade;
+  const duskFog = 1 - 0.3 * base.dusk;   // low sun, hazier air
+  atm.fogNear += (ph.fog[0] * duskFog - atm.fogNear) * k; atm.fogFar += (ph.fog[1] * duskFog - atm.fogFar) * k;
+  renderer.toneMappingExposure = 1.05 - 0.1 * atm.night + 0.05 * atm.dusk;
   const u = skyMat.uniforms;
-  u.top.value.copy(atm.top); u.bot.value.copy(atm.bot); u.cloudCol.value.copy(atm.cloud); u.sunCol.value.copy(atm.sunCol); u.sunDir.value.copy(atm.sunDir);
+  u.top.value.copy(atm.top); u.bot.value.copy(atm.bot); u.cloudCol.value.copy(atm.cloud); u.sunCol.value.copy(atm.sunCol); u.sunDir.value.copy(atm.skySun);
   u.time.value = clock; u.cover.value = atm.cover; u.wind.value.set(wind.x, wind.z); u.night.value = atm.night;
   sky.position.copy(camera.position);
   scene.fog.color.copy(atm.bot);
@@ -420,7 +472,7 @@ export function updateWorld(dt, ph, wind, focus, flash) {
   sun.color.copy(atm.sunCol); sun.intensity = atm.sunI; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.55 : 1);
   updateEnvIntensity((1 - 0.85 * atm.night) * 0.35);
   aimSun(focus);
-  cloudMat.color.copy(atm.cloud);
+  cloudMat.color.copy(atm.cloud); cloudMat.emissive.copy(atm.cloud).multiplyScalar(0.5 - 0.25 * atm.night);   // self-lit so dusk and rain do not turn the puffs into black blobs
   // hills ignore fog, so fade them into the horizon colour at night and in fog instead of letting them turn into black cut-outs
   hillMat.color.setHex(0x5f8f6e).lerp(atm.bot, Math.min(0.94, 0.5 + 0.42 * atm.night + 0.45 * Math.max(0, 1 - atm.fogFar / 220)));
   hillMat.opacity = Math.min(1, Math.max(0, (atm.fogFar - 60) / 90)); hillMat.visible = hillMat.opacity > 0.02;   // thick fog swallows the horizon

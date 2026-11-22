@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { renderer, scene, camera } from './world.js';
+import { renderer, scene, camera, atm } from './world.js';
 import { settings } from './settings.js';
 
 // Grade in display space, after tone mapping: lift / gain tint, contrast, saturation, vignette.
@@ -71,5 +71,15 @@ export function applyPostQuality() { if (mode !== settings.quality) { mode = set
 export function resizePost() { if (!composer) return; renderer.getSize(size); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(size.x, size.y); }
 // renderer.info counts the whole frame (all passes), not only the last full-screen pass
 renderer.info.autoReset = false;
-export function renderFrame() { renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, camera); }
+// Each frame: the level's grade, warmed by the sunset glow, and bloom that takes the lit windows up as night comes.
+let gradeSrc = null;
+function tuneFrame() {
+  if (atm.grade !== gradeSrc) { gradeSrc = atm.grade; setGrade(gradeSrc || DEFAULT_GRADE); }
+  if (!grade) return;
+  const g = currentGrade, d = atm.dusk, u = grade.uniforms;
+  u.gain.value.set(g.gain[0] * (1 + 0.06 * d), g.gain[1], g.gain[2] * (1 - 0.05 * d));
+  u.saturation.value = g.saturation * (1 + 0.08 * d);
+  bloom.strength = 0.55 + 0.15 * atm.night; bloom.threshold = 0.82 - 0.06 * atm.night;
+}
+export function renderFrame() { renderer.info.reset(); tuneFrame(); if (composer) composer.render(); else renderer.render(scene, camera); }
 export const post = { get passes() { return composer ? composer.passes.map((p) => p.constructor.name) : []; } };

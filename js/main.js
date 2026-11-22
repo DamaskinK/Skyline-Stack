@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { renderer, scene, camera, applyQuality, resize, updateWorld } from './world.js';
+import { dayAt } from './core/dayarc.js';
 import { updateCrane, updateMarker } from './entities.js';
 import { FX, People, updateWeather, updateBolt } from './fx.js';
 import { Sfx, Music } from './audio.js';
@@ -78,7 +79,7 @@ function render(rdt) {
   camera.lookAt(camLook);
   camera.updateMatrixWorld();
 
-  updateWorld(rdt, ph, game.wind, camLook, game.flashV);
+  updateWorld(rdt, ph, game.wind, camLook, game.flashV, game.state !== 'menu' && game.run ? dayAt(game.run.level, n, game.run.endless) : undefined);
   game.flashV = Math.max(0, game.flashV - rdt * 2.5);
   $flash.style.opacity = String(Math.min(0.75, game.flashV * 0.8));
   updateBolt(rdt);
