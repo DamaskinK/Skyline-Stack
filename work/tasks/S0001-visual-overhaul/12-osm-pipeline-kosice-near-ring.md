@@ -10,7 +10,7 @@ CC0 kit pieces (Kenney / KayKit / Quaternius), instanced.
 **Status:** done
 **Read:** plan "Scene in three rings", "Assets and build"; brief references.
 
-- [ ] Build site for Kosice chosen near the centre with the landmarks in the default camera view; noted in the level data
+- [x] Build site for Kosice chosen near the centre with the landmarks in the default camera view; noted in the level data
 - [x] Script and generated JSON committed; ODbL attribution in CREDITS; kit packs in CREDITS
 - [x] Ground uses the merged-mesh approach from 05 (no flicker)
 - [x] Draw calls and frame time within budget (04 checks)
@@ -26,3 +26,5 @@ CC0 kit pieces (Kenney / KayKit / Quaternius), instanced.
 - Open: the box "build site noted in level data" is not ticked: `js/levels.js` was off limits. Site stays 48.7206, 21.2578. From it (north = up):
   St. Elisabeth Cathedral 42 m at bearing 147 deg (south-east), National Theatre 130 m at 345 deg (north-north-west); Hlavna street runs past the site.
   Both are in `osm.json` under `landmarks`. Traffic is off on OSM levels (no cars on the real streets yet); parked cars only.
+
+- Main session: the build site was already in `js/levels.js` (`site: { lat: 48.7206, lon: 21.2578 }`, ticket 08), so the box is met.
