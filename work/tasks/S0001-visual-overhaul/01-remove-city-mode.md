@@ -6,7 +6,7 @@ high-score tab are gone; Endless plays exactly as before. Prefactor that makes t
 **Blocked by:** None (can start immediately).
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan sections "Solution", "Interface"; `docs/adr/0002-remove-city-mode.md`.
 
 - [ ] New Game screen has no mode choice for City; Start goes to Endless
