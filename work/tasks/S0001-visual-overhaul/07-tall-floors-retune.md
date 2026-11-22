@@ -6,7 +6,7 @@ crane, camera offsets, sway mode shape and collapse thresholds are retuned so th
 **Blocked by:** 02
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Floor size"; `GLOSSARY.md` Floor.
 
 - [ ] Core tests updated for the new height and green
