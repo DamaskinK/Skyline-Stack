@@ -6,7 +6,7 @@ sky, fog, exposure, and window / street-light glow at dusk. Kosice gets its arc.
 **Blocked by:** 06, 08
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Time-of-day arc".
 
 - [ ] Arc defined per level in data
