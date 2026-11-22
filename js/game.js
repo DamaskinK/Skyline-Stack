@@ -8,6 +8,7 @@ import { BUILDING_TYPES } from './building-types.js';
 import { makeBlockMesh, makeFoundation, makeRoof } from './entities.js';
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
+import { Music } from './music.js';
 import { settings, loadScores, saveLevelResult } from './settings.js';
 import { levelById } from './levels.js';
 import { loadLevelAssets } from './assets.js';
@@ -45,6 +46,7 @@ export class Game {
   async loadLevel(id, onProgress) {
     const { assets, errors } = await loadLevelAssets(id, onProgress);
     applyLevelAssets(id, assets);
+    Music.provide(id, assets.music);
     return errors;
   }
 
@@ -81,6 +83,7 @@ export class Game {
 
   // One core event -> what the player sees and hears.
   handle(ev) {
+    Music.event(ev.type);
     switch (ev.type) {
       case 'spawn': {
         const bt = BTYPES[ev.block];

@@ -5,7 +5,8 @@ import { renderer, scene, camera, applyQuality, resize, updateWorld } from './wo
 import { dayAt } from './core/dayarc.js';
 import { updateCrane, updateMarker } from './entities.js';
 import { FX, People, updateWeather, updateBolt } from './fx.js';
-import { Sfx, Music } from './audio.js';
+import { Sfx } from './audio.js';
+import { Music } from './music.js';
 import { settings, onSettings } from './settings.js';
 import { Game, buildDemo } from './game.js';
 import { createUI } from './ui.js';
@@ -15,6 +16,9 @@ import { applyPostQuality, resizePost, renderFrame, post } from './post.js';
 const game = new Game();
 game.camera = camera;
 game.ui = createUI(game);
+Music.bind(game);
+window.__music = Music;   // director state, log and levels for the browser checks
+window.__sfx = Sfx;
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
 installDebug({ renderer, scene, camera });
 
@@ -96,7 +100,6 @@ function render(rdt) {
   FX.update(rdt);
   People.update(game.paused ? 0 : rdt, game.wind, !!ph.rain);
   Sfx.ambience(game.wind, ph, game.state === 'play' && !game.paused);
-  Music.tension = Math.min(1, n / 60);
   Music.update();
   renderFrame();
   game.ui.update(rdt, Math.atan2(camera.position.z - camLook.z, camera.position.x - camLook.x));

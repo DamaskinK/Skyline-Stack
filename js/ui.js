@@ -3,7 +3,7 @@ import { BUILDING_TYPES } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById } from './levels.js';
-import { Sfx, Music } from './audio.js';
+import { Sfx } from './audio.js';
 import { People } from './fx.js';
 import { buildDemo, clearDemo } from './game.js';
 
@@ -99,7 +99,6 @@ export function createUI(game) {
     Sfx.init(); Sfx.uiOk(); stack = [];
     if (game.levelId !== level) await loadLevel(level);
     clearDemo(); hideScreens();
-    Music.setMood('game');
     game.start(mode, diff, level);
     starting = false;
   }
@@ -218,7 +217,7 @@ export function createUI(game) {
   function toMenu() {
     game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
-    stack = []; show('sTitle'); buildDemo(); People.setWalkers(9); Music.setMood('menu');
+    stack = []; show('sTitle'); buildDemo(); People.setWalkers(9);
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };

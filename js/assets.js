@@ -22,9 +22,14 @@ function loadOne(a, onBytes) {
 
 // Loads every asset of a level. onProgress(fraction 0..1). Resolves to { assets: { id: value }, errors: [{ id, url, message }] }.
 // A failed optional asset is reported in `errors` and left out; a failed required asset (or manifest) rejects.
-export async function loadLevelAssets(level, onProgress = () => {}) {
-  const res = await fetch(`assets/levels/${level}/manifest.json`);
-  if (!res.ok) throw new Error(`No asset list for level "${level}" (HTTP ${res.status})`);
+export function loadLevelAssets(level, onProgress = () => {}) {
+  return loadManifest(`assets/levels/${level}/manifest.json`, onProgress, `level "${level}"`);
+}
+
+// Same loader for any manifest file, e.g. the shared audio list (assets/audio/manifest.json).
+export async function loadManifest(url, onProgress = () => {}, label = url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`No asset list for ${label} (HTTP ${res.status})`);
   const manifest = await res.json();
   const list = manifest.assets || [];
   const total = list.reduce((s, a) => s + (a.bytes || 1), 0) || 1;

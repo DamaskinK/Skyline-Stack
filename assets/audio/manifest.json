@@ -1,0 +1,12 @@
+{
+  "level": "audio",
+  "assets": [
+    { "id": "menu", "type": "audio", "url": "assets/audio/music/menu.mp3", "bytes": 2527398 },
+    { "id": "drop", "type": "audio", "url": "assets/audio/sfx/drop.mp3", "bytes": 25536 },
+    { "id": "land", "type": "audio", "url": "assets/audio/sfx/land.mp3", "bytes": 4368 },
+    { "id": "thunder", "type": "audio", "url": "assets/audio/sfx/thunder.mp3", "bytes": 257424 },
+    { "id": "wind", "type": "audio", "url": "assets/audio/sfx/wind-loop.mp3", "bytes": 449856 },
+    { "id": "rain", "type": "audio", "url": "assets/audio/sfx/rain-loop.mp3", "bytes": 1401576 },
+    { "id": "city", "type": "audio", "url": "assets/audio/sfx/city-loop.mp3", "bytes": 409992 }
+  ]
+}

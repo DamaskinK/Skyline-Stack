@@ -1,5 +1,7 @@
-// Synthesised sound effects and a small chiptune loop. No audio files; volumes come from settings.
+// Sound effects: recorded files from assets/audio/manifest.json where they loaded, synthesised ones as the fallback.
+// Volumes come from settings. The music director lives in js/music.js.
 import { settings, onSettings } from './settings.js';
+import { loadManifest } from './assets.js';
 
 export const Sfx = {
   ctx: null,
@@ -14,9 +16,57 @@ export const Sfx = {
     const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     this.noiseBuf = buf;
-    const loop = (type, freq) => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; const g = c.createGain(); g.gain.value = 0; s.connect(f).connect(g).connect(this.fx); s.start(); return { f, g }; };
-    this.windL = loop('lowpass', 400); this.rainL = loop('highpass', 2500);
-    Music.next = c.currentTime + 0.1;
+    this.analyser = c.createAnalyser(); this.analyser.fftSize = 2048; this.out.connect(this.analyser);   // for checks: rms()
+    this.buffers = {};
+    this.loops = {};
+    this.startLoop('wind'); this.startLoop('rain'); this.startLoop('city');
+    this.loadShared();
+    for (const fn of this.onReady) fn();
+  },
+  onReady: [],   // callbacks run once the AudioContext exists (the music director hooks in here)
+  // Ambient loop: the recorded file when decoded, else filtered noise. Replacing a loop stops the old one.
+  startLoop(name) {
+    const c = this.ctx, old = this.loops[name], rec = this.buffers[name];
+    if (old) { old.g.gain.cancelScheduledValues(0); old.g.gain.value = 0; try { old.s.stop(); } catch { /* already stopped */ } }
+    if (name === 'city' && !rec) { this.loops.city = { s: { stop() {} }, g: c.createGain(), f: null, rec: false }; return; }
+    const s = c.createBufferSource(); s.buffer = rec || this.noiseBuf; s.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = name === 'rain' ? 'highpass' : 'lowpass'; f.frequency.value = rec ? (name === 'rain' ? 60 : 800) : (name === 'rain' ? 2500 : 400);
+    const g = c.createGain(); g.gain.value = 0; s.connect(f).connect(g).connect(this.fx); s.start();
+    this.loops[name] = { s, f, g, rec: !!rec };
+  },
+  // Fetch and decode the shared audio list. A file that fails stays out of `buffers` and its synth sound plays instead.
+  async loadShared() {
+    if (this.sharedLoading) return; this.sharedLoading = true;
+    try {
+      const { assets, errors } = await loadManifest('assets/audio/manifest.json', () => {}, 'shared audio');
+      this.loadErrors = errors;
+      await Promise.all(Object.entries(assets).map(async ([id, raw]) => {
+        const b = await this.decode(raw);
+        if (!b) return;
+        if (id === 'menu') this.menuTrack = b; else this.buffers[id] = b;
+        if (id === 'wind' || id === 'rain' || id === 'city') this.startLoop(id);
+      }));
+      for (const fn of this.onShared) fn();
+    } catch (e) { this.loadErrors = [{ message: e.message }]; }
+  },
+  onShared: [],
+  // decodeAudioData detaches its input, so a copy goes in and the loaded bytes stay usable. Null when the file cannot be decoded.
+  async decode(raw) {
+    try { return await this.ctx.decodeAudioData(raw.slice(0)); } catch { return null; }
+  },
+  rms() {
+    if (!this.analyser) return 0;
+    const d = new Float32Array(this.analyser.fftSize); this.analyser.getFloatTimeDomainData(d);
+    let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i]; return Math.sqrt(s / d.length);
+  },
+  // Play a decoded effect once. Returns false when it is not available (the caller then plays the synth version).
+  play(name, vol = 1, rate = 1, when = 0, dest = null) {
+    const b = this.buffers && this.buffers[name]; if (!b) return false;
+    const c = this.ctx, s = c.createBufferSource(), g = c.createGain();
+    s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol;
+    s.connect(g).connect(dest || this.fx); s.start(c.currentTime + when);
+    return true;
   },
   applyVolumes() {
     if (!this.ctx) return;
@@ -40,16 +90,33 @@ export const Sfx = {
   ui() { this.tone(660, 0.06, 'square', 0.06); },
   uiOk() { this.tone(880, 0.08, 'square', 0.07); this.tone(1320, 0.1, 'square', 0.05, null, 0.06); },
   uiBack() { this.tone(440, 0.08, 'square', 0.06, 330); },
-  drop() { this.noise(0.25, 900, 0.12, 'bandpass'); },
+  drop() { if (!this.play('drop', 0.7, 0.95 + Math.random() * 0.1)) this.noise(0.25, 900, 0.12, 'bandpass'); },
   land(perfect, combo) {
-    this.tone(110, 0.22, 'sine', 0.5, 45); this.noise(0.1, 500, 0.25);
+    if (!this.play('land', 1, 0.92 + Math.random() * 0.16)) { this.tone(110, 0.22, 'sine', 0.5, 45); this.noise(0.1, 500, 0.25); }
     if (perfect) { const base = 523 * Math.pow(2, Math.min(combo, 12) / 12); [1, 1.26, 1.5, 2].forEach((m, i) => this.tone(base * m, 0.25, 'square', 0.06, null, i * 0.06)); }
   },
   bounce() { this.tone(180, 0.25, 'square', 0.12, 620); },
   miss() { this.tone(330, 0.6, 'sawtooth', 0.12, 70); },
-  thud() { this.tone(70, 0.3, 'sine', 0.4, 35); this.noise(0.25, 300, 0.2); },
-  crash() { this.noise(1.6, 350, 0.6); this.tone(60, 1.2, 'sawtooth', 0.15, 30); },
-  thunder() { this.noise(2.5, 180, 0.8); this.noise(0.3, 3000, 0.3, 'highpass'); },
+  thud() { if (!this.play('land', 0.55, 0.75)) { this.tone(70, 0.3, 'sine', 0.4, 35); this.noise(0.25, 300, 0.2); } },
+  // Collapse: four layers. A pitched-down Low Thud with a synthesised sub-boom for weight, a noise burst whose filter
+  // falls for the rubble, and a short scatter of metal and glass pings. The recorded part falls back to synth tones.
+  crash() {
+    const c = this.ctx; if (!c) return;
+    if (!this.play('land', 1, 0.45) ) this.tone(70, 0.5, 'sine', 0.6, 30);
+    this.play('land', 0.8, 0.3, 0.05);
+    this.tone(78, 1.5, 'sine', 0.75, 26);                       // sub-boom
+    this.tone(46, 2.0, 'sine', 0.55, 24, 0.08);
+    const t = c.currentTime, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noiseBuf; f.type = 'lowpass'; f.Q.value = 0.8;
+    f.frequency.setValueAtTime(6000, t); f.frequency.exponentialRampToValueAtTime(140, t + 1.9);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.7, t + 0.03); g.gain.exponentialRampToValueAtTime(0.001, t + 2.0);
+    s.connect(f).connect(g).connect(this.fx); s.start(t); s.stop(t + 2.1);   // debris
+    for (let i = 0; i < 14; i++) {                              // metal and glass scatter
+      const w = 0.05 + Math.pow(Math.random(), 1.6) * 1.3, fr = 1800 + Math.random() * 7200;
+      this.tone(fr, 0.05 + Math.random() * 0.12, Math.random() < 0.5 ? 'triangle' : 'square', 0.03 + Math.random() * 0.05, fr * (0.9 + Math.random() * 0.2), w);
+    }
+  },
+  thunder() { if (!this.play('thunder', 1)) { this.noise(2.5, 180, 0.8); this.noise(0.3, 3000, 0.3, 'highpass'); } },
   rumble() { this.noise(1.2, 120, 0.25); },
   anchor() { this.tone(200, 0.5, 'triangle', 0.25, 420); },
   golden() { [784, 988, 1175, 1568].forEach((f, i) => this.tone(f, 0.4, 'triangle', 0.1, null, i * 0.08)); },
@@ -57,45 +124,14 @@ export const Sfx = {
   fanfare() { [523, 659, 784, 1046, 784, 1046].forEach((f, i) => this.tone(f, 0.22, 'square', 0.08, null, i * 0.12)); },
   over() { [392, 330, 262, 196].forEach((f, i) => this.tone(f, 0.35, 'square', 0.08, null, i * 0.2)); },
   ambience(wind, ph, active) {
-    if (!this.ctx) return; const t = this.ctx.currentTime;
-    this.windL.g.gain.setTargetAtTime(active ? Math.min(0.35, 0.02 + wind.speed * 0.022) : 0.015, t, 0.3);
-    this.windL.f.frequency.setTargetAtTime(250 + wind.speed * 45, t, 0.3);
-    this.rainL.g.gain.setTargetAtTime(active && ph.rain ? 0.09 : 0, t, 0.6);
+    if (!this.ctx) return; const t = this.ctx.currentTime, L = this.loops;
+    const wr = L.wind.rec, rr = L.rain.rec;
+    L.wind.g.gain.setTargetAtTime(active ? Math.min(wr ? 0.9 : 0.35, (wr ? 0.1 : 0.02) + wind.speed * (wr ? 0.06 : 0.022)) : (wr ? 0.05 : 0.015), t, 0.3);
+    L.wind.f.frequency.setTargetAtTime((wr ? 500 : 250) + wind.speed * (wr ? 220 : 45), t, 0.3);
+    L.rain.g.gain.setTargetAtTime(active && ph.rain ? (rr ? 0.55 : 0.09) : 0, t, 0.6);
+    // city ambience, quiet, in clear weather only (and a little in the menu)
+    const clear = ph.kind === 'clear';
+    L.city.g.gain.setTargetAtTime(L.city.rec && clear ? (active ? 0.16 : 0.09) : 0, t, 0.8);
   },
 };
 onSettings((k) => { if (k === 'sfx' || k === 'music' || k === 'muted') Sfx.applyVolumes(); });
-
-// ── music: a four-chord chiptune loop scheduled a little ahead of time ──
-// Notes are semitones from A3. Two moods: a relaxed menu groove and a busier in-game one that speeds up with height.
-const CHORDS = [[0, 3, 7], [-4, 0, 3], [-7, -3, 0], [-2, 2, 5]];        // Am  F  C  G (relative to A)
-const LEAD_A = [12, 15, 19, 15, 17, 15, 12, 10, 8, 12, 15, 12, 10, 7, 10, 12];
-const LEAD_B = [19, 17, 15, 12, 15, 17, 19, 22, 20, 19, 15, 12, 14, 15, 17, 19];
-const hz = (s) => 220 * Math.pow(2, s / 12);
-export const Music = {
-  next: 0, step: 0, mood: 'menu', tension: 0,
-  setMood(m) { this.mood = m; },
-  update() {
-    const c = Sfx.ctx; if (!c || settings.music <= 0 || settings.muted) { if (c) this.next = c.currentTime + 0.05; return; }
-    if (this.next < c.currentTime) this.next = c.currentTime + 0.05;
-    const bpm = this.mood === 'menu' ? 96 : 118 + Math.min(22, this.tension * 22);
-    const sixteenth = 60 / bpm / 4;
-    while (this.next < c.currentTime + 0.25) {
-      const s = this.step, bar = Math.floor(s / 16) % 4, beat = s % 16, ch = CHORDS[bar], t = this.next - c.currentTime;
-      const out = Sfx.mus;
-      // bass on every eighth, root and fifth
-      if (beat % 2 === 0) Sfx.tone(hz(ch[0] - 12 + (beat % 8 === 4 ? 7 : 0)) / 2, sixteenth * 1.8, 'triangle', 0.3, null, t, out);
-      // arpeggio
-      if (this.mood !== 'menu' || beat % 2 === 0) Sfx.tone(hz(ch[beat % 3] + 12), sixteenth * 0.9, 'square', 0.035, null, t, out);
-      // lead melody on quarter and offbeat notes
-      if (beat % 4 === 0 || (this.mood !== 'menu' && beat % 4 === 3)) {
-        const mel = (Math.floor(s / 64) % 2 ? LEAD_B : LEAD_A)[(bar * 4 + Math.floor(beat / 4)) % 16];
-        Sfx.tone(hz(mel), sixteenth * 3, 'square', 0.05, null, t, out);
-      }
-      // drums
-      if (beat % 8 === 0) Sfx.tone(140, 0.12, 'sine', 0.35, 45, t, out);
-      if (beat % 8 === 4) Sfx.noise(0.1, 1800, 0.12, 'bandpass', t, out);
-      if (this.mood !== 'menu' && beat % 2 === 1) Sfx.noise(0.03, 7000, 0.04, 'highpass', t, out);
-      this.next += sixteenth; this.step++;
-    }
-  },
-};
