@@ -4,6 +4,7 @@
 // Real directions from the site: the Slovak Ore Mountains (Cierna hora, Volovske vrchy) close the horizon in the north and north-west,
 // the Hornad valley runs north-south about 1.8 km west of the centre, the Kosice basin opens to gentler hills east and a plain in the south.
 import * as THREE from 'three';
+import { CAM_OFFSETS } from './config.js';
 import { canvas2d } from './textures.js';
 import { Builder, hash, insideRing, material, mesh, calmMat, pitchedRoof, OLD_PALETTE, PLAIN_PALETTE, ROOF_COLORS } from './near-ring.js';
 import { tileRoofTex, roofTex, STOREY_H, STOREY_W } from './textures.js';
@@ -127,7 +128,8 @@ export function buildMiddleFar() {
   const wallB = (kind, hex, v) => { const k = `${kind}${hex}${v}`; if (!walls.has(k)) walls.set(k, { kind, hex, v, b: new Builder() }); return walls.get(k).b; };
   const ALPHA = 0.14, ca = Math.cos(ALPHA), sa = Math.sin(ALPHA), C = 60;                     // street lattice, turned a little off north
   // the default camera looks north-north-west past the tower: keep tall blocks out of that sector so the tower never melts into one
-  const blocksView = (x, z, h) => h > 22 && (x * -9 + z * -22) / 23.8 > 0 && Math.abs(x * 22 - z * 9) / 23.8 < 60;
+  const vx = -CAM_OFFSETS[0][0], vz = -CAM_OFFSETS[0][2], vl = Math.hypot(vx, vz);   // from the camera through the tower
+  const blocksView = (x, z, h) => h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60;
   const panelHex = [0xe7e3d9, 0xd9ddd8, 0xe8dcc6, 0xdfe4e6];
   let count = 0;
   const place = (kind, hex, v, cx, cz, w, d, rot, storeys, roof, rcol, ty) => {

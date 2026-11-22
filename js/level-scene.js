@@ -18,8 +18,19 @@ function fitWidth(obj, width) {
   obj.scale.setScalar(width / Math.max(size.x, size.z, 1e-3));
 }
 
+// Frees what the old level group holds on the GPU. Cached props (cloned GLTF kit) are simply re-uploaded if used again.
+function disposeGroup(g) {
+  g.traverse((o) => {
+    o.geometry?.dispose();
+    for (const m of [].concat(o.material || [])) {
+      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
+      m.dispose();
+    }
+  });
+}
+
 export function applyLevelAssets(id, assets) {
-  group.clear();
+  disposeGroup(group); group.clear();
   level.id = id; level.env = assets.sky || null;
   envRT?.dispose(); envRT = null;
   if (assets.sky) {

@@ -14,7 +14,8 @@ const TYPES = {
 };
 
 createServer((req, res) => {
-  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let url;
+  try { url = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400, { 'Content-Type': 'text/plain' }).end('bad request'); return; }
   let file = normalize(join(root, url));
   if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403).end(); return; }
   try { if (statSync(file).isDirectory()) file = join(file, 'index.html'); statSync(file); }

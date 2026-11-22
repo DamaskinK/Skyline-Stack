@@ -44,9 +44,8 @@ export class Game {
   get levelId() { return level.id; }
   // Fetch a level's assets and put them in the scene. Resolves to the list of files that failed (may be empty).
   async loadLevel(id, onProgress) {
-    const { assets, errors } = await loadLevelAssets(id, onProgress);
+    const { assets, errors } = await loadLevelAssets(id, onProgress, (aid, v) => { if (aid === 'music') Music.provide(id, v); });
     applyLevelAssets(id, assets);
-    Music.provide(id, assets.music);
     return errors;
   }
 
@@ -54,7 +53,7 @@ export class Game {
     this.clear();
     this.mode = mode; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
     this.cityId = levelId; this.levelDef = mode === 'level' ? levelById(levelId) : null;
-    this.prevBest = loadScores(levelId)[0]?.score || 0;
+    this.prevBest = mode === 'level' ? 0 : (loadScores(levelId)[0]?.score || 0);
     this.state = 'play'; this.paused = false; this.saved = false;
     People.setWalkers(9);
     // Endless runs on the chosen city: its weather segments loop and only its events happen
@@ -194,7 +193,7 @@ export class Game {
       }
     }
     Sfx.over();
-    setTimeout(() => { if (this.state === 'over') this.ui.gameOver(this.lastResult, this.lastResult.score > this.prevBest && this.lastResult.score > 0); }, 1400);
+    setTimeout(() => { if (this.state === 'over') this.ui.gameOver(this.lastResult, !this.levelDef && this.lastResult.score > this.prevBest && this.lastResult.score > 0); }, 1400);
   }
 }
 

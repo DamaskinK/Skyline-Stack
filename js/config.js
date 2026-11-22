@@ -1,5 +1,8 @@
 // All balance numbers live here. Difficulty presets scale a few of them at runtime.
 
+// Default camera offsets from the tower top, by camera mode (shared by the camera and the far-ring view clearing)
+export const CAM_OFFSETS = [[-28, 9, -24], [30, 6, 12], [0, 26, 12]];
+
 export const CFG = {
   W: 4, D: 4, H: 2.8, FOUND_H: 2.4, G: 30, DT: 1 / 120,
   METERS_PER_FLOOR: 3.2,

@@ -1,6 +1,6 @@
 // Entry point: wires the game to the interface and runs the frame loop (fixed 120 Hz simulation, free-running render).
 import * as THREE from 'three';
-import { CFG } from './config.js';
+import { CFG, CAM_OFFSETS } from './config.js';
 import { renderer, scene, camera, applyQuality, resize, updateWorld } from './world.js';
 import { dayAt } from './core/dayarc.js';
 import { updateCrane, updateMarker } from './entities.js';
@@ -28,7 +28,7 @@ onSettings((k) => { if (k === 'quality') { applyQuality(); applyPostQuality(); }
 window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
-const camOffsets = [new THREE.Vector3(-28, 9, -24), new THREE.Vector3(30, 6, 12), new THREE.Vector3(0, 26, 12)];
+const camOffsets = CAM_OFFSETS.map((o) => new THREE.Vector3(...o));
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
 let clock = 0, camY = 8;

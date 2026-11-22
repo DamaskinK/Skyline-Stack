@@ -36,7 +36,8 @@ let composer = null, gtao = null, bloom = null, grade = null, mode = null;
 const size = new THREE.Vector2();
 
 function build(q) {
-  composer?.dispose(); gtao?.dispose?.();
+  composer?.passes.forEach((p) => p.dispose?.()); composer?.dispose(); gtao?.dispose?.();
+  composer?.renderTarget1?.dispose?.();
   composer = null; gtao = null; bloom = null; grade = null;
   if (q === 'low') return;
   renderer.getSize(size);
@@ -48,6 +49,13 @@ function build(q) {
     gtao = new GTAOPass(scene, camera, size.x, size.y);
     gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.6, thickness: 2, scale: 1, samples: 12, distanceFallOff: 1 });
     gtao.blendIntensity = 0.9;
+    // GTAO's normal/depth pass draws sprites and depthWrite:false meshes (dust, rings, glass) as solid squares: hide them there
+    const hide = (o) => o.isSprite || (o.material && !Array.isArray(o.material) && o.material.transparent && o.material.depthWrite === false);
+    const baseOverride = gtao.overrideVisibility.bind(gtao);
+    gtao.overrideVisibility = function () {
+      baseOverride();
+      this.scene.traverse((o) => { if (hide(o)) o.visible = false; });
+    };
     composer.addPass(gtao);
   }
   bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.45, 0.82);

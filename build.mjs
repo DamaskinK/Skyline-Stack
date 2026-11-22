@@ -21,6 +21,7 @@ const res = await build({
 });
 cpSync('css/style.css', 'dist/css/style.css');
 cpSync('assets', 'dist/assets', { recursive: true });
+cpSync('CREDITS.md', 'dist/CREDITS.md');
 const html = readFileSync('index.html', 'utf8')
   .replace(/<script type="importmap">[\s\S]*?<\/script>\n?/, '')
   .replace('<script type="module" src="js/main.js"></script>', '<script type="module" src="game.js"></script>');

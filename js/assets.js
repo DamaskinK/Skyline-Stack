@@ -22,21 +22,27 @@ function loadOne(a, onBytes) {
 
 // Loads every asset of a level. onProgress(fraction 0..1). Resolves to { assets: { id: value }, errors: [{ id, url, message }] }.
 // A failed optional asset is reported in `errors` and left out; a failed required asset (or manifest) rejects.
-export function loadLevelAssets(level, onProgress = () => {}) {
-  return loadManifest(`assets/levels/${level}/manifest.json`, onProgress, `level "${level}"`);
+// onLate(id, value) receives the audio files when they arrive: the level does not wait for them.
+export function loadLevelAssets(level, onProgress = () => {}, onLate = null) {
+  return loadManifest(`assets/levels/${level}/manifest.json`, onProgress, `level "${level}"`, onLate);
 }
 
 // Same loader for any manifest file, e.g. the shared audio list (assets/audio/manifest.json).
-export async function loadManifest(url, onProgress = () => {}, label = url) {
+export async function loadManifest(url, onProgress = () => {}, label = url, onLate = null) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`No asset list for ${label} (HTTP ${res.status})`);
   const manifest = await res.json();
-  const list = manifest.assets || [];
+  const all = manifest.assets || [];
+  const list = onLate ? all.filter((a) => a.type !== 'audio') : all;   // with onLate, audio is not waited for
   const total = list.reduce((s, a) => s + (a.bytes || 1), 0) || 1;
   const got = new Map();
   const report = () => onProgress(Math.min(1, [...got.values()].reduce((s, v) => s + v, 0) / total));
   const assets = {}, errors = [];
   report();
+  if (onLate) for (const a of all) if (a.type === 'audio') {
+    if (!cache.has(a.url)) cache.set(a.url, loadOne(a, () => {}));
+    cache.get(a.url).then((v) => onLate(a.id, v), () => cache.delete(a.url));
+  }
   await Promise.all(list.map(async (a) => {
     try {
       if (!cache.has(a.url)) cache.set(a.url, loadOne(a, (b) => { got.set(a.id, Math.min(b, a.bytes || b)); report(); }));

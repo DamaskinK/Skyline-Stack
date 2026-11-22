@@ -80,7 +80,7 @@ export function createUI(game) {
     const k = levelById('kosice');
     $('#modeNote').textContent = pickMode === 'level'
       ? `1 star: reach ${k.target} floors. 2 stars: lose at most one life. 3 stars: at least half your landings perfect.`
-      : 'ENDLESS: one tower, as high as you can. Weather turns every 15 floors.';
+      : 'ENDLESS: one tower, as high as you can. The weather keeps changing as you climb.';
   }
   syncNew();
   // Mode cards: Kosice level (with its best stars) and Endless. The world map (ticket 20) will replace this.
@@ -228,7 +228,7 @@ export function createUI(game) {
   // ── game over ──
   $('#saveForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    if (game.saved || !game.lastResult) return;
+    if (game.saved || !game.lastResult || game.levelDef) return;
     const r = game.lastResult;
     addScore(game.cityId, { name: ($('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
     try { localStorage.setItem('tb3d_name', $('#name').value); } catch { /* storage blocked */ }
@@ -267,12 +267,17 @@ export function createUI(game) {
     },
     gameOver(r, record) {
       $('#hud').hidden = true;
-      $('#overTitle').textContent = 'GAME OVER';
-      $('#newRecord').hidden = !record;
-      $('#overStats').innerHTML = `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
+      const lv = !!game.levelDef;   // a failed level run: result screen, no high-score form
+      $('#overTitle').textContent = lv ? `${game.levelDef.city.toUpperCase()} FAILED` : 'GAME OVER';
+      $('#newRecord').hidden = lv || !record;
+      $('#saveForm').hidden = lv; $('#overHs').hidden = lv;
+      $('#btnAgain').textContent = lv ? 'RETRY' : 'PLAY AGAIN';
+      $('#overStats').innerHTML = lv
+        ? `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">STARS</span><b>0 / 3</b></div>`
+        : `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
       $('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
       try { $('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
-      renderScores($('#overHs'), game.cityId);
+      if (!lv) renderScores($('#overHs'), game.cityId);
       stack = []; show('sOver');
       if (record) Sfx.fanfare();
     },
