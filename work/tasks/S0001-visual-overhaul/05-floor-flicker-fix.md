@@ -7,7 +7,7 @@ higher camera near plane.
 **Blocked by:** 04
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Rendering: Floor flicker fix"; brief "Now".
 
 - [ ] Flicker check from 04 passes on Low, Medium and High, menu orbit and in-game cameras
