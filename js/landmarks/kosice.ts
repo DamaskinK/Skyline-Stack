@@ -7,14 +7,20 @@ import { glowMats } from '../world.js';
 import { Parts, landmarkMaterials, lathe, box, cyl, extrude, archShape, roundArch, gableRoof, shedRoof, stretchUV } from './style.js';
 
 // OSM names of the footprints the models replace
-export const hide = new Set(['Dóm svätej Alžbety', 'Kaplnka sv. Michala', 'Národné divadlo Košice']);
+export const hide = new Set(['Dóm svätej Alžbety', 'Kaplnka sv. Michala', 'Národné divadlo Košice', 'Urbanova veža']);
 // centre and rotation (about y; local +z turns to (sin, cos)) taken from the minimum-area rectangle of each footprint
 interface At { x: number; z: number; rot: number }
-const AT: Record<'cathedral' | 'theatre' | 'chapel' | 'urban', At> = {
+// S0004 01: every spot checked against OpenStreetMap / Wikimedia Commons coordinates. St. Urban's tower stood 55 m from its OSM footprint (the man_made=tower way at
+// (43, 37.7), minimum rectangle 16.1 x 15.4 m at 21.5 degrees, the arcaded gallery); the Singing Fountain stood 26 m off its OSM basin (the 12.5 x 23.9 m water polygon, 18.5 degrees,
+// centre (4.9, -19.6); the model draws the basin itself, the near ring drops small water that touches the build pad), and the Immaculata (Commons category coordinates 48.7228 N, 21.2568 E) stood inside that basin,
+// where the Marian column does not stand: it is on Hlavna street 117 m north of the theatre.
+const AT: Record<'cathedral' | 'theatre' | 'chapel' | 'urban' | 'fountain' | 'immaculata', At> = {
   cathedral: { x: 47.4, z: 81.4, rot: 0 },                        // long axis east-west, apse to the east, towers at the west end
   theatre: { x: -15.9, z: -82.6, rot: 18 * Math.PI / 180 },      // front faces +z local = south-south-east, towards the site
   chapel: { x: 63, z: 120.6, rot: 13 * Math.PI / 180 },
-  urban: { x: 9.3, z: 88.5, rot: 0 },
+  urban: { x: 43, z: 37.7, rot: 21.5 * Math.PI / 180 },          // gallery front along local x
+  fountain: { x: 4.9, z: -19.6, rot: 18.5 * Math.PI / 180 },     // long axis along local z, on the theatre axis
+  immaculata: { x: -55.1, z: -199, rot: 0 },
 };
 
 // Circles (city frame, metres) the procedural middle ring keeps clear when these landmarks lie beyond the near ring (r = footprint radius + a block's reach)
@@ -134,20 +140,22 @@ function plagueColumn(parts: Parts) {                                           
   parts.add(box(2, 2.6, 2), 'stoneGrey', { y: 1.8 }); parts.add(cyl(0.38, 0.3, 4.6, 6), 'cream_flat', { y: 4.4 });
   parts.add(cyl(0.55, 0.4, 0.8, 6), 'cream_flat', { y: 9 }); parts.add(cyl(0.3, 0.2, 1.5, 5), 'gold', { y: 9.8 }); parts.add(new THREE.SphereGeometry(0.22, 5, 4), 'gold', { y: 11.5 });
 }
-function fountain(parts: Parts) {                                                                         // Singing Fountain: round basin, water, glass-like jets
-  parts.add(cyl(4.6, 4.4, 0.7, 12), 'stoneGrey'); parts.add(cyl(4.1, 4.1, 0.05, 12), 'water', { y: 0.55 });
-  parts.add(cyl(0.2, 0.2, 3.2, 5), 'water', { y: 0.6 });
-  ring(6, 2.2, (x, z) => parts.add(cyl(0.12, 0.12, 1.6, 4), 'water', { x, y: 0.6, z }));
+function fountain(parts: Parts) {                                                                         // Singing Fountain (procedural fallback): jets only, the basin is the OSM water polygon of the near ring
+  parts.add(cyl(0.2, 0.2, 3.2, 5), 'water', { y: 0.32 });
+  ring(6, 2.2, (x, z) => parts.add(cyl(0.12, 0.12, 1.6, 4), 'water', { x, y: 0.32, z }));
 }
 
-// The cathedral can come from a Blender-built GLB (scripts/blender/cathedral.py, three LODs on one atlas) instead of the procedural parts.
-// Flag: add ?cathedral=procedural to the page URL to keep the procedural one (fallback, also used when the GLB failed to load).
-const CATHEDRAL_LOD_DIST = [0, 150, 380];
-function blenderCathedral(srcNode: THREE.Object3D) {
-  const lod = new THREE.LOD(); lod.name = 'st-elisabeth';
+// Blender-built GLBs (scripts/blender/<name>.py, three LODs each: the atlas material plus tiling roof / stone materials) replace the procedural parts.
+// Flag: add ?landmarks=procedural (or the old ?cathedral=procedural for the cathedral only) to keep the procedural ones (also the fallback when a GLB failed to load).
+// A model's materials are named <model>_atlas (emission texture: lit windows), <model>_tiles and <model>_stone (no emission map: a flat warm tint as the procedural materials).
+const FLAT_GLOW: Record<string, number> = { tiles: 0x3a2e12, stone: 0x2a2418 };
+const LOD_DIST: Record<string, number[]> = { cathedral: [0, 150, 380], theatre: [0, 160, 400], urban: [0, 130, 320], chapel: [0, 120, 300], immaculata: [0, 90, 220], fountain: [0, 70, 180] };
+function blenderModel(srcNode: THREE.Object3D, id: string) {
+  const lod = new THREE.LOD(); lod.name = id;
   const levels: THREE.Object3D[] = [];
+  const re = new RegExp(`^${id}_LOD(\\d)$`);
   const src = srcNode.clone(true);                                                                                    // the GLTF scene is cached: never take nodes out of it
-  src.traverse((o) => { const m = /^cathedral_LOD(\d)$/.exec(o.name); if (m) levels[+m[1]] = o; });     // a node with two materials arrives as a Group of two meshes
+  src.traverse((o) => { const m = re.exec(o.name); if (m) levels[+m[1]] = o; });                                    // a node with several materials arrives as a Group of meshes
   const tris = (o: THREE.Object3D) => { let t = 0; o.traverse((m) => { if (m instanceof THREE.Mesh) t += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return t; };
   levels.forEach((m, i) => {
     if (!m) return;
@@ -157,9 +165,9 @@ function blenderCathedral(srcNode: THREE.Object3D) {
       mesh.castShadow = i < 2; mesh.receiveShadow = true;
       const mat = mesh.material = mesh.material.clone();                                                       // own material: the glow below must not touch the cached one
       if (mat.emissiveMap) { mat.emissive.set(0xffffff); mat.emissiveIntensity = 0; glowMats.push(mat); }          // lit windows and floodlit stone follow the scenery glow
-      else { mat.emissive = new THREE.Color(0x3a2e12); mat.emissiveIntensity = 0; glowMats.push(mat); }          // roof tiles, as the procedural material
+      else { const k = /_(tiles|stone)/.exec(mat.name)?.[1] ?? 'stone'; mat.emissive = new THREE.Color(FLAT_GLOW[k]); mat.emissiveIntensity = 0; glowMats.push(mat); }
     });
-    lod.addLevel(m, CATHEDRAL_LOD_DIST[i]);
+    lod.addLevel(m, LOD_DIST[id][i] ?? 400);
   });
   lod.userData.tris = levels[0] ? tris(levels[0]) : 0;
   return lod;
@@ -171,19 +179,21 @@ export function build(assets?: LevelAssets) {
     const g = new THREE.Group(); g.name = name; g.position.set(a.x, 0, a.z); g.rotation.y = a.rot;
     const p = new Parts(); fn(p); p.build(mats, g); root.add(g); return g;
   };
-  const glb = assets?.cathedral, useGlb = glb && new URLSearchParams(location.search).get('cathedral') !== 'procedural';
-  let cat;
-  if (useGlb) {
-    cat = new THREE.Group(); cat.name = 'st-elisabeth'; cat.position.set(AT.cathedral.x, 0, AT.cathedral.z); cat.rotation.y = AT.cathedral.rot;
-    const lod = blenderCathedral(glb); cat.add(lod); cat.userData.tris = lod.userData.tris; root.add(cat);
-  } else cat = place('st-elisabeth', AT.cathedral, cathedral);
-  place('st-urban', AT.urban, urbanTower);
-  place('st-michael-chapel', AT.chapel, chapel);
-  const th = place('state-theatre', AT.theatre, theatre);
-  // Immaculata column and Singing Fountain stand on the theatre's axis in front of it (local +z), outside the 28 m plaza
-  const axis = (d: number) => ({ x: AT.theatre.x + Math.sin(AT.theatre.rot) * d, z: AT.theatre.z + Math.cos(AT.theatre.rot) * d, rot: 0 });
-  place('fountain', axis(40), fountain);
-  place('immaculata', axis(55), plagueColumn);
+  const q = new URLSearchParams(location.search), procedural = q.get('landmarks') === 'procedural';
+  // the GLB of `id` placed at AT[id], or the procedural parts when the GLB is missing or the flag asks for them
+  const model = (id: keyof typeof AT, name: string, fn: (p: Parts) => void, glbKey: string = id) => {
+    const glb = (assets as Record<string, THREE.Object3D | undefined> | undefined)?.[glbKey], flag = glbKey === 'cathedral' && q.get('cathedral') === 'procedural';
+    if (!glb || procedural || flag) return place(name, AT[id], fn);
+    const g = new THREE.Group(); g.name = name; g.position.set(AT[id].x, 0, AT[id].z); g.rotation.y = AT[id].rot;
+    const lod = blenderModel(glb, glbKey); g.add(lod); g.userData.tris = lod.userData.tris; root.add(g); return g;
+  };
+  const cat = model('cathedral', 'st-elisabeth', cathedral);
+  model('urban', 'st-urban', urbanTower);
+  model('chapel', 'st-michael-chapel', chapel);
+  const th = model('theatre', 'state-theatre', theatre);
+  // Singing Fountain with its basin at the real place, Immaculata on Hlavna street
+  model('fountain', 'fountain', fountain);
+  model('immaculata', 'immaculata', plagueColumn);
   root.userData.stats = { cathedral: cat.userData.tris, theatre: th.userData.tris };
   return root;
 }

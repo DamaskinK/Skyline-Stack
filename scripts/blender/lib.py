@@ -33,6 +33,12 @@ ROLES = {
     'gold':   dict(density=0.25, rough=0.35, metal=0.60, emit=(0x7a5a14, 1.0)),
     'glass':  dict(density=0.30, rough=0.30, metal=0.0, emit=(0xffc477, 0.9)),
     'dark':   dict(density=0.15, rough=0.9, metal=0.0, emit=(0x000000, 0.0)),
+    'stone2': dict(density=1.00, rough=0.88, metal=0.0, emit=(0x2a2418, 1.0)),      # second masonry look (S0004 01: plaster vs dressed stone)
+}
+# Look of the two baked masonry roles; a model script updates these before assembling. bw/rh: block width and course height in metres.
+STYLES = {
+    'stone':  dict(c1=0xe4dac0, c2=0xd0c6aa, mortar=0xa89e86, bw=1.3, rh=0.55, msize=0.006, nz=0.2),
+    'stone2': dict(c1=0xe4dac0, c2=0xd0c6aa, mortar=0xa89e86, bw=1.3, rh=0.55, msize=0.006, nz=0.2),
 }
 ROLE_ORDER = list(ROLES)
 
@@ -248,26 +254,26 @@ def source_material(role, tile_png):
         img = bpy.data.images.load(tile_png); img.colorspace_settings.name = 'sRGB'
         t = _tex_node(nt, img); t.extension = 'REPEAT'; t.interpolation = 'Linear'
         nt.links.new(mp.outputs['Vector'], t.inputs['Vector']); nt.links.new(t.outputs['Color'], bsdf.inputs['Base Color'])
-    elif role == 'stone':
-        # ashlar courses 0.55 m high, blocks ~1.3 m; per-block tint; slow noise for weathering
+    elif role in ('stone', 'stone2'):
+        # ashlar courses; per-block tint; slow noise for weathering (look from STYLES)
+        st = STYLES[role]
         mp = nt.nodes.new('ShaderNodeMapping'); nt.links.new(uvn.outputs['UV'], mp.inputs['Vector'])
         b = nt.nodes.new('ShaderNodeTexBrick'); b.inputs['Scale'].default_value = 1.0
-        b.inputs['Color1'].default_value = srgb(0xe4dac0); b.inputs['Color2'].default_value = srgb(0xd0c6aa); b.inputs['Mortar'].default_value = srgb(0xa89e86)
-        b.inputs['Mortar Size'].default_value = 0.006; b.inputs['Mortar Smooth'].default_value = 0.4; b.inputs['Bias'].default_value = 0.0
-        b.inputs['Brick Width'].default_value = 1.3; b.inputs['Row Height'].default_value = 0.55; b.offset = 0.5; b.offset_frequency = 2
+        b.inputs['Color1'].default_value = srgb(st['c1']); b.inputs['Color2'].default_value = srgb(st['c2']); b.inputs['Mortar'].default_value = srgb(st['mortar'])
+        b.inputs['Mortar Size'].default_value = st['msize']; b.inputs['Mortar Smooth'].default_value = 0.4; b.inputs['Bias'].default_value = 0.0
+        b.inputs['Brick Width'].default_value = st['bw']; b.inputs['Row Height'].default_value = st['rh']; b.offset = 0.5; b.offset_frequency = 2
         nt.links.new(mp.outputs['Vector'], b.inputs['Vector'])
         nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 0.8; nz.inputs['Detail'].default_value = 4
         nt.links.new(mp.outputs['Vector'], nz.inputs['Vector'])
-        mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs['Factor'].default_value = 0.2
+        mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.inputs['Factor'].default_value = st['nz']
         nt.links.new(b.outputs['Color'], mx.inputs['A']); nt.links.new(nz.outputs['Color'], mx.inputs['B'])
-        # darker stone tint toward the base and under eaves is handled by the AO bake
         nt.links.new(mx.outputs['Result'], bsdf.inputs['Base Color'])
     else:
         c = {'copper': PALETTE['copper'], 'gold': PALETTE['gold'], 'glass': PALETTE['glass'], 'dark': PALETTE['dark']}[role]
         if role == 'copper':
             mp = nt.nodes.new('ShaderNodeMapping'); nt.links.new(uvn.outputs['UV'], mp.inputs['Vector'])
             nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 1.5; nt.links.new(mp.outputs['Vector'], nz.inputs['Vector'])
-            mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.inputs['A'].default_value = srgb(PALETTE['copperDark']); mx.inputs['B'].default_value = srgb(0x66b39a)
+            mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.inputs['A'].default_value = srgb(PALETTE['copperDark']); mx.inputs['B'].default_value = srgb(PALETTE.get('copperLight', 0x66b39a))
             nt.links.new(nz.outputs['Fac'], mx.inputs['Factor']); nt.links.new(mx.outputs['Result'], bsdf.inputs['Base Color'])
         else:
             bsdf.inputs['Base Color'].default_value = srgb(c)

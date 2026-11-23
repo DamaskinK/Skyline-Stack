@@ -104,7 +104,7 @@ function extract(site, keep, outId) {
       if (t.building === 'apartments' || t.building === 'residential' || t.building === 'dormitory') b.a = 1;     // flats: prefab blocks on the estates
       if (t.amenity === 'place_of_worship' || t.building === 'cathedral' || t.building === 'church') b.k = 'church';
       else if (t.amenity === 'theatre') b.k = 'theatre';
-      if (t.name && b.k) b.n = t.name;
+      if (t.name && (b.k || t.man_made === 'tower')) b.n = t.name;                // towers keep their name too (St. Urban's tower is hidden by name behind its Blender model)
       out.buildings.push(b);
     } else if (t.highway && ROAD[t.highway]) {
       const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);

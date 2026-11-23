@@ -13,12 +13,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy, bmesh
 import numpy as np
 from lib import *
+from pipeline import *
 
 argv = cli()
 out_glb = argv[0] if argv else '/tmp/cathedral.glb'
-def opt(k, d):
-    return argv[argv.index(k) + 1] if k in argv else d
-SIZE = int(opt('--size', 2048)); STAGE = opt('--stage', 'full'); PREVIEWS = opt('--previews', None)
 PI = math.pi
 
 # ---------------------------------------------------------------- dimensions (m)
@@ -261,122 +259,31 @@ def build_tops():
         b.cbox(0, 0, 2.2, 2.2, 0, 1.6, 'stone')
         b.lathe([(0.0, 1.6), (1.5, 1.6), (1.0, 3.6), (0.5, 6.5), (0.12, 9.0), (0.0, 9.3)], 8, PI / 8, 'copper')
 
-# ---------------------------------------------------------------- tile pattern (3 m repeat, 0.5 m diamond cells)
-def write_tile_pattern(path, px=384, period=3.0):
-    cells = 6; L = period / cells * 1.0                       # cell diagonal in metres: 6 cells across the period
-    rng = np.random.default_rng(7)
-    u = (np.arange(px) + 0.5) / px * period
-    U, V = np.meshgrid(u, u)
-    a = (U + V) / L; bb = (U - V) / L                           # rotated cell coordinates (a, b)
-    ia, ib = np.floor(a).astype(int) % cells, np.floor(bb).astype(int) % cells
-    fa, fb = a - np.floor(a), bb - np.floor(bb)
-    c = (cells - 1) / 2
-    d = np.maximum(np.abs(ia - c), np.abs(ib - c))              # Chebyshev rings around the lozenge centre
-    pal = {k: np.array([(PALETTE[k] >> s & 255) / 255 for s in (16, 8, 0)]) for k in ('tileYellow', 'tileGreen', 'tileRed', 'tileBlue', 'tileBlack')}
-    img = np.zeros((px, px, 3))
-    corner = (np.abs(ia - c) > 2) & (np.abs(ib - c) > 2)
-    for k, mask in (('tileRed', d < 1), ('tileYellow', (d >= 1) & (d < 2)), ('tileGreen', (d >= 2)), ('tileBlue', (d >= 2) & ((((ia == 0) | (ia == 5)) & ((ib == 2) | (ib == 3))) | (((ib == 0) | (ib == 5)) & ((ia == 2) | (ia == 3)))))):
-        img[mask] = pal[k]
-    img[corner] = pal['tileBlack']
-    noise = rng.normal(1.0, 0.04, (cells, cells))[ia, ib][..., None]
-    edge = np.minimum(np.minimum(fa, 1 - fa), np.minimum(fb, 1 - fb)); img *= (1 - 0.35 * np.clip(1 - edge / 0.06, 0, 1))[..., None] * noise
-    # little centre highlight inside each tile
-    img *= (0.94 + 0.12 * np.exp(-(((fa - 0.5) ** 2 + (fb - 0.5) ** 2) / 0.05)))[..., None]
-    # to sRGB bytes
-    rgba = np.concatenate([np.clip(img, 0, 1), np.ones((px, px, 1))], -1)
-    im = bpy.data.images.new('tilepat', px, px, alpha=False); im.pixels = rgba[::-1].ravel().tolist(); im.filepath_raw = path; im.file_format = 'PNG'; im.save()
-    bpy.data.images.remove(im)
-
-# ---------------------------------------------------------------- assembly
-def role_colours_material():
-    mats = []
-    for role in ROLE_ORDER:
-        m = bpy.data.materials.new(f'flat_{role}'); m.use_nodes = True
-        col = {'stone': 0xcfc6ae, 'tiles': 0x3d8a52, 'copper': 0x4f9a82, 'gold': 0xe3b34a, 'glass': 0x34506a, 'dark': 0x23272c}[role]
-        m.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = srgb(col); m.node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value = 0.8
-        mats.append(m)
-    return mats
-
-t0 = time.time()
+# ---------------------------------------------------------------- assembly (pipeline.py)
 reset()
+t0 = time.time()
 build_body(); build_openings(); build_tops()
 log('shells built', round(time.time() - t0, 1), 's')
-ob = body.object(); co = cut.object(); oi = inl.object()
-# 1. union the masses, then cut windows and portals
-union_self(ob); log('union', len(ob.data.polygons), 'faces', round(time.time() - t0, 1), 's')
-boolean(ob, co, 'DIFFERENCE', True); evaluated_copy(ob); bpy.data.objects.remove(co); log('cut', len(ob.data.polygons), 'faces', round(time.time() - t0, 1), 's')
-# faces tagged tiles that are not sloped go back to stone (gable ends, eave undersides)
-bm = bmesh.new(); bm.from_mesh(ob.data); lay = bm.faces.layers.int.get('role'); ti = ROLE_ORDER.index('tiles'); si = ROLE_ORDER.index('stone')
-if lay is None: raise SystemExit('boolean dropped the role attribute')
-for f in bm.faces:
-    if f[lay] == ti and not (0.2 < f.normal.z < 0.985): f[lay] = si
-bm.to_mesh(ob.data); bm.free()
-if '--bevel' in argv: bevel_edges(ob, 0.09, 40, 1); evaluated_copy(ob)
-# inlays join the body (they keep their own roles)
-for o in (ob, oi): pass
-bpy.ops.object.select_all(action='DESELECT'); oi.select_set(True); ob.select_set(True); bpy.context.view_layer.objects.active = ob; bpy.ops.object.join()
-mesh_obj = bpy.context.view_layer.objects.active; mesh_obj.name = 'cathedral_LOD0'; mesh_obj.data.name = 'cathedral_LOD0'
-merge_close(mesh_obj, 0.003); flat_shade(mesh_obj)
-log('LOD0 triangles', tri_count(mesh_obj), 'time', round(time.time() - t0, 1), 's')
-
-if STAGE == 'geom':
-    mats = role_colours_material(); mesh_obj.data.materials.clear()
-    for m in mats: mesh_obj.data.materials.append(m)
-    bm = bmesh.new(); bm.from_mesh(mesh_obj.data); lay = bm.faces.layers.int.get('role')
-    for f in bm.faces: f.material_index = f[lay]
-    bm.to_mesh(mesh_obj.data); bm.free()
-else:
-    import tempfile; work = os.path.join(tempfile.gettempdir(), 'cathedral_work'); os.makedirs(work, exist_ok=True)   # intermediate PNGs stay out of the repo
-    tile_png = os.path.join(work, 'tile_pattern.png'); write_tile_pattern(tile_png)
-    pattern_uv(mesh_obj)
-    parts = split_by_role(mesh_obj); bpy.data.objects.remove(mesh_obj)
-    tiles_obj = parts.pop('tiles')                                              # roof tiles repeat (own material), everything else shares the atlas
-    joined = unwrap_roles(parts, SIZE); joined.name = 'cathedral_LOD0'
-    log('atlas coverage', round(uv_coverage(joined) * 100, 1), '% ; texel density', round(texel_density(joined, SIZE), 1), 'px/m')
-    tuv = tiles_obj.data.uv_layers.new(name='atlas')
-    for l in tuv.data: l.uv = (0.9995, 0.9995)                                  # no atlas space for tiles while baking (they still occlude)
-    bpy.ops.object.select_all(action='DESELECT'); tiles_obj.select_set(True); joined.select_set(True); bpy.context.view_layer.objects.active = joined; bpy.ops.object.join()
-    joined = bpy.context.view_layer.objects.active
-    imgs = bake_atlas(joined, SIZE, tile_png, work)
-    finish_images(imgs); save_images(imgs, work)
-    tile_img = bpy.data.images.load(tile_png)
-    mat_atlas, mat_tiles = final_materials(imgs, tile_img)
-    me = joined.data; ti = ROLE_ORDER.index('tiles')
-    me.materials.clear(); me.materials.append(mat_atlas); me.materials.append(mat_tiles)             # (clearing slots resets the indices: set them after)
-    bm = bmesh.new(); bm.from_mesh(me); lay = bm.faces.layers.int.get('role'); puv = bm.loops.layers.uv['pat']; auv = bm.loops.layers.uv['atlas']
-    for f in bm.faces:
-        is_t = f[lay] == ti; f.material_index = 1 if is_t else 0
-        if is_t:
-            for l in f.loops: l[auv].uv = (l[puv].uv.x / TILE_PERIOD, l[puv].uv.y / TILE_PERIOD)
-    bm.to_mesh(me); bm.free()
-    me.uv_layers.remove(me.uv_layers['pat'])
-    mesh_obj = joined
-    flat_shade(mesh_obj)
-
-# LODs (shared atlas)
-lod1 = make_lod(mesh_obj, 'cathedral_LOD1', 6.0, 0.6); lod2 = make_lod(mesh_obj, 'cathedral_LOD2', 25.0, 0.3)
-tris = [tri_count(o) for o in (mesh_obj, lod1, lod2)]
-log('triangles LOD0/1/2', tris)
-objs = [mesh_obj, lod1, lod2]
-if STAGE != 'geom': export_glb(objs, out_glb)
-# a root-level view for the previews: hide the LODs that are not shown
-if PREVIEWS:
-    os.makedirs(PREVIEWS, exist_ok=True)
-    preview_scene(objs)
-    for o in (lod1, lod2): o.hide_render = True
-    VIEWS = {
-        'game-nw': ((-70, 12, -62), (-14, 18, 6), 34),         # about the game camera: north-west of the north tower
-        'ne': ((78, 40, -62), (0, 14, 0), 34),
-        'south': ((14, 22, 95), (2, 16, 0), 38),
-        'west': ((-78, 18, 8), (-22, 22, 0), 38),
-        'aerial': ((50, 80, 70), (2, 12, 0), 42),
-        'portal-west': ((-42, 5, 6), (-27, 6, 0), 45),
-        'portal-south': ((12, 6, 40), (7, 8, 21), 40),
-        'apse': ((70, 16, -20), (22, 12, 0), 40),
-    }
-    for name, (eye, tgt, lens) in VIEWS.items(): render_view(os.path.join(PREVIEWS, f'cathedral-{name}.png'), eye, tgt, lens)
-    if len(sys.argv) and '--lods' in argv:
-        for o in objs: o.hide_render = True
-        for i, o in enumerate(objs):
-            o.hide_render = False; render_view(os.path.join(PREVIEWS, f'cathedral-lod{i}.png'), (-60, 30, -60), (0, 18, 0), 40); o.hide_render = True
-log('done', round(time.time() - t0, 1), 's')
+import tempfile
+work = os.path.join(tempfile.gettempdir(), 'cathedral_work'); os.makedirs(work, exist_ok=True)
+tile_png, stone_png, stone_n = (os.path.join(work, n) for n in ('tile_pattern.png', 'stone.png', 'stone_n.png'))
+if (argv[argv.index('--stage') + 1] if '--stage' in argv else 'full') == 'full':
+    write_tile_texture(tile_png, 'cathedral')
+    write_stone_texture(stone_png, stone_n, period=3.2, px=1024, course=0.4, c1=0xa39579, c2=0x645b50, mortar=0x453f36, seed=11, block=(0.5, 1.2))
+tiling = {
+    'tiles': dict(png=tile_png, period=TILE_PERIOD, rough=ROLES['tiles']['rough'], metal=ROLES['tiles']['metal']),
+    'stone': dict(png=stone_png, normal=stone_n, period=3.2, rough=0.9, metal=0.0, ao=True),
+}
+VIEWS = {
+    'game-nw': ((-70, 12, -62), (-14, 18, 6), 34),         # about the game camera: north-west of the north tower
+    'ne': ((78, 40, -62), (0, 14, 0), 34),
+    'south': ((14, 22, 95), (2, 16, 0), 38),
+    'west': ((-78, 18, 8), (-22, 22, 0), 38),
+    'aerial': ((50, 80, 70), (2, 12, 0), 42),
+    'portal-west': ((-42, 5, 6), (-27, 6, 0), 45),
+    'portal-south': ((12, 6, 40), (7, 8, 21), 40),
+    'apse': ((70, 16, -20), (22, 12, 0), 40),
+    'close-wall': ((-4, 4, 33), (4, 6, 21), 45),           # a few metres from the south transept wall: stone sharpness
+}
+assemble('cathedral', body, cut, inl, argv, out_glb, size=2048, tiling=tiling, views=VIEWS,
+         geom_colours={'stone': 0xb2a68e, 'tiles': 0x3d8a52, 'copper': 0x4f9a82, 'gold': 0xe3b34a, 'glass': 0x34506a, 'dark': 0x23272c})

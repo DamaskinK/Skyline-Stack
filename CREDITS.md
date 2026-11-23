@@ -29,6 +29,8 @@ Every external file used by the game, with its source and licence. Add a row whe
 | Texture "Sandstone Blocks 08" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/sandstone_blocks_08 | CC0 | St Elisabeth cathedral stone (`assets/textures/`) |
 | Draco decoder (`draco_decoder.wasm/.js`, wrapper) and `DRACOLoader`, from three@0.160.0 `examples/jsm` | Google, three.js authors | https://github.com/google/draco, vendored by `scripts/vendor-addons.mjs` | Apache-2.0 (decoder), MIT (loader) | decoding Draco-compressed GLB models (`vendor/draco/`) |
 | St. Elisabeth Cathedral model (own work, built by `scripts/blender/cathedral.py`) | project | n/a | project | `assets/levels/kosice/cathedral.glb` |
+| State Theatre, St. Urban's tower, St. Michael's chapel, Immaculata column and Singing Fountain models (own work, built by `scripts/blender/{theatre,urban,chapel,monuments}.py`; shapes modelled after photos on Wikimedia Commons that are not part of the repo, cited in the S0004 01 ticket) | project | n/a | project | `assets/levels/kosice/{theatre,urban,chapel,immaculata,fountain}.glb` |
+| Cathedral stone, roof-tile and chapel/tower tile textures (procedural, written by `scripts/blender/pipeline.py`, baked into the GLBs) | project | n/a | project | inside `assets/levels/kosice/*.glb` |
 
 ## Credit lines to show on the credits screen (CC-BY 4.0)
 

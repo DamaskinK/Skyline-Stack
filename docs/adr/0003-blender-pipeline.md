@@ -31,3 +31,13 @@ that must change at run time.
 - Models are rebuilt by running the script; the GLB is committed (it is a level asset). Previews are not committed.
 - Cost of the cathedral: LOD0 18.4k triangles (procedural 1.2k), 2 draw calls instead of about 14, 1.4 MB file (mostly the WebP atlas).
 - Texture memory: a 2048 colour atlas, 2048 ORM and a 2048 emission map (emission could drop to 512 later).
+
+## Update 2026-11-23 (S0004 01): all Kosice landmarks, tiling stone
+- `scripts/blender/pipeline.py` holds the shared assembly (`assemble`): union, cut, roles, UV, bake, LODs, GLB, previews. A model script only builds its shells
+  (`theatre.py`, `urban.py`, `chapel.py`, `monuments.py --which immaculata|fountain`, `cathedral.py`) and says which roles tile.
+- A role that repeats gets its own material (3 m roof tiles; the cathedral's ashlar stone, 3.2 m period, 1024 colour + normal map). Its occlusion still comes from the atlas
+  through a second UV set (`ao`, glTF `texCoord` 1), so portals and window reveals stay dark. The cathedral therefore has three materials (atlas, tiles, stone); the other models
+  have one or two.
+- The decimated LODs are cleaned (degenerate faces dissolved, `Mesh.validate`) before export: the "mesh not valid" exporter warning is gone.
+- Game side: `js/landmarks/kosice.ts` loads every model through one `blenderModel(id)`; materials without an emission map get a flat warm night tint by name (`_tiles`, `_stone`).
+  `?landmarks=procedural` keeps the procedural parts for all of them.
