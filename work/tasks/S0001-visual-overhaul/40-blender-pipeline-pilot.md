@@ -20,3 +20,6 @@ better and more optimised models. Blender is installed at /Applications/Blender.
       frame time at 2560x1440 DPR 2 High and on Low.
 - [ ] `docs/adr/0003-blender-pipeline.md`: when to use Blender (landmarks, crowns, lobbies, floor modules) and when to stay
       procedural (OSM city), how to rebuild models.
+
+## Comments
+- Main session 2026-11-23: headless Blender verified (bevel modifier, GLB export with Draco, EEVEE PNG render). Decision: scripts, not the Blender MCP (reproducible, works for subagents without a GUI). Vendor three r160 `DRACOLoader` and `libs/draco/` decoder for loading.

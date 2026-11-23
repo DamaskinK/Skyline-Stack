@@ -41,3 +41,10 @@ npm test             # Vitest: simulation core (tests/core)
 The main session (Opus) talks to the developer, grills, plans, reviews and picks what is next; it does not build.
 Each ticket is built by a fresh `skyline-builder` (Sonnet); milestone reviews by `skyline-reviewer` (Opus); checks and
 recipes by `skyline-runner` (Haiku); repo searches by `skyline-scout` (Haiku). Details: `docs/agents/model-routing.md`.
+
+## Blender (models)
+Blender 5.3 at `/Applications/Blender.app`. Models are built headless from Python scripts in `scripts/blender/`
+(reproducible, no GUI, no MCP): `/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P <script.py> -- <out>`.
+Export GLB with Draco compression (Three.js needs `DRACOLoader` + the decoder in `vendor/`), render a PNG preview with
+EEVEE in the same script and look at it. Use Blender for landmarks, tower crowns/lobbies and floor modules; keep the
+OpenStreetMap city procedural. Verified 2026-11-23: bevel, Draco GLB export and EEVEE render work headless.
