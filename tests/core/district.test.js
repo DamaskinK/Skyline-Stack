@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, NEWTOWN, DISTRICT_CITIES, levelById } from '../../js/levels.js';
+import { LEVELS, NEWTOWN, DISTRICT_CITIES, levelById, nextLevel } from '../../js/levels.js';
 import { BUILDING_TYPES } from '../../js/building-types.js';
 import { WEATHER } from '../../js/config.js';
 import {
@@ -18,8 +18,10 @@ describe('district data', () => {
     expect(NEWTOWN.district.plots).toHaveLength(5);
     expect(NEWTOWN.fictional && NEWTOWN.openFromStart).toBe(true);
   });
-  it('keeps S0001 fields and the six-city order', () => {
-    expect(LEVELS).toHaveLength(6);
+  it('keeps S0001 fields and the three-city order (ADR 0004)', () => {
+    expect(LEVELS.map((l) => l.id)).toEqual(['kosice', 'prague', 'tokyo']);
+    expect(LEVELS.map((l) => l.order)).toEqual([1, 2, 3]);
+    expect(nextLevel('prague').id).toBe('tokyo');
     expect(LEVELS[0].site).toEqual({ lat: 48.72100, lon: 21.25755 });
     expect(D.plots[4].site).toEqual(LEVELS[0].site);
     expect(DISTRICT_CITIES.map((c) => c.id)).toEqual(['kosice', 'newtown']);

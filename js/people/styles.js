@@ -11,8 +11,6 @@
 
 export const SKIN = [0xffd9b8, 0xf0c29a, 0xd9a273, 0xb07a4f, 0x8a5a3a];
 const SKIN_EURO = [0xffd9b8, 0xf0c29a, 0xf6cfa8, 0xd9a273];
-const SKIN_DUBAI = [0xd9a273, 0xb07a4f, 0xf0c29a, 0x8a5a3a];
-const SKIN_NY = [0xffd9b8, 0xd9a273, 0xb07a4f, 0x8a5a3a, 0x6b4430];
 const SKIN_TOKYO = [0xf6cfa8, 0xf0c29a, 0xffd9b8];
 
 const HAIR_DARK = [0x2b1d14, 0x3a2a1c, 0x14100c, 0x4a3426];
@@ -41,34 +39,6 @@ export const STYLES = {
     ],
   },
   prague: null, // set below: same family as Kosice with a few more coats
-  // Urban casual and business.
-  berlin: {
-    outfits: [
-      { w: 4, top: [0x23252b, 0x3a3f4a, 0x6a7a8a], bottom: DARK, shoes: SHOES, hair: HAIR_MIX, hairStyle: 'short', sleeves: 'long', coat: 'jacket', coatCol: [0x23252b, 0x3a3f4a, 0x2f4a52], bag: 'shoulder' },
-      { w: 3, top: [0xffffff, 0xcfe0f0], bottom: [0x23252b, 0x1b2236], shoes: [0x1c1c1c, 0x4a3426], hair: HAIR_MIX, hairStyle: 'short', sleeves: 'long', tie: 0x3a4a8a, coat: 'long', coatCol: [0x23252b, 0x5a5a62] },
-      { w: 3, top: BRIGHT, bottom: JEANS, shoes: SHOES, hair: HAIR_MIX, hairStyle: 'long', sleeves: 'short', bag: 'backpack', bagCol: DARK },
-      { w: 2, top: MUTED, bottom: JEANS, shoes: SHOES, hair: HAIR_MIX, hairStyle: 'bun', sleeves: 'long', hat: 'beanie', hatCol: DARK },
-    ],
-  },
-  // Modern wear mixed with traditional dress: kandura with ghutra, abaya with hijab.
-  dubai: {
-    outfits: [
-      { w: 4, garment: 'robe', robe: [0xffffff, 0xf3ead8], top: [0xffffff], shoes: [0x8a6a3a, 0x2a2a2a], hair: HAIR_BLACK, hairStyle: 'none', headwear: 'ghutra', headCol: [0xffffff, 0xf3f3f3], sleeves: 'long' },
-      { w: 3, garment: 'robe', robe: [0x1c1c22, 0x23252b], top: [0x1c1c22], shoes: [0x2a2a2a], hair: HAIR_BLACK, hairStyle: 'none', headwear: 'hijab', headCol: [0x1c1c22], sleeves: 'long', bag: 'shoulder', bagCol: [0x8a6a3a, 0xd9c8a0] },
-      { w: 3, top: [0xffffff, 0xf3ead8, 0x9ac0e0], bottom: [0xc9b99a, 0x3a4a6a, 0x23252b], shoes: SHOES, hair: HAIR_DARK, hairStyle: 'short', sleeves: 'short' },
-      { w: 2, top: [0xf3ead8, 0xe0b38a], bottom: [0xf3ead8, 0x3a4a6a], shoes: SHOES, hair: HAIR_DARK, hairStyle: 'long', garment: 'skirt', tights: SKIN_DUBAI, sleeves: 'long' },
-      { w: 2, top: [0x23252b, 0xffffff], bottom: [0x23252b], shoes: [0x1c1c1c], hair: HAIR_DARK, hairStyle: 'short', sleeves: 'long', tie: 0x8a2f3a },
-    ],
-  },
-  // Business and street wear.
-  'new-york': {
-    outfits: [
-      { w: 4, top: [0xffffff, 0xcfe0f0], bottom: [0x23252b, 0x1b2236], shoes: [0x1c1c1c], hair: HAIR_MIX, hairStyle: 'short', sleeves: 'long', tie: 0x8a2f3a, coat: 'long', coatCol: [0x23252b, 0x2f3340, 0xb0a08a], bag: 'shoulder', bagCol: DARK },
-      { w: 3, top: BRIGHT, bottom: JEANS, shoes: [0xeeeeee, 0x2a2a2a], hair: HAIR_MIX, hairStyle: 'short', sleeves: 'long', hat: 'cap', hatCol: BRIGHT },
-      { w: 3, top: [0x23252b, 0xb02a3a, 0x3a6a4a], bottom: JEANS, shoes: [0xeeeeee], hair: HAIR_MIX, hairStyle: 'long', sleeves: 'long', coat: 'jacket', coatCol: [0x23252b, 0x8a6a2a, 0x2f4a52] },
-      { w: 2, top: MUTED, bottom: DARK, shoes: SHOES, hair: HAIR_MIX, hairStyle: 'bun', sleeves: 'short', bag: 'backpack', bagCol: BRIGHT },
-    ],
-  },
   // Business suits, school uniforms, street fashion.
   tokyo: {
     outfits: [
@@ -94,5 +64,5 @@ export function dressForCold(o, rnd) {
 
 export function styleFor(cityId) { return STYLES[cityId] || STYLES.kosice; }
 export function skinFor(cityId) {
-  return { kosice: SKIN_EURO, prague: SKIN_EURO, berlin: SKIN_EURO.concat([0xb07a4f]), dubai: SKIN_DUBAI, 'new-york': SKIN_NY, tokyo: SKIN_TOKYO }[cityId] || SKIN;
+  return { kosice: SKIN_EURO, prague: SKIN_EURO, tokyo: SKIN_TOKYO }[cityId] || SKIN;
 }

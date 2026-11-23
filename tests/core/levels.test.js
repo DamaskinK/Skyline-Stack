@@ -68,7 +68,7 @@ describe('progress', () => {
     expect(isOpen(p, LEVELS, 'prague')).toBe(false);
     p = recordLevel(p, LEVELS, 'kosice', { stars: 1, height: 20 });
     expect(isOpen(p, LEVELS, 'prague')).toBe(true);
-    expect(isOpen(p, LEVELS, 'berlin')).toBe(false);
+    expect(isOpen(p, LEVELS, 'tokyo')).toBe(false);
   });
   it('keeps the best stars and best height', () => {
     let p = recordLevel(emptyProgress(), LEVELS, 'kosice', { stars: 3, height: 20 });
