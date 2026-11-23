@@ -36,8 +36,12 @@ const music = (page) => page.evaluate(() => ({ state: __music.state, chip: __mus
   const loaded = await page.evaluate(() => Object.keys(__sfx.buffers).sort().join(','));
   check(loaded === 'city,drop,land,rain,thunder,wind', `recorded SFX decoded (${loaded})`);
 
-  await page.evaluate(() => { document.querySelector('[data-go="sNew"]').click(); document.querySelector('#btnStart').click(); });
-  await page.waitForFunction(() => __game.state === 'play', null, { timeout: 40000 });
+  // a district plot (the only run with a target since S0002): a short target so the win comes after the scripted collapse
+  await page.evaluate(async () => { const m = await import('/js/levels.js'); m.cityById('kosice').district.plots[0].target = 12; });
+  await page.evaluate(() => { document.querySelector('[data-go="sNew"]').click(); setTimeout(() => document.querySelector('[data-district="kosice"]').click(), 80); });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => document.querySelector('[data-play="terasa"]').click());
+  await page.waitForFunction(() => __game.state === 'play', null, { timeout: 60000 });
   // bot: drops when roughly over the tower. The Perfect window is widened for the 'perfect' phase (a simple bot cannot hit
   // 8 % of the width through wind and sway); mode 'risky' drops far off centre to push stability down.
   await page.evaluate(() => {
