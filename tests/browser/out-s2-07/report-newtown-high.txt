@@ -1,5 +1,0 @@
-app http://localhost:8000 · level newtown · quality high · 1280x720 dpr 1 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
-shot tests/browser/out-s2-07/newtown-high-start.png
-shot tests/browser/out-s2-07/newtown-high-mid.png (floor 8)
-console errors: none
-RESULT PASS
