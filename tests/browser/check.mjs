@@ -23,7 +23,7 @@ const POSES = {
 mkdirSync(out, { recursive: true });
 const lines = [], fails = [];
 const log = (s) => { lines.push(s); console.log(s); };
-const plot = opt('plot', null);   // Kosice plot index: the scene of that plot is built around the tower before the checks
+const plot = opt('plot', null);   // plot index of --level (kosice or newtown): the scene of that plot is built around the tower before the checks
 const tag = `${level}${plot !== null ? '-p' + plot : ''}-${quality}${opt('dpr', 1) != 1 ? '-dpr' + opt('dpr', 1) : ''}`;
 
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -44,7 +44,7 @@ await page.addInitScript((q) => {
 await page.goto(app, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });
 await page.waitForTimeout(800);
-if (plot !== null) { const errs = await page.evaluate((n) => window.__debug.loadPlot(Number(n)), plot); log(`plot ${plot} loaded${errs.length ? ' with errors ' + JSON.stringify(errs) : ''}`); await page.waitForTimeout(500); }
+if (plot !== null) { const errs = await page.evaluate(([n, c]) => window.__debug.loadPlot(Number(n), c), [plot, level]); log(`plot ${plot} loaded${errs.length ? ' with errors ' + JSON.stringify(errs) : ''}`); await page.waitForTimeout(500); }
 const info = await page.evaluate(() => window.__debug.info());
 log(`app ${app} · level ${level} · quality ${quality} · ${vw}x${vh} dpr ${opt('dpr', 1)} · GPU ${info.gpu}`);
 
@@ -61,7 +61,7 @@ if (cmd === 'all' || cmd === 'flicker') {
 
 if (cmd !== 'flicker') {
   // start a run and let a simple bot drop each block when it is over the tower top
-  await page.evaluate(() => { document.querySelector('[data-go="sNew"]').click(); document.querySelector('#btnStart').click(); });
+  await page.evaluate((lv) => { document.querySelector('[data-go="sNew"]').click(); document.querySelector(`[data-endless="${lv}"]`)?.click(); document.querySelector('#btnStart').click(); }, level);
   await page.waitForFunction(() => window.__game.state === 'play', null, { timeout: 30000 });
   await page.evaluate(() => {
     window.__bot = setInterval(() => {

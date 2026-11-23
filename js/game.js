@@ -9,7 +9,7 @@ import { makeBlockMesh, makeFoundation, makeRoof, makeCrown } from './entities.j
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
-import { settings, loadScores, saveLevelResult, loadDistrictProgress, saveDistrictResult } from './settings.js';
+import { settings, loadScores, loadDistrictProgress, saveDistrictResult } from './settings.js';
 import { levelById, cityById, nextLevel } from './levels.js';
 import { resultCounts, plotStars, plotResidents, towerBonuses, districtTotals, nextPlot, plotOf } from './core/district.js';
 import { cityProgress } from './core/district-progress.js';
@@ -58,8 +58,9 @@ export class Game {
   async loadPlot(cityId, plotId, onProgress) {
     const plot = (cityById(cityId)?.district?.plots || []).find((p) => p.id === plotId);
     if (!plot) throw new Error(`No plot "${plotId}" in ${cityId}`);
+    // a real city has one OpenStreetMap extract per plot; fictional Newtown is the procedural city and has none
     const [{ assets, errors }, osm] = await Promise.all([
-      loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), loadPlotExtract(cityId, plotId)]);
+      loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), plot.site.x != null ? null : loadPlotExtract(cityId, plotId)]);
     applyLevelAssets(cityId, assets, plot, osm);
     showDistrictTowers(cityId, plotId, cityProgress(loadDistrictProgress(), cityId).plots);
     return errors;
@@ -83,13 +84,13 @@ export class Game {
   start(mode = this.mode, diffKey = settings.difficulty, levelId = 'kosice') {
     this.clear(); this.plotDef = null; this.plotId = null;
     this.mode = mode; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
-    this.cityId = levelId; this.levelDef = mode === 'level' ? levelById(levelId) : null;
+    this.cityId = levelId; this.levelDef = mode === 'level' ? cityById(levelId) : null;
     this.prevBest = mode === 'level' ? 0 : (loadScores(levelId)[0]?.score || 0);
     this.state = 'play'; this.paused = false; this.saved = false;
     People.setWalkers(9);
     // Endless runs on the chosen city: its weather segments loop and only its events happen
-    this.run = new Run(this.diff, { level: levelById(levelId), endless: mode !== 'level' });
-    this.objects.push(makeFoundation(0, 0, this.run.buildingType, this.levelDef ? this.levelDef.city : (levelById(levelId) || {}).city));
+    this.run = new Run(this.diff, { level: cityById(levelId), endless: mode !== 'level' });
+    this.objects.push(makeFoundation(0, 0, this.run.buildingType, (cityById(levelId) || {}).city));
     this.ui.showHud();
   }
   clear() {
@@ -237,16 +238,6 @@ export class Game {
     this.state = 'over';
     this.lastResult = { ...result, diff: this.diffKey };
     if (this.plotDef) { this.finishPlot(result); return; }
-    if (this.levelDef) {
-      saveLevelResult(this.levelDef.id, result.stars, result.floors);
-      if (result.completed) {
-        const top = this.floorMeshes[this.floorMeshes.length - 1];
-        if (top) { const crown = makeCrown(this.run.buildingType); crown.position.y = CFG.H / 2; top.add(crown); }
-        Sfx.fanfare();
-        setTimeout(() => { if (this.state === 'over') this.ui.levelDone(this.lastResult, this.levelDef); }, 1400);
-        return;
-      }
-    }
     Sfx.over();
     setTimeout(() => { if (this.state === 'over') this.ui.gameOver(this.lastResult, !this.levelDef && this.lastResult.score > this.prevBest && this.lastResult.score > 0); }, 1400);
   }

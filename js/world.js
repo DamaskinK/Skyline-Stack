@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { CFG, PHASES } from './config.js';
 import { settings } from './settings.js';
+import { NEWTOWN } from './levels.js';
+import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
+import { surface } from './surfaces.js';
 import { facade, roofTex, shopTex, billboardTex, pavingTex, grassTex, sidewalkTex, puffTex, storeyUV, canvas2d, toTex } from './textures.js';
 
 // deterministic pseudo-random for scenery, so the city looks the same on every visit
@@ -84,6 +87,9 @@ export const nearProc = new THREE.Group(); nearProc.name = 'procedural-near'; sc
 // The procedural backdrop (grass plain, far blocks, pyramid hills) is replaced by the middle and far ring (far-ring.js) in the same way.
 export const backdrop = new THREE.Group(); backdrop.name = 'procedural-backdrop'; scene.add(backdrop);
 let realRings = false;
+// The procedural city (Newtown) is built once around its plaza. To play another plot the whole city group is moved by minus the
+// plot's site, so the tower (always at the world origin) stands on that plot. Cars follow; people get routes in the same frame (level-scene.js).
+export function setProcOffset(x = 0, z = 0) { nearProc.position.set(x, 0, z); backdrop.position.set(x, 0, z); carMesh.position.set(x, 0, z); carLights.position.set(x, 0, z); }
 export function setNearProcedural(on) { nearProc.visible = on; backdrop.visible = on; realRings = !on; traffic.mode = on ? 'grid' : 'osm'; traffic.setCount(traffic.want); }
 
 // ── ground, plaza, roads, sidewalks ──
@@ -114,10 +120,10 @@ function mergeGeos(geos) {
 }
 const flat = (w, d, mat, x, z, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; backdrop.add(m); return m; };
 flat(2400, 2400, new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }), 0, 0, 0);
-const roadMat = new THREE.MeshStandardMaterial({ color: 0x3b3e46, roughness: 1 });
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x3b3e46, roughness: 1, ...surface('asphalt', 4, 0.8) });
 const tile = (t) => { const c = t.clone(); c.repeat.set(1, 1); c.needsUpdate = true; return c; };
 const swMat = new THREE.MeshStandardMaterial({ map: tile(sidewalkTex), roughness: 1 });
-const pavingMat = new THREE.MeshStandardMaterial({ map: tile(pavingTex), roughness: 0.95 });
+const pavingMat = new THREE.MeshStandardMaterial({ map: tile(pavingTex), roughness: 0.95, ...surface('cobble', 4, 0.7) });
 // pieces of a line along one axis, cut out where the crossing roads are
 const cuts = (pad) => [[-LEN / 2, -ROAD - pad], [-ROAD + pad, ROAD - pad], [ROAD + pad, LEN / 2]];
 const IN = ROAD - ROAD_W / 2 - SW;   // inner edge of the inner sidewalks = edge of the plaza
@@ -134,7 +140,9 @@ for (const s of [-1, 1]) {
 }
 ground(roadMat, roadParts);
 ground(swMat, walkParts);
-ground(pavingMat, [[-IN, IN, -IN, IN, yW, 7.6, 7.6]]);
+// paved pads under the district plots away from the plaza (a plot is a building site, not open grass)
+const PLOT_PADS = NEWTOWN.district.plots.filter((p) => Math.hypot(p.site.x, p.site.z) > 20);
+ground(pavingMat, [[-IN, IN, -IN, IN, yW, 7.6, 7.6], ...PLOT_PADS.map((p) => [p.site.x - 9, p.site.x + 9, p.site.z - 9, p.site.z + 9, yW, 7.6, 7.6])]);
 const dashes = [];
 for (const s of [-1, 1]) for (let k = -LEN / 2; k < LEN / 2; k += 6) { dashes.push([k, s * ROAD, 0]); dashes.push([s * ROAD, k, Math.PI / 2]); }
 // markings sit a real 1.5 cm above the road; the small depth bias only keeps distant ones crisp
@@ -191,6 +199,9 @@ function cityBlock(x, z, w, d, h, hex, variant, idx) {
   props.push([x, roofY, z, rnd() * 6]);
   if (idx % 5 === 0) boards.push([x, roofY, z, w, idx]);
 }
+// Blocks keep away from the district plots (the tower and its camera need room) and from the landmarks.
+const SITES = [...NEWTOWN.district.plots.map((p) => [p.site.x, p.site.z, 36]), ...NEWTOWN.landmarks.map((l) => [l.x, l.z, l.r + 10])];
+const clearOfSites = (x, z, half) => SITES.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r + half);
 const isRoad = (x, z, pad) => Math.abs(Math.abs(x) - ROAD) < pad || Math.abs(Math.abs(z) - ROAD) < pad;
 for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   const a = rnd() * Math.PI * 2, r = 64 + rnd() * 190;
@@ -200,6 +211,7 @@ for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   const along = (x * -9 + z * -22) / 23.8, across = Math.abs(x * 22 - z * 9) / 23.8;
   if (along > 0 && across < 12 + Math.max(w, d) / 2) continue;
   const tall = r > 120 ? 20 + rnd() * 90 : 6 + rnd() * rnd() * 50;
+  if (!clearOfSites(x, z, Math.max(w, d) / 2)) continue;   // after the random draws above, so the stream stays as it was
   cityBlock(x, z, w, d, tall, palette[made % palette.length], made % 3, made); made++;
 }
 function finishBlocks(props, boards, parent) {
@@ -234,6 +246,14 @@ for (let i = 0; i < 120; i++) {
   if (isRoad(x, z, ROAD_W / 2 + 4) || (Math.abs(x) < 39 && Math.abs(z) < 39)) continue;
   trees.push([x, z, 0.8 + rnd() * 0.6, Math.floor(rnd() * 3)]);
 }
+// parkland round every plot away from the plaza: trees in a loose ring, kept off the roads (own random stream, the scene above stays as it was)
+{
+  let st = 313; const pr = () => { st = (st * 16807) % 2147483647; return (st - 1) / 2147483646; };
+  for (const p of PLOT_PADS) for (let i = 0; i < 16; i++) {
+    const a = pr() * Math.PI * 2, r = 28 + pr() * 26, x = p.site.x + Math.cos(a) * r, z = p.site.z + Math.sin(a) * r, sc = 0.8 + pr() * 0.6, v = Math.floor(pr() * 3);
+    if (!isRoad(x, z, ROAD_W / 2 + 4) && clearOfSites(x, z, 2)) trees.push([x, z, sc, v]);
+  }
+}
 for (let k = -33; k <= 33; k += 3) for (const s of [-1, 1]) { if (Math.abs(k) > 6) { bushes.push([k, s * 36.5]); bushes.push([s * 36.5, k]); } }
 for (let k = -30; k <= 30; k += 12) for (const s of [-1, 1]) { lamps.push([k, s * 34, s > 0 ? Math.PI : 0]); lamps.push([s * 34, k, s > 0 ? -Math.PI / 2 : Math.PI / 2]); }
 for (let k = -150; k <= 150; k += 22) for (const s of [-1, 1]) for (const o of [-1, 1]) {
@@ -243,13 +263,10 @@ for (let k = -150; k <= 150; k += 22) for (const s of [-1, 1]) for (const o of [
 for (let k = -24; k <= 24; k += 16) for (const s of [-1, 1]) { benches.push([k + 4, s * 32, s > 0 ? Math.PI : 0]); benches.push([s * 32, k + 4, s > 0 ? -Math.PI / 2 : Math.PI / 2]); }
 for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) for (let i = 0; i < 24; i++) flowers.push([x + (rnd() - 0.5) * 5, z + (rnd() - 0.5) * 5, Math.floor(rnd() * 4)]);
 
-const treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
-const treeGeos = [0x3f8f3a, 0x4fa548, 0x2f7a3a].map((c) => mergeColored([[cyl(0.3, 2, 0, 1, 0, 6), 0x7a5230], [new THREE.IcosahedronGeometry(1.7, 0).translate(0, 3.2, 0), c], [new THREE.IcosahedronGeometry(1.1, 0).translate(0.6, 4.3, 0.3), c]]));
-for (let t = 0; t < 3; t++) instanced(treeGeos[t], treeMat, trees.filter((q) => q[3] === t), ([x, z, s], o) => { o.position.set(x, 0, z); o.scale.setScalar(s); o.rotation.y = x; }, true, nearProc);
-instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0x3d8a3a, flatShading: true, roughness: 1 }), bushes, ([x, z], o) => { o.position.set(x, 0.6, z); o.scale.set(1.4, 0.8, 1.4); }, true, nearProc);
-const flowerCols = [0xff5a6e, 0xffd34d, 0xff9be0, 0xffffff];
-for (let c = 0; c < 4; c++) instanced(new THREE.IcosahedronGeometry(0.28, 0), new THREE.MeshStandardMaterial({ color: flowerCols[c], roughness: 0.8 }), flowers.filter((f) => f[2] === c), ([x, z], o) => { o.position.set(x, 0.35, z); }, false, nearProc);
-for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) { const bed = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.4, 16), new THREE.MeshStandardMaterial({ color: 0x6b4a2e })); bed.position.set(x, 0.2, z); bed.receiveShadow = true; nearProc.add(bed); }
+// Same vegetation as the OpenStreetMap near ring (js/vegetation.js): full trees with wind sway, hedge rows, flower beds.
+addTrees(nearProc, trees, 0);
+addHedges(nearProc, bushes.map(([x, z]) => [x, z, x === 36.5 || x === -36.5 ? Math.PI / 2 : 0, 1.1]), 0);
+addFlowerBeds(nearProc, [[-26, -26], [26, -26], [-26, 26], [26, 26]].map(([x, z], i) => [x, z, i * 0.8, 5.5, 3.2]), 0.06);
 const benchGeo = mergeColored([[box(2.2, 0.15, 0.7, 0, 0.55, 0), 0x9c6b3e], [box(2.2, 0.6, 0.12, 0, 0.9, -0.3), 0x9c6b3e], [box(0.12, 0.55, 0.6, -0.95, 0.27, 0), 0x333333], [box(0.12, 0.55, 0.6, 0.95, 0.27, 0), 0x333333]]);
 instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true, nearProc);
 const poleGeo = mergeColored([[cyl(0.1, 5.2, 0, 2.6, 0, 6), 0x2f3540], [box(0.12, 0.12, 1.4, 0, 5.1, 0.6), 0x2f3540]]);

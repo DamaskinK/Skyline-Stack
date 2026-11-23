@@ -70,7 +70,7 @@ export function createUI(game) {
   for (const b of $$('.mi, .card-opt, .seg button, .tabs button')) b.addEventListener('pointerenter', () => { if (document.activeElement !== b) { b.focus({ preventScroll: true }); Sfx.ui(); } });
 
   // ── new game ──
-  let pickDiff = settings.difficulty, pickMode = 'endless';
+  let pickDiff = settings.difficulty, pickMode = 'endless', pickCity = 'kosice';
   const dc = $('#diffCards');
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
@@ -81,15 +81,17 @@ export function createUI(game) {
   }
   function syncNew() {
     for (const b of $$('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === pickDiff));
-    for (const b of $$('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === pickMode));
-    $('#modeNote').textContent = 'ENDLESS: one tower on the Kosice city centre plot, as high as you can. The weather keeps changing as you climb. Districts are played from the cards below.';
+    for (const b of $$('[data-endless]')) b.setAttribute('aria-pressed', String(b.dataset.endless === pickCity));
+    $('#modeNote').textContent = `ENDLESS: one tower on the ${pickCity === 'newtown' ? 'Newtown plaza' : 'Kosice city centre plot'}, as high as you can.`
+      + ' The weather keeps changing as you climb. Districts are played from the cards below.';
   }
   syncNew();
   // Mode cards: Kosice level (with its best stars) and Endless. The world map (ticket 20) will replace this.
   function renderModes() {
     $('#modeCards').innerHTML =
-      `<button type="button" class="card-opt" data-mode="endless"><b>ENDLESS</b><span class="sub">No target, as high as you can</span></button>`;
-    for (const b of $$('[data-mode]')) b.onclick = () => { pickMode = b.dataset.mode; Sfx.ui(); syncNew(); };
+      `<button type="button" class="card-opt" data-mode="endless" data-endless="kosice"><b>ENDLESS · KOSICE</b><span class="sub">No target, as high as you can</span></button>`
+      + `<button type="button" class="card-opt" data-mode="endless" data-endless="newtown"><b>ENDLESS · NEWTOWN</b><span class="sub">The made-up city, open from the start</span></button>`;
+    for (const b of $$('[data-endless]')) b.onclick = () => { pickMode = 'endless'; pickCity = b.dataset.endless; Sfx.ui(); syncNew(); };
     syncNew();
     $('#districtCards').innerHTML = DISTRICT_CITIES.filter((c) => c.built).map((c) =>
       `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${c.district.goal} residents</span></button>`).join('');
@@ -97,7 +99,7 @@ export function createUI(game) {
   }
   // District map (S0002 05). Play loads the scene of the plot and runs it with the plot's rules.
   const districtMap = createDistrictMap({
-    onPlay: (cityId, plotId) => { if (cityId === 'kosice') startGame('plot', pickDiff, cityId, plotId); },
+    onPlay: (cityId, plotId) => startGame('plot', pickDiff, cityId, plotId),
     onBack: back,
   });
   // Back to the district map after a plot: the finished towers stand on their sites, the next open plot is selected.
@@ -113,7 +115,7 @@ export function createUI(game) {
     stack = ['sTitle', 'sNew']; show('sMap');
     return info;
   }
-  $('#btnStart').onclick = () => startGame(pickMode, pickDiff);
+  $('#btnStart').onclick = () => startGame(pickMode, pickDiff, pickCity);
   let starting = false;
   // plot mode: a district plot of `level` (a city id). Endless and the other modes run on the city centre plot (Kosice: the cathedral).
   async function startGame(mode, diff, level = 'kosice', plotId = null) {
@@ -250,10 +252,8 @@ export function createUI(game) {
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnAgain').onclick = restart;
-  $('#btnRetry').onclick = restart;
   $('#btnPlotRetry').onclick = restart;
   $('#btnPlotMap').onclick = () => { Sfx.uiOk(); toMap(game.cityId); };
-  $('#btnContinue').onclick = () => { Sfx.uiBack(); toMenu(); };   // no level 2 yet: back to the menu
 
   // ── game over ──
   $('#saveForm').addEventListener('submit', (e) => {
@@ -287,14 +287,6 @@ export function createUI(game) {
       const c = $('#wxCard'); c.hidden = true; void c.offsetWidth; c.hidden = false; wxTimer = 3.2;
     },
     bumpFloor() { const el = $('#floorBig'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); },
-    levelDone(r, lv) {
-      $('#hud').hidden = true;
-      $('#doneTitle').textContent = `${lv.city.toUpperCase()} COMPLETE`;
-      $('#doneStars').innerHTML = [1, 2, 3].map((i) => STAR(i <= r.stars)).join('');
-      $('#doneStars').setAttribute('aria-label', `${r.stars} of 3 stars`);
-      $('#doneStats').innerHTML = `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">PERFECTS</span><b>${r.perfects}/${r.landings}</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
-      stack = []; show('sLevelDone');
-    },
     // Result of a district plot: counted or not (and why), stars, residents, district progress, next city.
     plotDone(r, plot, city) {
       $('#hud').hidden = true;
@@ -316,7 +308,7 @@ export function createUI(game) {
       $('#plotDistrict').innerHTML = `<div class="lbl">${esc(city.city.toUpperCase())} DISTRICT · RESIDENTS <b>${t.residents}</b> / ${t.goal}</div>`
         + `<div class="bar res" role="progressbar" aria-label="Residents towards the goal" aria-valuemin="0" aria-valuemax="${t.goal}" aria-valuenow="${t.residents}"><i style="width:${pct}%"></i></div>`
         + `<div class="lbl">${t.counted} / ${t.plots} PLOTS BUILT · ${t.stars} / ${t.maxStars} STARS</div>`
-        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : 'Next city opened.'}</div>` : '');
+        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : city.fictional ? 'The whole district is built.' : 'Next city opened.'}</div>` : '');
       stack = []; show('sPlot');
     },
     gameOver(r, record) {

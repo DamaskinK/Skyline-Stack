@@ -8,12 +8,6 @@
       "bytes": 1435119
     },
     {
-      "id": "osm",
-      "type": "json",
-      "url": "assets/levels/kosice/osm.json",
-      "bytes": 188989
-    },
-    {
       "id": "cathedral",
       "type": "gltf",
       "url": "assets/levels/kosice/cathedral.glb",

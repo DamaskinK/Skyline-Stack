@@ -2,11 +2,11 @@
 // Everything here is replaced when the level changes.
 import * as THREE from 'three';
 import { CFG } from './config.js';
-import { scene, renderer, setEnvironment, setNearProcedural, GROUND_Y } from './world.js';
+import { scene, renderer, setEnvironment, setNearProcedural, setProcOffset, GROUND_Y } from './world.js';
 import { buildNearRing } from './near-ring.js';
 import { buildMiddleFar } from './far-ring.js';
 import { landmarkHide, buildLandmarks, landmarkClear } from './landmarks/index.js';
-import { levelById } from './levels.js';
+import { cityById } from './levels.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
 
@@ -30,14 +30,22 @@ function disposeGroup(g) {
   });
 }
 
-// Where a plot lies in the frame of its city (origin = the city's site, x east, z south), metres.
+// Where a plot lies in the frame of its city (origin = the city's site, x east, z south), metres. Newtown sites are already {x, z}.
 export function plotOffset(cityId, plot) {
-  const c = levelById(cityId)?.site; if (!c || !plot?.site) return { x: 0, z: 0 };
+  const c = cityById(cityId)?.site; if (!c || !plot?.site) return { x: 0, z: 0 };
+  if (plot.site.x != null) return { x: plot.site.x - (c.x || 0), z: plot.site.z - (c.z || 0) };
   return { x: (plot.site.lon - c.lon) * 111320 * Math.cos(c.lat * Math.PI / 180), z: -(plot.site.lat - c.lat) * 111320 };
 }
 
 // With `plot` ({ id, site }) and `plotOsm` (its extract) the scene is built around that plot: the near ring from the extract (origin = plot site),
 // the middle/far ring and the landmarks of the city shifted by the plot's offset so they keep their real bearing and distance.
+// Street routes of the procedural grid (roads along x = +-44 and z = +-44) in the frame of a shifted city, so people walk on its pavements.
+function procRoutes(ox, oz) {
+  const L = 300, R = 44, off = 6, out = [];
+  for (const s of [-1, 1]) { out.push({ p: [ox - L, oz + s * R, ox + L, oz + s * R], off }); out.push({ p: [ox + s * R, oz - L, ox + s * R, oz + L], off }); }
+  return out;
+}
+
 export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
   disposeGroup(group); group.clear();
   level.id = id; level.plotId = plot ? plot.id : null; level.env = assets.sky || null; People.setCity(id);
@@ -57,6 +65,13 @@ export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
   }
+  // Newtown: the procedural city is the scene; the whole city moves so the plot's site sits at the world origin
+  if (!osm) {
+    const off = plot ? plotOffset(id, plot) : { x: 0, z: 0 };
+    setProcOffset(-off.x, -off.z);
+    const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
+    People.setRoutes(procRoutes(-off.x, -off.z));
+  } else setProcOffset(0, 0);
   if (assets.bench) {
     for (const s of [-1, 1]) {
       const b = assets.bench.clone(true);

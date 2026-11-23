@@ -10,7 +10,7 @@ import { isPlotOpen, nextPlot, plotOf, plotBonuses, plotResidents, districtTotal
 
 const esc = (s) => String(s).replace(/[<>&"]/g, '');
 const STAR = (on) => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-const LANDMARK_NAMES = { 'st-elisabeth': 'St Elisabeth Cathedral', 'state-theatre': 'State Theatre', hlavna: 'Hlavna street', plaza: 'the Plaza tower' };
+const LANDMARK_NAMES = { 'st-elisabeth': 'St Elisabeth Cathedral', 'state-theatre': 'State Theatre', hlavna: 'Hlavna street', 'clock-tower': 'the Meridian Clock Tower', 'lantern-bridge': 'the Lantern Bridge' };
 const landmarkName = (id) => LANDMARK_NAMES[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 export function requirementText(plot) {
@@ -60,7 +60,7 @@ export function createDistrictMap({ onPlay, onBack }) {
     const tot = districtTotals(d, plots), next = nextPlot(d, plots);
     if (focusNext && next) selected = next.id;
     if (!selected || !d.plots.some((p) => p.id === selected)) selected = (next || d.plots[d.plots.length - 1]).id;
-    const playable = city.id === 'kosice';
+    const playable = !!city.built;
 
     $('#mapTitle').textContent = `${city.city.toUpperCase()} DISTRICT`;
     $('#mapSub').textContent = city.fictional ? 'A made-up city. Build outward from the edge estate to the plaza.' : 'Five plots from the outskirts to the centre. Reach the residents goal to open the next city.';
@@ -92,7 +92,7 @@ export function createDistrictMap({ onPlay, onBack }) {
       const status = s.kind === 'built' ? `BUILT · ${plotResidents(d, plots, p.id)} residents · best ${s.st.bestHeight} fl`
         : s.kind === 'open' ? (s.st.bestHeight ? `OPEN · best so far ${s.st.bestHeight} fl, requirement missed` : 'OPEN') : 'LOCKED · build the plot before it first';
       const why = !s.open ? (s.kind === 'built' ? 'Built earlier. Counted plots before it first to play it again.' : '')
-        : !playable ? 'Newtown scenes follow with the next tickets.' : '';
+        : !playable ? 'This city is not built yet.' : '';
       return `<article class="pcard ${s.kind}${p.id === selected ? ' sel' : ''}" data-plot="${esc(p.id)}" aria-label="${esc(p.name)}">`
         + `<header><span class="num">${i + 1}</span><b>${esc(p.name).toUpperCase()}</b><span class="stars sm" role="img" aria-label="${s.st.stars} of 3 stars">${[1, 2, 3].map((n) => STAR(n <= s.st.stars)).join('')}</span></header>`
         + `<div class="meta"><span class="tag">${esc(t.label).toUpperCase()}</span><span>${p.target} floors · ${rate} residents per floor</span></div>`

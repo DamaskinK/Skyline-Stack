@@ -50,20 +50,27 @@ export const nextLevel = (id) => { const l = levelById(id); return l ? LEVELS.fi
 
 // Newtown: the original fictional city of the first version, a seventh city outside the world map, open from the start.
 // Not part of LEVELS (order, nextLevel and the world map stay six real cities). Plot sites are {x, z} metres on its
-// procedural grid (origin = plaza, x east, z south); a later ticket may nudge them to match the ring roads.
+// procedural grid (origin = plaza, x east, z south; roads run along x = +-44 and z = +-44). The last plot is the plaza,
+// where Endless also runs. `landmarks` are our own invented designs (js/landmarks/newtown.js); the same sites keep the
+// procedural blocks away from them.
 export const NEWTOWN = {
   id: 'newtown', city: 'Newtown', country: 'Fiction', fictional: true, openFromStart: true, built: true,
-  buildingType: 'panel', target: 20, site: { x: 0, z: 0 }, weather: [{ fromFloor: 0, kind: 'clear' }], events: [],
+  buildingType: 'panel', target: 20, site: { x: 0, z: 0 },
+  weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }], events: [],
   dayArc: { start: 16.5, end: 20.5 },
   grade: { gain: [1.0, 1.0, 1.0], contrast: 1.05, saturation: 1.05 },
+  landmarks: [
+    { id: 'clock-tower', name: 'Meridian Clock Tower', x: -72, z: -62, r: 16 },
+    { id: 'lantern-bridge', name: 'Lantern Bridge', x: 44, z: -112, r: 20 },
+  ],
   district: {
     goal: 800,
     plots: [
-      { id: 'edge', name: 'Edge estate', site: { x: -170, z: 150 }, buildingType: 'panel', target: 12, require: {}, windScale: 0.8, weather: [{ fromFloor: 0, kind: 'clear' }], landmarksInView: [] },
-      { id: 'park-row', name: 'Park row', site: { x: 130, z: 140 }, buildingType: 'panel', target: 15, require: {}, windScale: 0.9, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 8, kind: 'rain' }], landmarksInView: [] },
-      { id: 'outer-ring', name: 'Outer ring', site: { x: -110, z: -80 }, buildingType: 'hotel', target: 18, require: { maxLivesLost: 2 }, windScale: 1.0, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 9, kind: 'rain' }], landmarksInView: ['plaza'] },
-      { id: 'inner-ring', name: 'Inner ring', site: { x: 80, z: -70 }, buildingType: 'office', target: 22, require: { maxLivesLost: 2 }, windScale: 1.1, weather: [{ fromFloor: 0, kind: 'rain' }, { fromFloor: 12, kind: 'clear' }], landmarksInView: ['plaza'] },
-      { id: 'plaza', name: 'Plaza', site: { x: 0, z: 70 }, buildingType: 'glass', target: 26, require: { minPerfectShare: 0.4 }, windScale: 1.25, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }], landmarksInView: ['plaza'] },
+      { id: 'edge', name: 'Edge estate', site: { x: -190, z: 150 }, buildingType: 'panel', target: 12, require: {}, windScale: 0.8, weather: [{ fromFloor: 0, kind: 'clear' }], landmarksInView: [] },
+      { id: 'park-row', name: 'Park row', site: { x: 150, z: 125 }, buildingType: 'panel', target: 15, require: {}, windScale: 0.9, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 8, kind: 'rain' }], landmarksInView: [] },
+      { id: 'outer-ring', name: 'Outer ring', site: { x: -115, z: -85 }, buildingType: 'hotel', target: 18, require: { maxLivesLost: 2 }, windScale: 1.0, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 9, kind: 'rain' }], landmarksInView: ['clock-tower'] },
+      { id: 'inner-ring', name: 'Inner ring', site: { x: 85, z: -80 }, buildingType: 'office', target: 22, require: { maxLivesLost: 2 }, windScale: 1.1, weather: [{ fromFloor: 0, kind: 'rain' }, { fromFloor: 12, kind: 'clear' }], landmarksInView: ['lantern-bridge', 'clock-tower'] },
+      { id: 'plaza', name: 'Plaza', site: { x: 0, z: 0 }, buildingType: 'glass', target: 26, require: { minPerfectShare: 0.4 }, windScale: 1.25, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }, { fromFloor: 18, kind: 'rain' }], landmarksInView: ['clock-tower', 'lantern-bridge'] },
     ],
   },
 };

@@ -21,7 +21,7 @@ Music.bind(game);
 window.__music = Music;   // director state, log and levels for the browser checks
 window.__sfx = Sfx;
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
-installDebug({ renderer, scene, camera, loadPlot: (n) => game.loadPlot('kosice', DISTRICT_CITIES.find((c) => c.id === 'kosice').district.plots[n].id) });
+installDebug({ renderer, scene, camera, loadPlot: (n, city = 'kosice') => game.loadPlot(city, DISTRICT_CITIES.find((c) => c.id === city).district.plots[n].id) });
 
 applyQuality(); resize(); applyPostQuality();
 window.addEventListener('resize', () => { resize(); resizePost(); });

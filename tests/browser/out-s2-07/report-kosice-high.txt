@@ -1,0 +1,12 @@
+app http://localhost:8000 · level kosice · quality high · 1280x720 dpr 1 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
+flicker depth  menu  max 0.12% mean 0.08% (limit 1.0%) PASS
+flicker depth  game  max 0.46% mean 0.25% (limit 1.0%) PASS
+flicker depth  low   max 0.56% mean 0.26% (limit 1.0%) PASS
+flicker shadow menu  max 0.00% mean 0.00% (limit 0.2%) PASS
+flicker shadow game  max 0.00% mean 0.00% (limit 0.2%) PASS
+flicker shadow low   max 0.00% mean 0.00% (limit 0.2%) PASS
+shot tests/browser/out-s2-07/kosice-high-start.png
+perf p50 16.7 ms · p90 16.7 ms (budget 18) · 60 fps · 634 draw calls · 1852593 triangles PASS
+shot tests/browser/out-s2-07/kosice-high-mid.png (floor 8)
+console errors: none
+RESULT PASS
