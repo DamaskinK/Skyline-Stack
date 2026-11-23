@@ -8,7 +8,7 @@ progress and whether the next city opened.
 **Blocked by:** 01, 02, 03
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan Solution, user stories 9-18.
 
 - [ ] Requirement shown during the run (HUD) and on the result screen (counted / not counted and why).
