@@ -16,7 +16,7 @@ const ids = D.plots.map((p) => p.id);
 
 describe('district data', () => {
   it('has five plots in Kosice and Newtown with the planned targets', () => {
-    expect(D.plots.map((p) => p.target)).toEqual([12, 15, 18, 22, 26]);
+    expect(D.plots.map((p) => p.target)).toEqual([12, 14, 16, 20, 22]);
     expect(need(NEWTOWN.district).plots).toHaveLength(5);
     expect(NEWTOWN.fictional && NEWTOWN.openFromStart).toBe(true);
   });
@@ -33,7 +33,7 @@ describe('district data', () => {
       expect(BUILDING_TYPES[p.buildingType]).toBeTruthy();
       for (const w of p.weather) expect(WEATHER[w.kind]).toBeTruthy();
     }
-    expect(D.plots.map((p) => p.require)).toEqual([{}, {}, { maxLivesLost: 2 }, { maxLivesLost: 2 }, { minPerfectShare: 0.4 }]);
+    expect(D.plots.map((p) => p.require)).toEqual([{}, {}, { maxLivesLost: 2 }, { maxLivesLost: 2 }, { minPerfectShare: 0.3 }]);
     const ws = D.plots.map((p) => p.windScale);
     expect([...ws].sort((a, b) => a - b)).toEqual(ws);
     expect(D.plots[0].buildingType).toBe('panel');
@@ -70,9 +70,9 @@ describe('counting and stars', () => {
     expect(resultCounts(kulturpark, good(18, { livesLost: 2 }))).toBe(true);
     expect(resultCounts(kulturpark, good(18, { livesLost: 3 }))).toBe(false);
   });
-  it('needs 40 % perfect landings at the heart', () => {
-    expect(resultCounts(cathedral, good(26, { perfects: 4 }))).toBe(true);
-    expect(resultCounts(cathedral, good(26, { perfects: 3 }))).toBe(false);
+  it('needs 30 % perfect landings at the heart', () => {
+    expect(resultCounts(cathedral, good(22, { perfects: 3 }))).toBe(true);
+    expect(resultCounts(cathedral, good(22, { perfects: 2 }))).toBe(false);
   });
   it('gives stars only for a counting result and keeps the best', () => {
     expect(plotStars(kulturpark, good(18, { livesLost: 3 }))).toBe(0);
@@ -92,9 +92,9 @@ describe('residents and bonuses', () => {
     expect(towerResidents(D.plots[0], 12)).toBe(12 * 14);
   });
   it('adds +20 % view and the skyline bonus', () => {
-    const base = towerResidents(D.plots[4], 26);
-    expect(towerResidents(D.plots[4], 26, { view: true })).toBe(Math.round(base * (1 + VIEW_BONUS)));
-    expect(towerResidents(D.plots[4], 26, { view: true, skyline: true })).toBe(Math.round(base * (1 + VIEW_BONUS + SKYLINE_BONUS)));
+    const base = towerResidents(D.plots[4], 22);
+    expect(towerResidents(D.plots[4], 22, { view: true })).toBe(Math.round(base * (1 + VIEW_BONUS)));
+    expect(towerResidents(D.plots[4], 22, { view: true, skyline: true })).toBe(Math.round(base * (1 + VIEW_BONUS + SKYLINE_BONUS)));
   });
   it('gives the view only to a tall tower on a plot with a landmark in sight', () => {
     let p = build({}, ids[0], good(12));
@@ -121,7 +121,7 @@ describe('residents and bonuses', () => {
   it('lets the skyline bonus be earned in Kosice, whose plots lie up to 1.3 km apart', () => {
     let p: PlotStates = {}; for (let i = 0; i < 5; i++) p = build(p, ids[i], good(D.plots[i].target));
     expect(ids.some((id) => towerBonuses(D, p, id).skyline)).toBe(true);
-    expect(towerBonuses(D, p, 'juzna').skyline).toBe(true);    // 15 vs 22 floors, 900 m from the Main Street plot
+    expect(towerBonuses(D, p, 'juzna').skyline).toBe(true);    // 14 vs 19 or 22 floors, 900 m from the Main Street plot
   });
 });
 
@@ -136,7 +136,7 @@ describe('goal', () => {
     expect(t.residents).toBe(ids.slice(0, 4).reduce((s, id) => s + p[id].residents, 0));
     expect(goalReached(D, p)).toBe(t.residents >= D.goal);
     expect(t.residents).toBeGreaterThanOrEqual(D.goal);           // four plots are enough for Kosice
-    expect(districtTotals(D, build(build(build({}, ids[0], good(12)), ids[1], good(15)), ids[2], good(18))).residents).toBeLessThan(D.goal);
+    expect(districtTotals(D, build(build(build({}, ids[0], good(12)), ids[1], good(14)), ids[2], good(16))).residents).toBeLessThan(D.goal);
     expect(goalReached(D, build({}, ids[0], good(12)))).toBe(false);
   });
 });

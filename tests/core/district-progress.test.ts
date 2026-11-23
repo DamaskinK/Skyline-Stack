@@ -45,8 +45,8 @@ describe('district progress store', () => {
     const three = cityProgress(migrateFromLevels(emptyDistrictProgress(), oldLevels({ kosice: { stars: 3, bestHeight: 27 } }), 'kosice', D), 'kosice');
     expect(three.plots.cathedral).toMatchObject({ stars: 3, bestHeight: 27, counted: true });
     expect(three.plots.cathedral.residents).toBeGreaterThan(0);
-    const low = cityProgress(migrateFromLevels(emptyDistrictProgress(), oldLevels({ kosice: { stars: 3, bestHeight: 22 } }), 'kosice', D), 'kosice');
-    expect(low.plots.cathedral).toMatchObject({ stars: 3, bestHeight: 22, counted: false });   // the old target (20) is below the plot's 26
+    const low = cityProgress(migrateFromLevels(emptyDistrictProgress(), oldLevels({ kosice: { stars: 3, bestHeight: 20 } }), 'kosice', D), 'kosice');
+    expect(low.plots.cathedral).toMatchObject({ stars: 3, bestHeight: 20, counted: false });   // the old target (20) is below the plot's 22
     expect(Object.keys(c.plots)).toEqual(['cathedral']);
     expect(migrateFromLevels(p, oldLevels({ kosice: { stars: 3, bestHeight: 99 } }), 'kosice', D)).toEqual(p); // never overwrites
     expect(migrateFromLevels(emptyDistrictProgress(), oldLevels({}), 'kosice', D)).toEqual(emptyDistrictProgress());
