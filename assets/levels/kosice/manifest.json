@@ -78,6 +78,12 @@
       "type": "audio",
       "url": "assets/audio/music/kosice.mp3",
       "bytes": 7472358
+    },
+    {
+      "id": "housekit",
+      "type": "gltf",
+      "url": "assets/levels/kosice/housekit.glb",
+      "bytes": 90836
     }
   ]
 }

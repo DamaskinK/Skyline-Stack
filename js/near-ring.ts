@@ -12,12 +12,15 @@ import { settings } from './settings.js';
 import { planNearRing, PLAZA_HALF, PAD_HALF, BASIN_MAX, hash, insideRing, polyArea } from './core/placement.js';
 import type { Circle } from './core/placement.js';
 import { buildTramLine } from './trams.js';
+import { HouseKit, addHouse, addDormers, PANEL_SCHEMES } from './house-kit.js';
+import type { RoofInfo } from './house-kit.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
+const MID_PALETTE = [0xe6e1d6, 0xdcd3c1, 0xe8dcc0, 0xd7c9a8, 0xe3d6c4, 0xd3d8cf];   // 1930s-50s blocks: plaster in pale ochre and grey
 export const ROOF_COLORS = [0xb4573c, 0xa84c36, 0x9a5a44, 0x8a4a3a, 0xc0623f, 0x7d5a4c, 0xb0523a].map((c) => new THREE.Color(c));
 
 // ground heights: every layer a real step above the one below, plus a depth bias for the far distance
@@ -160,7 +163,7 @@ function hullArea(p: number[]): number {
 }
 const convexish = (p: number[], area: number): boolean => area > 12 && area / Math.max(1, hullArea(p)) > 0.86;
 // hip roof over a roughly convex footprint: the ridge runs along the long axis, eave ring at height h
-export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Color, rhFixed = 0, eave = 0): void {
+export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Color, rhFixed = 0, eave = 0): RoofInfo {
   const n = p.length / 2; let cx = 0, cz = 0, sxx = 0, szz = 0, sxz = 0;
   for (let i = 0; i < n; i++) { cx += p[2 * i]; cz += p[2 * i + 1]; } cx /= n; cz /= n;
   for (let i = 0; i < n; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
@@ -196,6 +199,32 @@ export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Col
       b.tri(E[i], E[j], lo(E[j]), nn, uvf, d); b.tri(E[i], lo(E[j]), lo(E[i]), nn, uvf, d);
     }
   }
+  return { cx, cz, ax, hu, hv, rh, rl, h };
+}
+
+
+// Gable roof over a four-cornered footprint (S0004 02): the ridge runs along the long side, eaves 0.45 m, barge 0.2 m, the gable ends are plain plaster (`fill`).
+// Returns the roof for dormers, or null when the footprint is not a rectangle.
+function gableRoof(tiles: Builder, fill: Builder, p: number[], h: number, color: THREE.Color, plaster: THREE.Color): RoofInfo | null {
+  if (p.length !== 8) return null;
+  const l01 = Math.hypot(p[2] - p[0], p[3] - p[1]), l12 = Math.hypot(p[4] - p[2], p[5] - p[3]);
+  if (Math.max(l01, l12) < 1.25 * Math.min(l01, l12) || Math.min(l01, l12) < 5) return null;
+  const long = l01 >= l12 ? 0 : 1, a0 = p[2 * long + 2] - p[2 * long], a1 = p[2 * long + 3] - p[2 * long + 1], al = Math.hypot(a0, a1);
+  const ax: [number, number] = [a0 / al, a1 / al], bx: [number, number] = [-ax[1], ax[0]];
+  let cx = 0, cz = 0; for (let i = 0; i < 4; i++) { cx += p[2 * i] / 4; cz += p[2 * i + 1] / 4; }
+  let hu = 0, hv = 0; for (let i = 0; i < 4; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; hu = Math.max(hu, Math.abs(dx * ax[0] + dz * ax[1])); hv = Math.max(hv, Math.abs(dx * bx[0] + dz * bx[1])); }
+  const rh = Math.min(4.4, Math.max(2.2, hv * 0.62)), ev = hv + 0.45, eu = hu + 0.2, uvf: UvFn = (q) => [q[0] / 4, q[2] / 4];
+  const P = (u: number, v: number, y: number): Vec => [cx + ax[0] * u + bx[0] * v, y, cz + ax[1] * u + bx[1] * v];
+  for (const s of [-1, 1]) {
+    const nrm = [bx[0] * s * rh, ev, bx[1] * s * rh], nl = Math.hypot(nrm[0], nrm[1], nrm[2]), n: Vec = [nrm[0] / nl, nrm[1] / nl, nrm[2] / nl];
+    const e0 = P(-eu, s * ev, h - 0.15), e1 = P(eu, s * ev, h - 0.15), r0 = P(-eu, 0, h + rh + 0.2 * rh / ev), r1 = P(eu, 0, h + rh + 0.2 * rh / ev);
+    tiles.tri(e0, e1, r1, n, uvf, color); tiles.tri(e0, r1, r0, n, uvf, color);
+  }
+  for (const s of [-1, 1]) {                                  // gable triangles in the wall plane
+    const A = P(s * hu, -hv, h), B = P(s * hu, hv, h), C = P(s * hu, 0, h + rh);
+    fill.tri(A, B, C, [ax[0] * s, 0, ax[1] * s], (q) => [q[0] + q[2], q[1]], plaster);
+  }
+  return { cx, cz, ax, hu: hu + 0.4, hv, rh, rl: hu - 0.2, h };
 }
 
 // A box that sticks out of a wall: `u0..u1` along the wall from its start (unit vector t), `y0..y1` up, `out` metres along the outward normal n.
@@ -277,8 +306,13 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // Historic centre (small footprints, no tall height tag): 2-4 storey baroque / classicist houses, pastel plaster, red hip roofs.
   // Everything larger or taller: plain calm facade, flat roof.
   const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder();
-  const frameR = settings.quality === 'low' ? 75 : 110;     // window frames only where the camera can see them; cornices and plinths everywhere
+  const spots: Record<string, { x: number; z: number; h: number; storeys: number; d: number }> = {}; group.userData.houseSpots = spots;     // nearest house of each style (screenshot poses)
+  const frameR = settings.quality === 'low' ? 75 : 110, kitR = settings.quality === 'low' ? 32 : 48;     // window frames only where the camera can see them; cornices and plinths everywhere
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
+  // S0004 02: houses are assembled from the Blender module kit (js/house-kit.ts); `?houses=procedural` or a kit that failed to load keeps the procedural facades
+  const hk = new URLSearchParams(location.search).get('houses') === 'procedural' ? null : HouseKit.from(kit.housekit as THREE.Object3D | undefined);
+  const fill = new Builder();                                // plain wall for edges too short for a bay, and gable ends
+  const shadowWalls = new Builder();                         // walls pushed 0.9 m into the house: the modules do not cast shadows, this does (invisible in the colour pass)
   const wallB = (kind: string, v: number): Builder => { const k = kind + v; let e = walls.get(k); if (!e) { e = { kind, v, b: new Builder() }; walls.set(k, e); } return e.b; };
   for (const site of plan.site.buildings) {                  // the footprints that stand: none near the tower, none on top of another (js/core/placement.ts)
     const bd = osm.buildings[site.i], p = bd.p, n = p.length / 2;
@@ -294,6 +328,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     else if (old) storeys = bh >= 3 ? Math.min(6, Math.max(2, Math.round(bh / STOREY_H))) : 2 + Math.floor(hv * 3);
     else storeys = Math.min(20, Math.max(2, Math.round((bh >= 3 ? bh : 9 + hv * 8) / STOREY_H)));
     const h = storeys * STOREY_H;
+    { const kind = old ? 'old' : panel ? 'panel' : 'mid', d0 = Math.hypot(cx, cz), cur = spots[kind]; if (d0 > 30 && (!cur || d0 < cur.d)) spots[kind] = { x: cx, z: cz, h, storeys, d: d0 }; }
     const v = Math.floor(hv * 1000) % OLD_PALETTE.length;
     const W = old ? wallB('old', bd.k === 'church' ? 99 : v) : wallB('plain', Math.floor(hv * 977) % PLAIN_PALETTE.length);
     const pitched = old && area < 1500 && convexish(p, area), wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
@@ -301,6 +336,32 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     tint.setRGB(shade * (1 + warm), shade, shade * (1 - warm));
     band.setHex(bd.k === 'church' ? 0xdad3c3 : old ? OLD_PALETTE[v] : PLAIN_PALETTE[Math.floor(hv * 977) % PLAIN_PALETTE.length]).multiplyScalar(1.06 * shade);
     const sign = polyArea(p) >= 0 ? 1 : -1;                    // outward normal of edge d is (dz, -dx) for counter-clockwise rings
+    if (hk) {
+      const sc = Math.floor(hv * 733) % PANEL_SCHEMES.length;
+      const base = old ? OLD_PALETTE[v] : panel ? PANEL_SCHEMES[sc][0] : MID_PALETTE[Math.floor(hv * 977) % MID_PALETTE.length];
+      const plaster = new THREE.Color(base).multiply(tint), roofCol = ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length];
+      const accent = old ? roofCol : new THREE.Color(PANEL_SCHEMES[sc][1]);
+      const short = addHouse(hk, { p, sign, style: old ? 'old' : panel ? 'panel' : 'mid', storeys, h, pitched: pitched && old, near: dist < kitR, plaster, accent, seed: hv, loggia: hash(cz * 1.3, cx) > 0.5, gate: hash(cx * 2.1, cz) > 0.45 });
+      {                                                      // shadow proxy: the footprint ring pushed inwards along the mitred normals (deeper than the loggias)
+        const q: number[] = [];
+        for (let i = 0; i < n; i++) {
+          const a = (i + n - 1) % n, j = (i + 1) % n, e1x = p[2 * i] - p[2 * a], e1z = p[2 * i + 1] - p[2 * a + 1], e2x = p[2 * j] - p[2 * i], e2z = p[2 * j + 1] - p[2 * i + 1];
+          const l1 = Math.hypot(e1x, e1z) || 1, l2 = Math.hypot(e2x, e2z) || 1, n1x = e1z / l1 * sign, n1z = -e1x / l1 * sign, n2x = e2z / l2 * sign, n2z = -e2x / l2 * sign;
+          const k = 0.9 / Math.max(0.35, 1 + n1x * n2x + n1z * n2z);
+          q.push(p[2 * i] - (n1x + n2x) * k, p[2 * i + 1] - (n1z + n2z) * k);
+        }
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n, ex = q[2 * j] - q[2 * i], ez = q[2 * j + 1] - q[2 * i + 1], l = Math.hypot(ex, ez); if (l < 0.05) continue;
+          const nn = [ez / l * sign, 0, -ex / l * sign], A = [q[2 * i], 0, q[2 * i + 1]], B = [q[2 * j], 0, q[2 * j + 1]], C = [q[2 * j], h, q[2 * j + 1]], D = [q[2 * i], h, q[2 * i + 1]];
+          shadowWalls.tri(A, B, C, nn, () => [0, 0]); shadowWalls.tri(A, C, D, nn, () => [0, 0]);
+        }
+      }
+      for (const e of short) {                                // a stub of wall between two corners: flat plaster
+        const l = Math.hypot(e.x1 - e.x0, e.z1 - e.z0), nn = [(e.z1 - e.z0) / l * sign, 0, -(e.x1 - e.x0) / l * sign], uf: UvFn = (q) => [Math.hypot(q[0] - e.x0, q[2] - e.z0), q[1]];
+        const A = [e.x0, 0, e.z0], B = [e.x1, 0, e.z1], C = [e.x1, h, e.z1], D = [e.x0, h, e.z0];
+        fill.tri(A, B, C, nn, uf, plaster); fill.tri(A, C, D, nn, uf, plaster);
+      }
+    } else {
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n, x0 = p[2 * i], z0 = p[2 * i + 1], x1 = p[2 * j], z1 = p[2 * j + 1], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz);
       if (l < 0.05) continue;
@@ -330,11 +391,22 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
         }
       }
     }
-    if (pitched) pitchedRoof(tiles, p, h, ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], 0, 0.5);
-    else {
-      fillPoly(flats, p, h, 8);
-      for (let i = 0; i < n; i++) { const j = (i + 1) % n; stripe(relief, p[2 * i], p[2 * i + 1], p[2 * j], p[2 * j + 1], 0.22, h, h + 0.5, band); }   // parapet
     }
+    if (pitched) {
+      const rc = ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
+      const roof = (hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null) ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
+      if (hk && dist < kitR) addDormers(hk, roof, rc, plasterC, hv);
+    } else {
+      fillPoly(flats, p, h, 8);
+      if (!hk) for (let i = 0; i < n; i++) { const j = (i + 1) % n; stripe(relief, p[2 * i], p[2 * i + 1], p[2 * j], p[2 * j + 1], 0.22, h, h + 0.5, band); }   // parapet
+    }
+  }
+  if (hk) {
+    group.userData.houseModules = hk.count;
+    hk.build(group);
+    mesh(fill, material(null, { vertexColors: true, roughness: 0.93, ...surface('plaster', [0.4, 0.4], 0.5) }), group, true);
+    const sw = mesh(shadowWalls, material(null, { colorWrite: false, depthWrite: false, shadowSide: THREE.DoubleSide }), group, true);
+    if (sw) { sw.receiveShadow = false; sw.name = 'house-shadow'; }
   }
   for (const { kind, v, b } of walls.values()) {
     if (b.empty) continue;

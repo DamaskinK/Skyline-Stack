@@ -86,5 +86,18 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
     return { middle, counts: a.counts, byCategory: a.byCategory, planByCategory: a.planFindings, mismatches: a.mismatches, sample: a.findings.slice(0, 8) };
   }
 
-  window.__debug = { snap, flicker, info, loadPlot, placementAudit };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
+  const houseSpots = () => scene.getObjectByName('near-ring')?.userData.houseSpots ?? {};   // nearest old-town / panel / in-between house (S0004 02 screenshot poses)
+  // instanced house modules of the near ring: meshes (draw calls, without the shadow pass), instances and triangles per module type
+  function houseStats() {
+    const near = scene.getObjectByName('near-ring'), per: Record<string, { n: number; tris: number }> = {}; let meshes = 0, tris = 0;
+    near?.traverse((o) => {
+      const im = o as THREE.InstancedMesh; if (!im.isInstancedMesh || !im.name.includes(':')) return;
+      const t = (im.geometry.index ? im.geometry.index.count : im.geometry.attributes.position.count) / 3 * im.count, k = im.name.split(':')[0];
+      meshes++; tris += t; (per[k] ??= { n: im.count, tris: 0 }).tris += t;
+    });
+    return { meshes, tris, per };
+  }
+  // hide the house module meshes whose name matches `re` (for example 'far:glass'); an empty pattern shows all again
+  const hideModules = (re: string) => { const r = re ? new RegExp(re) : null; scene.getObjectByName('near-ring')?.traverse((o) => { if (o.name.includes(':') && (o as THREE.InstancedMesh).isInstancedMesh) o.visible = !(r && r.test(o.name)); }); };
+  window.__debug = { snap, flicker, info, loadPlot, placementAudit, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }

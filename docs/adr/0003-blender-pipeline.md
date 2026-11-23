@@ -41,3 +41,10 @@ that must change at run time.
 - The decimated LODs are cleaned (degenerate faces dissolved, `Mesh.validate`) before export: the "mesh not valid" exporter warning is gone.
 - Game side: `js/landmarks/kosice.ts` loads every model through one `blenderModel(id)`; materials without an emission map get a flat warm night tint by name (`_tiles`, `_stone`).
   `?landmarks=procedural` keeps the procedural parts for all of them.
+
+## Update 2026-11-23 (S0004 02): house kit
+- `scripts/blender/housekit.py` builds `assets/levels/kosice/housekit.glb`: 26 small modules (one 3 m bay, one 3.4 m storey) in three kits (old town, panel block, in-between) plus a flat `_far` partner each.
+  No bake, no atlas: material classes (`kit_plaster`, `kit_accent` tinted per instance, `kit_detail` and `kit_glass` with vertex colours and a hand-set occlusion), UVs in metres.
+- `js/house-kit.ts` instances them along every footprint edge (one InstancedMesh per module and class, about 40 draw calls per plot); `js/near-ring.ts` keeps hip roofs (new: gable roofs, dormers) and draws the shadow from an
+  invisible proxy of the walls, because modules do not cast shadows. Detail radius 48 m (High) / 32 m (Low); beyond it the flat plates. `?houses=procedural` keeps the old facades.
+- Lessons: no coplanar faces closer than 3 cm (flicker check), flat strips instead of 5 cm deep frame bars, an interior wall behind every module so a camera inside a footprint sees a plain wall.
