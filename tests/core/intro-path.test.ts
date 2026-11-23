@@ -21,6 +21,13 @@ describe('intro path', () => {
     let prev = introPose(keys, 0);
     for (let i = 1; i <= 400; i++) { const q = introPose(keys, i / 400); expect(Math.hypot(...q.p.map((v, c) => v - prev.p[c]))).toBeLessThan(8); prev = q; }
   });
+  it('keeps a postcard distance from every landmark, high enough to look down on it', () => {
+    const cases = [[{ x: 47.4, z: 81.4 }, { x: -15.9, z: -82.6 }], [{ x: -29.7, z: -83.4 }, { x: -93, z: -247.4 }], [{ x: 47.4, z: 81.4 }]]   // real Kosice plots 4, 3 and 2;
+    for (const sp of cases) for (const k of introKeys(start, sp, end).slice(1, -1)) {
+      for (const s of sp) expect(Math.hypot(k.p[0] - s.x, k.p[2] - s.z)).toBeGreaterThanOrEqual(60);
+      expect(k.p[1]).toBeGreaterThan(k.l[1] + 15);
+    }
+  });
   it('works without landmarks and is the same every time', () => {
     const k = introKeys(start, [], end);
     expect(k.length).toBe(3);

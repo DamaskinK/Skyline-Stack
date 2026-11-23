@@ -7,10 +7,12 @@ export interface Spot { x: number; z: number }
 const HOLD = 1.6, PER_SPOT = 2.4, MAX = 9;   // seconds: first move, per landmark, never longer than this
 export const introDuration = (spots: number): number => Math.min(MAX, HOLD + 2.2 + PER_SPOT * spots);
 
-// A viewpoint beside a landmark: 55 m away, on the plot's side but turned 35 degrees (alternating) so the tower is not in the way.
-function viewOf(s: Spot, i: number): Pose {
+// Postcard viewpoint for a landmark: 120 m away on the plot's side (so the camera floats over the plot and the landmark fills the middle of the picture),
+// turned 35 degrees (alternating) so the plot and the landmark are seen at an angle, 46 m up so the roofs and the spire are seen from above, never from inside.
+export const VIEW_DIST = 120, VIEW_H = 46, VIEW_LOOK_H = 26;
+export function viewOf(s: Spot, i: number): Pose {
   const len = Math.hypot(s.x, s.z) || 1, a = Math.atan2(-s.z / len, -s.x / len) + (i % 2 ? -1 : 1) * 0.61;
-  return { p: [s.x + Math.cos(a) * 55, 26, s.z + Math.sin(a) * 55], l: [s.x, 14, s.z] };
+  return { p: [s.x + Math.cos(a) * VIEW_DIST, VIEW_H, s.z + Math.sin(a) * VIEW_DIST], l: [s.x, VIEW_LOOK_H, s.z] };
 }
 
 export function introKeys(start: Pose, spots: Spot[], end: Pose): Pose[] {

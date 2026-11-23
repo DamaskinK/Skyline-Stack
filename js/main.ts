@@ -40,7 +40,8 @@ const $flash = document.getElementById('flash') as HTMLElement, $vig = document.
 const camOffsets = CAM_OFFSETS.map((o) => new THREE.Vector3(...o));
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
-let clock = 0, camY = 8;
+let clock = 0, camY = 8, fovGoal = 50;
+const CFG_LOW_LIFT = 5, CFG_LOW_FOV = 8;   // metres the look-at point rises and degrees the field of view opens at floor 0, fading out by floor 10
 
 function render(rdt: number) {
   clock += rdt;
@@ -87,9 +88,14 @@ function render(rdt: number) {
     camY += (targetY - camY) * Math.min(1, rdt * 2.5);
     const off = !T ? tmpOff.set(30, 34, 44) : camOffsets[game.camMode];
     camPos.lerp(tmpTarget.set(cx, camY, cz).add(off), Math.min(1, rdt * 3));
-    tmpLook.set(cx, camY - (T ? 0.5 : 6), cz);
+    // low tower: look a little higher and open the field of view, so the skyline and the cathedral spire are not cut off at floor 0
+    const low = T && game.camMode < 2 ? Math.max(0, 1 - T.n / 10) : 0;
+    tmpLook.set(cx, camY - (T ? 0.5 : 6) + CFG_LOW_LIFT * low, cz);
+    fovGoal = 50 + CFG_LOW_FOV * low;
   }
   if (!game.intro) camLook.lerp(tmpLook, Math.min(1, rdt * 3));
+  if (game.intro || game.state === 'menu') fovGoal = 50;
+  if (Math.abs(camera.fov - fovGoal) > 0.01) { camera.fov += (fovGoal - camera.fov) * Math.min(1, rdt * 3); camera.updateProjectionMatrix(); }
   camera.position.copy(camPos);
   if (game.shake > 0) {
     game.shake -= rdt;
