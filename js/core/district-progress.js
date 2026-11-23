@@ -1,6 +1,6 @@
 // District progress as pure functions (storage lives in js/settings.js). One object for all cities:
 // { v: 2, cities: { [cityId]: { plots: { [plotId]: { stars, bestHeight, residents, counted } }, opened, goalReached } } }
-import { emptyPlot, recordPlot, plotResidents, goalReached } from './district.js';
+import { emptyPlot, recordPlot, plotResidents, goalReached, resultCounts } from './district.js';
 
 export const emptyDistrictProgress = () => ({ v: 2, cities: {} });
 export const emptyCity = () => ({ plots: {}, opened: false, goalReached: false });
@@ -42,14 +42,16 @@ export function recordCityPlot(progress, cityId, district, plotId, result, nextC
 }
 
 // Carry S0001 Kosice level progress (sanitised { levels: { kosice: { stars, bestHeight } } }) onto the last plot
-// (the cathedral, the S0001 site). Only when the district progress has no Kosice entry yet; stars >= 1 counts as counted.
+// (the cathedral, the S0001 site). Only when the district progress has no Kosice entry yet. Stars and best height are kept; `counted`
+// follows the plot's own rules (resultCounts) on a result rebuilt from the S0001 stars: 1 = reached (here: best height >= the plot's target),
+// 2 = and at most one life lost, 3 = and half the landings perfect. What the stars do not say (perfect share below 3 stars) counts against.
 export function migrateFromLevels(progress, oldProgress, cityId, district) {
   const p = sanitizeDistrict(JSON.parse(JSON.stringify(progress)));
   const old = oldProgress && oldProgress.levels && oldProgress.levels[cityId];
   if (p.cities[cityId] || !old || !(old.stars > 0 || old.bestHeight > 0)) return p;
   const last = district.plots[district.plots.length - 1];
   const city = emptyCity();
-  city.plots[last.id] = { ...emptyPlot(), stars: Math.min(3, Math.max(0, old.stars)), bestHeight: Math.max(0, old.bestHeight), counted: old.stars >= 1 };
+  city.plots[last.id] = { ...emptyPlot(), stars: Math.min(3, Math.max(0, old.stars)), bestHeight: Math.max(0, old.bestHeight), counted: resultCounts(last, { height: old.bestHeight, reached: old.stars >= 1 && old.bestHeight >= last.target, livesLost: old.stars >= 2 ? 0 : 9, perfects: old.stars >= 3 ? 1 : 0, landings: 1 }) };
   city.plots[last.id].residents = plotResidents(district, city.plots, last.id);
   city.opened = true;
   city.goalReached = goalReached(district, city.plots);

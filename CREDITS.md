@@ -13,7 +13,7 @@ Every external file used by the game, with its source and licence. Add a row whe
 | Music "Calm Ambient 1 (Synthwave 4k)" | cynicmusic | https://opengameart.org/node/97098 | CC0 (author asks for credit, not required: "The Cynic Project / cynicmusic.com / pixelsphere.org") | menu track (`assets/audio/music/menu.mp3`) |
 | Music "Folk Round" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100357 | CC-BY 4.0 | Kosice track (`assets/audio/music/kosice.mp3`) |
 | Music "Dvorak Polka" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100249 | CC-BY 4.0 | Prague track (`prague.mp3`, not wired yet) |
-| Music "Empacotatron" | Fupi | https://opengameart.org/node/180427 | CC0 | Berlin track (`berlin.ogg`, not wired yet) |
+| Music "Empacotatron" | Fupi | https://opengameart.org/node/180427 | CC0 | Newtown track (`assets/audio/music/newtown.mp3`, the OGG original mixed down to MP3 for Safari) |
 | Music "Desert City" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100564 | CC-BY 4.0 | Dubai track (`dubai.mp3`, not wired yet) |
 | Music "Jazz Brunch" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700074 | CC-BY 4.0 | New York track (`new-york.mp3`, not wired yet) |
 | Music "Neon Laser Horizon" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2000023 | CC-BY 4.0 | Tokyo track (`tokyo.mp3`, not wired yet) |
@@ -28,6 +28,8 @@ Every external file used by the game, with its source and licence. Add a row whe
 | Texture "White Plaster Rough 01" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/white_plaster_rough_01 | CC0 | Kosice house walls (`assets/textures/`) |
 | Texture "Roof Tiles 14" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/roof_tiles_14 | CC0 | Kosice pitched roofs (`assets/textures/`) |
 | Texture "Sandstone Blocks 08" (normal and roughness maps, 1k resized to 512) | Poly Haven authors | https://polyhaven.com/a/sandstone_blocks_08 | CC0 | St Elisabeth cathedral stone (`assets/textures/`) |
+| Draco decoder (`draco_decoder.wasm/.js`, wrapper) and `DRACOLoader`, from three@0.160.0 `examples/jsm` | Google, three.js authors | https://github.com/google/draco, vendored by `scripts/vendor-addons.mjs` | Apache-2.0 (decoder), MIT (loader) | decoding Draco-compressed GLB models (`vendor/draco/`) |
+| St. Elisabeth Cathedral model (own work, built by `scripts/blender/cathedral.py`) | project | n/a | project | `assets/levels/kosice/cathedral.glb` |
 
 ## Credit lines to show on the credits screen (CC-BY 4.0)
 
@@ -59,5 +61,3 @@ http://creativecommons.org/licenses/by/4.0/
 
 The menu track asks for an optional credit: The Cynic Project / cynicmusic.com / pixelsphere.org (CC0, not required).
 UI clicks stay synthesised in code (no Kenney files were downloaded). The collapse sound is built in code from Low Thud plus synthesis.
-| Draco decoder (`draco_decoder.wasm/.js`, wrapper) and `DRACOLoader`, from three@0.160.0 `examples/jsm` | Google, three.js authors | https://github.com/google/draco, vendored by `scripts/vendor-addons.mjs` | Apache-2.0 (decoder), MIT (loader) | decoding Draco-compressed GLB models (`vendor/draco/`) |
-| St. Elisabeth Cathedral model (own work, built by `scripts/blender/cathedral.py`) | project | n/a | project | `assets/levels/kosice/cathedral.glb` |

@@ -1,6 +1,7 @@
 {
   "level": "newtown",
   "assets": [
-    { "id": "sky", "type": "hdri", "url": "assets/levels/kosice/sky_1k.hdr", "bytes": 1435119 }
+    { "id": "sky", "type": "hdri", "url": "assets/levels/kosice/sky_1k.hdr", "bytes": 1435119 },
+    { "id": "music", "type": "audio", "url": "assets/audio/music/newtown.mp3", "bytes": 1615245 }
   ]
 }

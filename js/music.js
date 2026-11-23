@@ -14,7 +14,7 @@ import { settings } from './settings.js';
 // Tempo (bpm) and tonic (0 = C) per track, estimated from the audio; they set the tension layer.
 export const TRACKS = {
   menu: { bpm: 73, root: 5 }, kosice: { bpm: 98, root: 2 }, prague: { bpm: 115, root: 9 },
-  tokyo: { bpm: 160, root: 1 },
+  tokyo: { bpm: 160, root: 1 }, newtown: { bpm: 168, root: 5 },
 };
 export const STATES = {
   menu:    { g: 0.8,  lp: 12000, tension: 0 },

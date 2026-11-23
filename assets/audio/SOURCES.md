@@ -4,7 +4,7 @@ One line per downloaded file. Licence values are copied from docs/research/music
 Kevin MacLeod tracks (CC-BY 4.0) need the credit line from the research file. The Freesound CC-BY 4.0 sound needs its credit line too.
 
 - music/menu.mp3 | Calm Ambient 1 (Synthwave 4k) | cynicmusic | https://opengameart.org/node/97098 | CC0 (author asks for credit, not required) | 2527398 bytes
-- music/berlin.ogg | Empacotatron (full track) | Fupi | https://opengameart.org/node/180427 | CC0 | 1569070 bytes
+- music/newtown.mp3 | Empacotatron (full track, the original OGG mixed down to MP3 for Safari with scripts/blender/ogg_to_mp3.py) | Fupi | https://opengameart.org/node/180427 | CC0 | 1615245 bytes
 - music/kosice.mp3 | Folk Round | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100357 | CC-BY 4.0 | 7472358 bytes
 - music/prague.mp3 | Dvorak Polka | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100249 | CC-BY 4.0 | 3865971 bytes
 - music/dubai.mp3 | Desert City | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100564 | CC-BY 4.0 | 3679550 bytes

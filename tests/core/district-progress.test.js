@@ -38,8 +38,12 @@ describe('district progress store', () => {
     const old = { v: 1, levels: { kosice: { stars: 2, bestHeight: 27 }, prague: { stars: 1, bestHeight: 5 } }, opened: [], endless: {} };
     const p = migrateFromLevels(emptyDistrictProgress(), old, 'kosice', D);
     const c = cityProgress(p, 'kosice');
-    expect(c.plots.cathedral).toMatchObject({ stars: 2, bestHeight: 27, counted: true });
-    expect(c.plots.cathedral.residents).toBeGreaterThan(0);
+    expect(c.plots.cathedral).toMatchObject({ stars: 2, bestHeight: 27, counted: false, residents: 0 });   // 2 stars say nothing of the 40 % perfect rule
+    const three = cityProgress(migrateFromLevels(emptyDistrictProgress(), { levels: { kosice: { stars: 3, bestHeight: 27 } } }, 'kosice', D), 'kosice');
+    expect(three.plots.cathedral).toMatchObject({ stars: 3, bestHeight: 27, counted: true });
+    expect(three.plots.cathedral.residents).toBeGreaterThan(0);
+    const low = cityProgress(migrateFromLevels(emptyDistrictProgress(), { levels: { kosice: { stars: 3, bestHeight: 22 } } }, 'kosice', D), 'kosice');
+    expect(low.plots.cathedral).toMatchObject({ stars: 3, bestHeight: 22, counted: false });   // the old target (20) is below the plot's 26
     expect(Object.keys(c.plots)).toEqual(['cathedral']);
     expect(migrateFromLevels(p, { levels: { kosice: { stars: 3, bestHeight: 99 } } }, 'kosice', D)).toEqual(p); // never overwrites
     expect(migrateFromLevels(emptyDistrictProgress(), { levels: {} }, 'kosice', D)).toEqual(emptyDistrictProgress());
