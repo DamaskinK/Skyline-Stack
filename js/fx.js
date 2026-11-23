@@ -1,7 +1,7 @@
 // Particle effects, weather particles, lightning, and the residents who move into each new floor.
 import * as THREE from 'three';
 import { CFG } from './config.js';
-import { scene, mergeColored } from './world.js';
+import { scene, mergeColored, traffic } from './world.js';
 import { puffTex, starTex, canvas2d, toTex } from './textures.js';
 import { settings } from './settings.js';
 import { styleFor, skinFor, dressForCold } from './people/styles.js';
@@ -232,9 +232,25 @@ function along(r, s) {                                    // point and unit dire
   return [x0 + (x1 - x0) * f, z0 + (z1 - z0) * f, (x1 - x0) / l, (z1 - z0) / l];
 }
 
+// Life density (S0002 06): the quality preset sets the most that can be out, the finished plots of the district (0-5) set how much of it is.
+const MAX_LIFE = {     // walkers, seated, standing spots, cyclists, dog walkers, cars at 5 finished plots
+  low: { walkers: 14, sit: 3, stand: 3, bikes: 3, dogs: 1, cars: 14 },
+  medium: { walkers: 26, sit: 6, stand: 5, bikes: 5, dogs: 2, cars: 28 },
+  high: { walkers: 36, sit: 8, stand: 7, bikes: 7, dogs: 3, cars: 40 },
+};
+const LIFE_SHARE = [0.3, 0.45, 0.62, 0.78, 0.9, 1];     // share of the maximum at 0..5 finished plots
+export function lifeCount(kind, plots, quality = settings.quality) {
+  const max = (MAX_LIFE[quality] || MAX_LIFE.high)[kind], share = LIFE_SHARE[Math.max(0, Math.min(5, Math.round(plots)))];
+  return Math.max(kind === 'dogs' ? (plots >= 2 ? 1 : 0) : 1, Math.round(max * share));
+}
+
+function place2(P, spot) {            // a person standing still at a spot (vendor, customer, musician, listener)
+  const p = makePerson(false); p.userData.u.uAmp.value = 0; p.userData.u.uPhase.value = 0;
+  p.position.set(spot.x, 0.05, spot.z); p.rotation.set(spot.tilt || 0, spot.rot, 0); P.folk.push({ p }); return p;
+}
 const _right = new THREE.Vector3(), _p = new THREE.Vector3();
 export const People = {
-  flyers: [], walkers: [], side: 1, routes: [], life: null, folk: [], cyclists: [], blockers: [],
+  flyers: [], walkers: [], side: 1, routes: [], life: null, folk: [], cyclists: [], blockers: [], progress: 2, musicians: [], notes: 0,
   // OpenStreetMap levels: street walkers follow the real streets and footpaths (items { p: flat [x, z, ...], off: metres from the centre line }) instead of the procedural grid.
   setRoutes(list) {
     this.life = list.life || null;          // seats, standing spots, bike routes and basins from the near ring (street-life.js)
@@ -245,24 +261,33 @@ export const People = {
       return { p, off, cum, len: cum[cum.length - 1] };
     }).filter((r) => r.len > 25);
   },
+  // Finished plots of the district (0-5): more people, cars, open shops, market stalls and musicians. Rebuilds the street life when it changed.
+  setDistrictLife(plots) {
+    const n = Math.max(0, Math.min(5, Math.round(plots)));
+    if (n === this.progress) return;
+    this.progress = n; this.applyTraffic();
+    if (this.walkers.length) this.setWalkers(9); else this.buildLife();
+  },
+  applyTraffic() { traffic.setCount(lifeCount('cars', this.progress)); },
   // The city whose clothes people wear (a level id from levels.js); people already walking get new outfits.
   setCity(id) { if (id === city) return; city = id; for (const w of this.walkers) redress(w.p); for (const f of this.folk) redress(f.p); for (const c of this.cyclists) redress(c.rider); },
   // People who sit on benches, stand and chat, and cyclists on the bike lanes; counts follow the quality preset.
   buildLife() {
     this.clearLife();
     const L = this.life; if (!L) return;
-    const lo = settings.quality === 'low', pick = (a, n) => a.filter((q) => Math.hypot(q.x, q.z) < 130).sort((u, v) => Math.hypot(u.x, u.z) - Math.hypot(v.x, v.z)).filter((_, i) => i % 2 === 0 || n > 6).slice(0, n);
+    const n = this.progress, pick = (a, n) => a.filter((q) => Math.hypot(q.x, q.z) < 130).sort((u, v) => Math.hypot(u.x, u.z) - Math.hypot(v.x, v.z)).filter((_, i) => i % 2 === 0 || n > 6).slice(0, n);
     const place = (spot, sit) => {
       const p = makePerson(false, sit ? { sit: true } : null); p.userData.u.uAmp.value = 0; p.userData.u.uPhase.value = 0;
       p.position.set(spot.x, (spot.y ?? 0.05) + (sit ? SIT_DROP : 0), spot.z); p.rotation.y = spot.rot; this.folk.push({ p }); return p;
     };
-    for (const s of pick(L.sit, lo ? 3 : 8)) place(s, true);
-    for (const s of pick(L.stand, lo ? 3 : 7)) {
+    L.events?.setProgress(n);
+    for (const s of pick(L.sit, lifeCount('sit', n))) place(s, true);
+    for (const s of pick(L.stand, lifeCount('stand', n))) {
       place({ ...s, y: 0.05 }, false);
       if (s.mate) { const q = place({ x: s.x + Math.sin(s.rot) * 0.9, z: s.z + Math.cos(s.rot) * 0.9, rot: s.rot + Math.PI, y: 0.05 }, false); q.rotation.y += (Math.random() - 0.5) * 0.5; }
     }
     const routes = L.bikeRoutes.map((r) => ({ ...polyRoute(r.p), d: r.d })).filter((r) => r.len > 20 && r.d < 150).sort((a, b) => a.d - b.d);
-    const nb = lo ? 3 : 7;
+    const nb = lifeCount('bikes', n);
     for (let i = 0; routes.length && i < nb; i++) {
       const r = routes[i % routes.length], g = new THREE.Group(), bike = new THREE.Mesh(bikeGeo(rnd(BIKE_COLORS)), bikeMat); bike.castShadow = true; g.add(bike);
       const rider = makePerson(false, { noRobe: true }), pivot = new THREE.Group(); rider.scale.setScalar(1); rider.position.set(0, -0.62, 0); rider.userData.body.castShadow = true;
@@ -270,9 +295,24 @@ export const People = {
       g.scale.setScalar(1.2); scene.add(g);
       this.cyclists.push({ g, rider, r, s: nearestS(r, i), d: i % 2 ? 1 : -1, v: 3 + (i % 3) * 0.6, ph: Math.random() * 6 });
     }
+    this.buildEvents();
+  },
+  // Vendors and customers at the open market stalls, a musician with an audience
+  buildEvents() {
+    const E = this.life?.events; if (!E) return;
+    E.stalls.slice(0, E.shown.stalls).forEach((st, i) => {
+      const bx = Math.sin(st.rot), bz = Math.cos(st.rot);               // front of the stall (customers side)
+      place2(this, { x: st.x - bx * 0.55, z: st.z - bz * 0.55, rot: st.rot });
+      if (i % 2 === 0) place2(this, { x: st.x + bx * 1.2, z: st.z + bz * 1.2, rot: st.rot + Math.PI + (Math.random() - 0.5) * 0.4 });
+    });
+    this.musicians = E.musicians.slice(0, E.shown.musicians).map((m, i) => {
+      const fx = Math.sin(m.rot), fz = Math.cos(m.rot), p = place2(this, { x: m.x - fx * 0.9, z: m.z - fz * 0.9, rot: m.rot, tilt: 0.06 });
+      for (let k = 0; k < 3; k++) { const a = (k - 1) * 0.7, d = 3.2 + (k % 2) * 0.6; place2(this, { x: m.x - fx * 0.9 + Math.sin(m.rot + a) * d, z: m.z - fz * 0.9 + Math.cos(m.rot + a) * d, rot: m.rot + a + Math.PI + (Math.random() - 0.5) * 0.3 }); }
+      return { x: m.x - fx * 0.9, z: m.z - fz * 0.9, t: i * 1.7 };
+    });
   },
   clearLife() {
-    for (const f of this.folk) removePerson(f.p); this.folk = [];
+    for (const f of this.folk) removePerson(f.p); this.folk = []; this.musicians = [];
     for (const c of this.cyclists) { scene.remove(c.g); c.rider.userData.body.geometry.dispose(); c.rider.userData.body.material.dispose(); } this.cyclists = [];
   },
   // Residents glide in with umbrellas from the upper left or right, away from the drop zone, and step in through the side of the new floor.
@@ -289,12 +329,12 @@ export const People = {
   setWalkers(radius) {
     for (const w of this.walkers) { removePerson(w.p); if (w.dog) scene.remove(w.dog); }
     this.walkers = []; let dogs = 0;
-    this.buildLife();
-    const n = settings.quality === 'low' ? 12 : 26;
+    this.buildLife(); this.applyTraffic();
+    const n = lifeCount('walkers', this.progress);
     for (let i = 0; i < n; i++) {
       const p = makePerson(false);
       const kind = i % 3 === 0 ? 'street' : 'plaza';
-      const dogW = kind === 'street' && this.routes.length && dogs < (settings.quality === 'low' ? 1 : 3) ? (dogs++, dog()) : null;
+      const dogW = kind === 'street' && this.routes.length && dogs < lifeCount('dogs', this.progress) ? (dogs++, dog()) : null;
       this.walkers.push({ p, dog: dogW, kind, a: Math.random() * Math.PI * 2, r: radius + Math.random() * 4, sp: (0.15 + Math.random() * 0.2) * (i % 2 ? 1 : -1), ph: Math.random() * 6,
         rt: i, road: i % 4, pos: (Math.random() - 0.5) * 200, off: (i % 2 ? 1 : -1) * 6, v: (1.2 + Math.random()) * (i % 2 ? 1 : -1) });
     }
@@ -357,6 +397,9 @@ export const People = {
     }
   },
   updateLife(dt, raining) {
+    for (const m of this.musicians) {                  // a few notes drift up from the musician now and then
+      m.t -= dt; if (m.t <= 0) { m.t = 1.1 + Math.random() * 0.8; FX.emit(starTex, { x: m.x, y: 1.9, z: m.z }, { n: 1, colors: [0xffd34d, 0xffffff, 0x9ad4ff], size: 0.32, grow: 0.3, life: 1.6, speed: 0.3, up: 0.9, spread: 0.3, add: true }); }
+    }
     for (const f of this.folk) f.p.userData.umbrella.visible = raining && !f.p.userData.extra?.sit;
     for (const c of this.cyclists) {
       c.s += c.d * c.v * dt; c.ph += dt * c.v * 2.4;

@@ -2,6 +2,7 @@
 // bus stops and street signs (own low-poly, instanced), red bike lanes with white markings, and the spots where people
 // sit, stand and cyclists ride. Returns data for People (js/fx.js): { sit, stand, bikeRoutes, basins }.
 import * as THREE from 'three';
+import { glowMats } from './world.js';
 import { Builder, PLAZA_HALF, polyArea, insideRing, hash, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
 
 const Y = 0.05;                       // ground height of the footways
@@ -20,6 +21,20 @@ const SHAPES = {
   stop: () => [[box(0.1, 2.9, 0.1, -1.4, 1.45, 0), 0x55606b], [box(0.1, 2.9, 0.1, 1.4, 1.45, 0), 0x55606b], [box(3.2, 0.14, 1.3, 0, 2.95, 0), 0x3c4a58], [box(2.9, 1.7, 0.05, 0, 1.6, -0.55), 0x9ec9d8], [box(1.8, 0.05, 0.45, 0, 0.5, -0.3), 0x7a5a3a], [box(0.7, 0.9, 0.06, 1.8, 2.3, 0.2), 0xf0c02a], [box(0.08, 2.4, 0.08, 1.8, 1.2, 0.2), 0x55606b]],
   sign: () => [[box(0.07, 2.6, 0.07, 0, 1.3, 0), 0x4a4d52], [box(0.9, 0.28, 0.05, 0, 2.5, 0.04), 0x2f6fb0], [box(0.8, 0.04, 0.06, 0, 2.5, 0.04), 0xf2efe6]],
 };
+// ── life that grows with the district (S0002 06): shopfronts, market stalls, a street musician ──
+const SHOP_FRAME = () => [[box(0.22, 3.3, 0.3, -1.85, 1.65, 0.1), 0x4a4d52], [box(0.22, 3.3, 0.3, 1.85, 1.65, 0.1), 0x4a4d52], [box(4.0, 0.5, 0.22, 0, 3.05, 0.12), 0x2b2f36], [box(3.5, 0.12, 0.34, -0.6, 0.45, 0.16), 0x8a8478], [box(1.2, 2.3, 0.1, 1.1, 1.15, 0.04), 0x3a3d44]];
+const SHOP_AWNING = () => [[new THREE.BoxGeometry(3.8, 0.08, 1.2).rotateX(0.28).translate(0, 2.6, 0.62), 0xffffff], [box(3.8, 0.3, 0.06, 0, 2.38, 1.17), 0xffffff]];
+const SHOP_GLASS = () => [[box(2.2, 1.6, 0.05, -0.6, 1.4, 0.12), 0xffffff], [box(0.9, 1.95, 0.05, 1.1, 1.08, 0.12), 0xffffff]];
+const STALL_BODY = () => [[box(2.4, 0.08, 1.2, 0, 0.9, 0), 0x8a6a45], [box(2.3, 0.78, 0.06, 0, 0.5, 0.55), 0xa98a5e],
+  ...[[-1.2, -0.55], [1.2, -0.55], [-1.2, 0.55], [1.2, 0.55]].map(([x, z]) => [box(0.07, 2.4, 0.07, x, 1.2, z), 0x6b4f32]),
+  [box(0.55, 0.2, 0.4, -0.8, 1.04, 0.1), 0xd84a3a], [box(0.55, 0.2, 0.4, -0.15, 1.04, 0.1), 0x5aa347], [box(0.55, 0.2, 0.4, 0.5, 1.04, 0.1), 0xe8b93a], [box(0.4, 0.3, 0.4, 0.95, 1.1, -0.2), 0xb88a52]];
+const STALL_CANOPY = () => [[new THREE.BoxGeometry(2.9, 0.06, 1.9).rotateX(0.14).translate(0, 2.42, 0), 0xffffff], [box(2.9, 0.22, 0.05, 0, 2.2, 0.93), 0xffffff]];
+const BUSK_CASE = () => [[box(0.9, 0.14, 0.38, 0, 0.07, 0), 0x1b1b1d], [box(0.8, 0.02, 0.28, 0, 0.145, 0), 0x7a2030], [box(0.12, 0.02, 0.1, 0.1, 0.16, 0), 0xe0b84a], [box(0.42, 0.5, 0.28, 1.0, 0.25, -0.1), 0x2a2a2a]];
+const AWNING_COLORS = [0xc6483c, 0x2f6fb0, 0x3f8f4a, 0xe0a52a, 0x8a4aa8, 0xe8e4d8];
+const glassMat = new THREE.MeshStandardMaterial({ color: 0x6f8ea0, emissive: 0xffc468, emissiveIntensity: 0, roughness: 0.25, metalness: 0.1 });
+glowMats.push(glassMat);               // world.js lights these windows as night falls, like the shop windows of the procedural city
+// What is out at each count of finished plots (index = plots, 0..5), as shares of what the scene could hold
+export const LIFE_STEPS = { shops: [0, 3, 6, 10, 13, 16], stalls: [0, 0, 2, 4, 6, 8], musicians: [0, 0, 0, 1, 1, 2] };
 const furnitureMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
 
 function offsetLine(p, off) {         // polyline moved sideways by off metres (left of travel direction for off > 0)
@@ -147,7 +162,63 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
       else if (signs < 10) { items.sign.push([x0 + tx * 3 + nx * (r.w / 2 + 0.6) * side, Y, z0 + tz * 3 + nz * (r.w / 2 + 0.6) * side, Math.atan2(tx, tz)]); signs++; }
     }
   }
+  // ── shopfronts on the walls beside the streets, market stalls and street musicians, nearest to the square first ──
+  const taken = [...Object.values(items).flat(), ...benches].map((q) => [q[0], q[2]]);
+  const clearOf = (x, z, m) => taken.every(([a, b]) => Math.hypot(a - x, b - z) > m);
+  const shopSpots = [], spotRoads = osm.roads.filter((r) => r.k !== 'main' && r.k !== 'rail' && lengthOf(r.p) > 20).map((r) => ({ r, d: dOf(r.p) })).filter((q) => q.d < 170).sort((a, b) => a.d - b.d);
+  for (const { r } of spotRoads) {
+    for (let i = 0; i + 3 < r.p.length; i += 2) {
+      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 8) continue;
+      const tx = dx / l, tz = dz / l;
+      for (let s = 4 + hash(x0, z0) * 6; s < l - 3; s += 11 + hash(s, z0) * 5) for (const side of [1, -1]) {
+        const nx = -tz * side, nz = tx * side, px = x0 + tx * s, pz = z0 + tz * s;
+        for (let t = r.w / 2 + 1.2; t < r.w / 2 + 9; t += 0.6) {
+          const wx = px + nx * t, wz = pz + nz * t; if (!bbIn(wx, wz, 12)) break;
+          if (clearPlaza(wx, wz)) break;
+          if (inBuilding(wx, wz)) {
+            const fx = px + nx * (t - 0.35), fz = pz + nz * (t - 0.35);
+            if (t > r.w / 2 + 1.8 && !onBike(fx, fz) && !nearBasin(fx, fz, 3) && shopSpots.every((q) => Math.hypot(q.x - fx, q.z - fz) > 9)) shopSpots.push({ x: fx, z: fz, rot: Math.atan2(-nx, -nz), d: Math.hypot(fx, fz) });
+            break;
+          }
+        }
+      }
+    }
+  }
+  shopSpots.sort((a, b) => a.d - b.d); shopSpots.length = Math.min(shopSpots.length, 16);
+  const cand = [];
+  for (const { r } of walks) {
+    for (let i = 0; i + 3 < r.p.length; i += 2) {
+      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 6) continue;
+      const tx = dx / l, tz = dz / l;
+      for (let s = 3 + hash(z0, x0) * 5; s < l - 2; s += 13) {
+        const side = ((cand.length + i) & 1) ? 1 : -1, off = r.w / 2 + 2.6, x = x0 + tx * s - tz * side * off, z = z0 + tz * s + tx * side * off;
+        if (free(x, z) && clearOf(x, z, 3.5) && Math.hypot(x, z) > 13 && cand.every((q) => Math.hypot(q.x - x, q.z - z) > 7)) cand.push({ x, z, rot: Math.atan2(tz * side, -tx * side) + Math.PI, d: Math.hypot(x, z) });
+      }
+    }
+  }
+  cand.sort((a, b) => a.d - b.d);
+  const roomy = (q) => { let k = 0; for (let a = 0; a < 8; a++) if (free(q.x + Math.cos(a * 0.785) * 3.6, q.z + Math.sin(a * 0.785) * 3.6)) k++; return k >= 7; };   // room for an audience
+  const roomyList = cand.filter((q) => roomy(q)), musicians = [roomyList[1] || roomyList[0], roomyList[4]].filter((q, i, a) => q && a.indexOf(q) === i), stalls = cand.filter((q) => !musicians.includes(q)).slice(0, 8);
+  const batch = (name, parts, list, tint, shadow = false) => {
+    if (!list.length) return null;
+    const im = new THREE.InstancedMesh(mergeParts(parts()), name.includes('glass') ? glassMat : furnitureMat, list.length), c = new THREE.Color();
+    list.forEach((q, i) => { o.position.set(q.x, Y, q.z); o.rotation.set(0, q.rot, 0); o.scale.setScalar(1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (tint) im.setColorAt(i, c.setHex(AWNING_COLORS[(i * 5 + 1) % AWNING_COLORS.length])); });
+    im.castShadow = shadow; im.receiveShadow = true; im.name = name; im.frustumCulled = false; group.add(im); return im;
+  };
   const o = new THREE.Object3D();
+  const shopIm = [batch('shop-frame', SHOP_FRAME, shopSpots, false), batch('shop-awning', SHOP_AWNING, shopSpots, true), batch('shop-glass', SHOP_GLASS, shopSpots, false)].filter(Boolean);
+  const stallIm = [batch('stall-body', STALL_BODY, stalls, false, true), batch('stall-canopy', STALL_CANOPY, stalls, true)].filter(Boolean);
+  const buskIm = [batch('busker-props', BUSK_CASE, musicians, false)].filter(Boolean);
+  const life = {
+    shown: { shops: 0, stalls: 0, musicians: 0 }, stalls, musicians,
+    // n = finished plots of the district (0-5): what is out in the street
+    setProgress(n) {
+      const k = Math.max(0, Math.min(5, Math.round(n)));
+      const set = (ims, want, have) => { const c = Math.min(want, have); for (const im of ims) im.count = c; return c; };
+      this.shown.shops = set(shopIm, LIFE_STEPS.shops[k], shopSpots.length); this.shown.stalls = set(stallIm, LIFE_STEPS.stalls[k], stalls.length); this.shown.musicians = set(buskIm, LIFE_STEPS.musicians[k], musicians.length);
+      return this.shown;
+    },
+  };
   for (const [name, list] of Object.entries(items)) {
     if (!list.length) continue;
     const im = new THREE.InstancedMesh(mergeParts(SHAPES[name]()), furnitureMat, list.length);
@@ -155,5 +226,5 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
     im.castShadow = true; im.receiveShadow = true; im.name = 'furniture-' + name; group.add(im);
   }
   instanceKit(kit.bench, benches, 0, group, { lengthFit: 2.0 });
-  return { sit, stand, bikeRoutes, basins, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: lanes.length } };
+  return { sit, stand, bikeRoutes, basins, events: life, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: lanes.length, shops: shopSpots.length, stalls: stalls.length, musicians: musicians.length } };
 }

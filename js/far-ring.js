@@ -7,6 +7,9 @@ import * as THREE from 'three';
 import { CAM_OFFSETS } from './config.js';
 import { canvas2d } from './textures.js';
 import { Builder, hash, insideRing, material, mesh, calmMat, pitchedRoof, OLD_PALETTE, PLAIN_PALETTE, ROOF_COLORS } from './near-ring.js';
+import { level, plotOffset } from './level-scene.js';
+import { cityById } from './levels.js';
+import { loadDistrictProgress } from './settings.js';
 import { tileRoofTex, roofTex, STOREY_H, STOREY_W } from './textures.js';
 
 const EXT = 4800;                      // terrain radius
@@ -129,10 +132,21 @@ function addWalls(W, p, y0, h) {
   }
 }
 
+// Circles (city frame) round the sites of the finished towers of the city being played: the middle ring keeps its buildings off them
+// so no house stands under a tower (S0002 06). The plot being played is the origin of the near ring and needs none.
+const SITE_CLEAR_M = 48;
+function finishedSiteCircles() {
+  try {
+    const city = cityById(level.id), done = loadDistrictProgress().cities[level.id]?.plots || {};
+    return (city?.district?.plots || []).filter((p) => p.id !== level.plotId && done[p.id]?.counted && done[p.id].bestHeight > 0)
+      .map((p) => { const o = plotOffset(level.id, p); return { x: o.x, z: o.z, r: SITE_CLEAR_M }; });
+  } catch { return []; }
+}
+
 // opts.plot = { x, z }: where the plot (= the origin of the near ring) lies in the city frame, metres (default: the city's site).
 // opts.inner: half-size of the square round the plot that the near ring already fills. opts.clear: [{ x, z, r }] circles (city frame) with hand-built landmarks.
 export function buildMiddleFar(opts = {}) {
-  const plot = opts.plot || { x: 0, z: 0 }, inner = opts.inner || 340, clear = opts.clear || [];
+  const plot = opts.plot || { x: 0, z: 0 }, inner = opts.inner || 340, clear = [...(opts.clear || []), ...(opts.plot ? finishedSiteCircles() : [])];
   FLAT = opts.plot ? plot : null;
   const group = new THREE.Group(); group.name = 'middle-far-ring';
   group.position.set(-plot.x, 0, -plot.z);                                           // city frame -> frame of the plot

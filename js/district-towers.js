@@ -10,9 +10,15 @@ import { plotOffset } from './level-scene.js';
 import { terrainY } from './far-ring.js';
 import { cityById } from './levels.js';
 import { plotOf } from './core/district.js';
+import { People } from './fx.js';
+import { glowMats } from './world.js';
 
 export const REAL_M = 800;                 // the loaded rings: towers closer than this are built floor by floor
 const NEAR_FLAT_M = 300;                   // the near ring is flat; beyond it the ground follows the far-ring terrain
+const FAR_COLOR = { panel: 0xd9d4c4, hotel: 0xc9a27a, office: 0x8fb4c8, glass: 0x7fa6c0, deco: 0xd8c9a0 };
+const farGlow = new THREE.MeshStandardMaterial({ color: 0xffe7b0, emissive: 0xffc468, emissiveIntensity: 0.5, roughness: 0.6, fog: false });   // no fog: the haze would swallow a tower at 1-2 km
+glowMats.push(farGlow);                    // lit top: world.js brightens it as night falls (it stays a little warm by day)
+const HAZE = new THREE.Color(0x9fb4c4);
 const group = new THREE.Group(); group.name = 'district-towers'; scene.add(group);
 
 function dispose(g) {
@@ -34,6 +40,26 @@ function realTower(plot, floors, x, y, z, cityName) {
   return g;
 }
 
+// Far finished towers (beyond REAL_M): the real height as a readable silhouette. The shaft widens with distance so it still reads
+// at 1-2 km, a lit crown (two floors, glowing at night) and a thin mast with a beacon on top.
+function addFarTowers(far) {
+  const m4 = new THREE.Matrix4(), col = new THREE.Color(), q = new THREE.Quaternion(), V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x58606a, fog: false }), far.length);
+  const crown = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), farGlow, far.length);
+  const mast = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), farGlow, far.length);
+  far.forEach((f, i) => {
+    const h = CFG.FOUND_H + CFG.H * f.floors, w = CFG.W * 1.15 + Math.hypot(f.x, f.z) * 0.009, ch = CFG.H * 3.5;
+    m4.compose(V(f.x, f.y + (h - ch) / 2, f.z), q, V(w, h - ch, w)); body.setMatrixAt(i, m4);
+    body.setColorAt(i, col.set(FAR_COLOR[f.type] || 0xd8c9a0).lerp(HAZE, 0.3));
+    m4.compose(V(f.x, f.y + h - ch / 2, f.z), q, V(w * 1.08, ch, w * 1.08)); crown.setMatrixAt(i, m4);
+    const mh = Math.max(8, w * 2.2); m4.compose(V(f.x, f.y + h + mh / 2, f.z), q, V(w * 0.12, mh, w * 0.12)); mast.setMatrixAt(i, m4);
+  });
+  for (const im of [body, crown, mast]) { im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.castShadow = false; }
+  if (body.instanceColor) body.instanceColor.needsUpdate = true;
+  body.name = 'far-towers'; crown.name = 'far-towers-lit'; mast.name = 'far-towers-mast';
+  group.add(body, crown, mast);
+}
+
 // Show the counted towers of `cityId` seen from `plotId` (the origin of the loaded scene). The plot being played is left out
 // unless `withCurrent` (the menu after a result shows it standing on its own site). `plots` = progress map plotId -> { counted, bestHeight }.
 // Returns the number of real and instanced towers { real, far }.
@@ -51,16 +77,8 @@ export function showDistrictTowers(cityId, plotId, plots, { withCurrent = false 
     if (d <= REAL_M) { group.add(realTower(p, st.bestHeight, x, y, z, city.city)); real++; }
     else far.push({ x, y, z, floors: st.bestHeight, type: p.buildingType });
   }
-  if (far.length) {
-    const geo = new THREE.BoxGeometry(1, 1, 1), mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const im = new THREE.InstancedMesh(geo, mat, far.length), m4 = new THREE.Matrix4(), col = new THREE.Color();
-    far.forEach((f, i) => {
-      const h = CFG.FOUND_H + CFG.H * f.floors, w = CFG.W * 1.15;
-      m4.compose(new THREE.Vector3(f.x, f.y + h / 2, f.z), new THREE.Quaternion(), new THREE.Vector3(w, h, w)); im.setMatrixAt(i, m4);
-      im.setColorAt(i, col.set(f.type === 'panel' ? 0xd9d4c4 : f.type === 'hotel' ? 0xc9a27a : f.type === 'office' ? 0x8fb4c8 : f.type === 'glass' ? 0x7fa6c0 : 0xd8c9a0));
-    });
-    im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    im.frustumCulled = false; im.name = 'far-towers'; group.add(im);
-  }
+  if (far.length) addFarTowers(far);
+  // the district comes alive with its finished plots (ticket 06): people, traffic, shops, stalls, musicians
+  People.setDistrictLife(list.filter((p) => plotOf(plots, p.id).counted).length);
   return { real, far: far.length };
 }
