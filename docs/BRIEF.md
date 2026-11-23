@@ -199,3 +199,9 @@ Playtest of Kosice, 2026-11-22:
 - **Art direction refined:** "rich stylised" - stay stylised, but add real depth (cornices, window frames, recesses),
   relief maps on surfaces, fuller vegetation, volumetric clouds, warmer contrasted light. Not semi-realistic PBR.
 - **People:** more detailed figures, dressed for each city and culture, respectful and everyday.
+
+Scope change, 2026-11-23 (developer: "better 3 cities done well than 10 done badly"):
+- **Three real cities:** Kosice -> Prague -> Tokyo, plus the fictional Newtown as a bonus. Berlin, Dubai and New York
+  are dropped. Each city gets a district of five plots, Blender-built landmarks and full polish.
+- **Blender pipeline:** landmarks, tower crowns/lobbies and floor modules are built headless in Blender from scripts in
+  `scripts/blender/`; the OpenStreetMap city stays procedural.
