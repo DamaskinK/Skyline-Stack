@@ -5,7 +5,7 @@
 **Blocked by:** 00
 
 **Type:** polish
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Intro pass keeps a comfortable distance from the cathedral and theatre (S0001 19 Comments: `viewOf` in
       js/core/intro-path.ts), framed like a postcard.
