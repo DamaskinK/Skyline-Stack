@@ -6,6 +6,6 @@ no behaviour change.
 **Blocked by:** 02
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Typecheck, Vitest and all browser checks (check.mjs High/Low, plot-run, newtown-run) pass.
