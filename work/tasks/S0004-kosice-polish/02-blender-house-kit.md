@@ -6,7 +6,7 @@ them, assembled per OSM footprint in code (instanced modules).
 **Blocked by:** 00
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Old-town kit (Hlavna, centre): baroque/classicist burgher house modules - ground-floor arcade or shop portal,
       window bays with pilasters and frames, cornices, attic dormers, hip/gable roofs with tiles, pastel palette.
