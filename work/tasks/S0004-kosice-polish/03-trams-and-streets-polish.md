@@ -5,7 +5,7 @@
 **Blocked by:** 00
 
 **Type:** polish
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Trams: Kosice-style livery, headlights and lit windows at night, platforms that follow bends cleanly, wires sag.
 - [ ] Streets: kerbs with height everywhere, zebra crossings at junctions, lane markings, manholes and drains, street
