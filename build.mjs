@@ -16,7 +16,7 @@ const vendorThree = {
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist/css', { recursive: true });
 const res = await build({
-  entryPoints: ['js/main.js'], resolveExtensions: ['.ts', '.js', '.mjs', '.json'], bundle: true, format: 'esm', minify: true, target: 'es2020', outfile: 'dist/game.js',
+  entryPoints: ['js/main.ts'], resolveExtensions: ['.ts', '.js', '.mjs', '.json'], bundle: true, format: 'esm', minify: true, target: 'es2020', outfile: 'dist/game.js',
   plugins: [vendorThree], legalComments: 'none', write: true, metafile: true,
 });
 cpSync('css/style.css', 'dist/css/style.css');

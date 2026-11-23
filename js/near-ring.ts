@@ -25,7 +25,7 @@ export const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, lot: 
 const BIAS = { urban: 1, park: 2, water: 3, road: 4, lot: 4.5, bed: 5, path: 5.2, plaza: 7, basin: 9, bike: 6, mark: 8 };   // the plaza top always wins over the flat layers around it
 // park grass: soft green with random specks (the shared grass texture has specks on a lattice that read as dashed lines)
 const parkGrass = (() => {
-  const [c, x] = canvas2d(128, 128) as [HTMLCanvasElement, CanvasRenderingContext2D]; x.fillStyle = '#76a35e'; x.fillRect(0, 0, 128, 128);
+  const [c, x] = canvas2d(128, 128); x.fillStyle = '#76a35e'; x.fillRect(0, 0, 128, 128);
   for (let i = 0; i < 700; i++) { x.fillStyle = hash(i, 3) > 0.5 ? 'rgba(40,90,30,.16)' : 'rgba(190,225,140,.16)'; x.fillRect(hash(i, 1) * 128, hash(i, 2) * 128, 2, 3); }
   return toTex(c, true);
 })();

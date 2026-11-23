@@ -50,7 +50,7 @@ const cityRadius = (x: number, z: number): number => { const b = bearing(x, z); 
 let groundCache: THREE.CanvasTexture | null = null;
 function groundTexture(): THREE.CanvasTexture {
   if (groundCache) return groundCache;
-  const N = 768, [c, g] = canvas2d(N, N) as [HTMLCanvasElement, CanvasRenderingContext2D], img = g.createImageData(N, N), px = img.data;
+  const N = 768, [c, g] = canvas2d(N, N), img = g.createImageData(N, N), px = img.data;
   const col = (hx: number): number[] => [(hx >> 16) & 255, (hx >> 8) & 255, hx & 255];
   const fields = [0xb2bd66, 0xd2c474, 0x8db057, 0xbf9f5c, 0x9dbb66, 0xc8b86a].map(col);
   const wood = [0x3d6b3a, 0x2f5a35, 0x46733c].map(col), urban = col(0x7b776e), garden = col(0x93a171), riparian = col(0x7fa65c), meadow = col(0x86ad62);

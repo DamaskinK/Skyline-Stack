@@ -24,7 +24,15 @@ const BRIGHT = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0xff7f50, 0x1abc9c, 0xff
 const MUTED = [0x7a8aa0, 0x9a7a5a, 0x8a9a7a, 0xb0b0b0, 0x5a6a80, 0xa86a5a];
 const COATS = [0x3a3f4a, 0x6a4a32, 0x2f4a52, 0x8a2f3a, 0x4a5a3a, 0xb0a08a];
 
-export const STYLES = {
+type Col = number | number[];   // one colour or a list to pick from
+export interface Outfit {
+  w: number; top: Col; bottom?: Col; shoes?: Col; hair?: Col; hairStyle?: string; sleeves?: string;
+  garment?: string; coat?: string; coatCol?: Col; vest?: Col; vestTrim?: number; hat?: string; hatCol?: Col;
+  headwear?: string; headCol?: Col; scarf?: Col; tie?: number; bag?: string; bagCol?: Col; scale?: number; tights?: Col;
+  folk?: boolean; robe?: Col; sit?: boolean;
+}
+export interface CityStyle { outfits: Outfit[] }
+export const STYLES: Record<string, CityStyle> = {
   // Slovak and Czech everyday wear: jackets, some long coats and scarves, a few folk details (embroidered vest, kerchief).
   kosice: {
     outfits: [
@@ -38,7 +46,6 @@ export const STYLES = {
       { w: 1, top: BRIGHT, bottom: JEANS, shoes: SHOES, hair: HAIR_MIX, hairStyle: 'short', sleeves: 'long', coat: 'jacket', coatCol: BRIGHT, scale: 0.68, bag: 'backpack', bagCol: BRIGHT },
     ],
   },
-  prague: null, // set below: same family as Kosice with a few more coats
   // Business suits, school uniforms, street fashion.
   tokyo: {
     outfits: [
@@ -53,7 +60,7 @@ export const STYLES = {
 STYLES.prague = { outfits: STYLES.kosice.outfits.map((o) => (o.coat === 'none' || !o.coat ? o : { ...o, w: o.w + 1 })) };
 
 // Warm layer for snow: wrap any outfit that has no coat in a jacket, add a scarf or hat. Robes stay as they are.
-export function dressForCold(o, rnd) {
+export function dressForCold(o: Outfit, rnd: () => number): Outfit {
   if (o.garment === 'robe' || o.folk) return { ...o, sleeves: 'long' };
   const out = { ...o, sleeves: 'long' };
   if (!out.coat || out.coat === 'none') { out.coat = 'jacket'; out.coatCol = COATS; }
@@ -62,7 +69,7 @@ export function dressForCold(o, rnd) {
   return out;
 }
 
-export function styleFor(cityId) { return STYLES[cityId] || STYLES.kosice; }
-export function skinFor(cityId) {
-  return { kosice: SKIN_EURO, prague: SKIN_EURO, tokyo: SKIN_TOKYO }[cityId] || SKIN;
+export function styleFor(cityId: string): CityStyle { return STYLES[cityId] || STYLES.kosice; }
+export function skinFor(cityId: string): number[] {
+  return ({ kosice: SKIN_EURO, prague: SKIN_EURO, tokyo: SKIN_TOKYO } as Record<string, number[]>)[cityId] || SKIN;
 }

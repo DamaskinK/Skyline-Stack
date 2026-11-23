@@ -143,5 +143,5 @@ export interface OsmExtract {
 }
 // What a level's loaded assets hold (by manifest id): the sky HDRI, kit glTF scenes and textures, the OSM extract.
 // Values are typed where the code reads them; glTF kit pieces are Object3D, textures THREE.Texture.
-export type LevelAssets = Record<string, unknown> & { sky?: import('three').Texture; osm?: OsmExtract } & Partial<Record<'bench' | 'bush' | 'streetlight' | 'car_sedan' | 'car_hatchback', import('three').Object3D>>;
+export type LevelAssets = Record<string, unknown> & { sky?: import('three').Texture; osm?: OsmExtract } & Partial<Record<'bench' | 'bush' | 'streetlight' | 'car_sedan' | 'car_hatchback' | 'cathedral', import('three').Object3D>>;
 export interface Pt2 { x: number; z: number }

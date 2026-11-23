@@ -8,26 +8,26 @@ import { canvas2d } from '../textures.js';
 import { glowMats } from '../world.js';      // materials pushed here get emissiveIntensity = the scenery's night glow
 
 // ── geometry helpers ──
-export const lathe = (profile, seg = 8) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg);
-export const box = (w, h, d) => new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0);              // base on y = 0
-export const cyl = (r0, r1, h, seg = 8) => new THREE.CylinderGeometry(r1, r0, h, seg).translate(0, h / 2, 0);
+export const lathe = (profile: [number, number][], seg = 8) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+export const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d).translate(0, h / 2, 0);              // base on y = 0
+export const cyl = (r0: number, r1: number, h: number, seg = 8) => new THREE.CylinderGeometry(r1, r0, h, seg).translate(0, h / 2, 0);
 
-export function extrude(pts, depth, curve) {                                                      // outline in x/y, thickness along z (centred)
+export function extrude(pts: [number, number][], depth: number, curve?: number) {                                                      // outline in x/y, thickness along z (centred)
   const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
   const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: curve || 4 }); g.translate(0, 0, -depth / 2); return g;
 }
-export function archShape(w, h, rise, depth) {                                                    // pointed arch (gothic): straight sides, two curves meeting at the apex
+export function archShape(w: number, h: number, rise: number, depth: number) {                                                    // pointed arch (gothic): straight sides, two curves meeting at the apex
   const s = new THREE.Shape(), hw = w / 2;
   s.moveTo(-hw, 0); s.lineTo(hw, 0); s.lineTo(hw, h); s.quadraticCurveTo(hw * 0.9, h + rise * 0.8, 0, h + rise); s.quadraticCurveTo(-hw * 0.9, h + rise * 0.8, -hw, h); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 4 }); g.translate(0, 0, -depth / 2); return g;
 }
-export function roundArch(w, h, depth) {                                                          // round-headed opening
+export function roundArch(w: number, h: number, depth: number) {                                                          // round-headed opening
   const s = new THREE.Shape(), hw = w / 2;
   s.moveTo(-hw, 0); s.lineTo(hw, 0); s.lineTo(hw, h); s.absarc(0, h, hw, 0, Math.PI, false); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 6 }); g.translate(0, 0, -depth / 2); return g;
 }
 // swap two vertices of every triangle so the first face normal points up
-function faceUp(g) {
+function faceUp(g: THREE.BufferGeometry) {
   g.computeVertexNormals();
   if (g.attributes.normal.getY(0) >= 0) return g;
   for (const name of ['position', 'uv']) {
@@ -36,30 +36,30 @@ function faceUp(g) {
   }
   g.computeVertexNormals(); return g;
 }
-function slope(p, uv) {
+function slope(p: number[], uv: number[]) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); return faceUp(g);
 }
 // gabled roof along local x: ridge at y = rise, eaves at y = 0, half width hw. Returns the two tile slopes and the two stone gable triangles.
-export function gableRoof(len, hw, rise, tile = 5) {
-  const sl = Math.hypot(hw, rise), L = len / 2, slopes = [];
+export function gableRoof(len: number, hw: number, rise: number, tile = 5) {
+  const sl = Math.hypot(hw, rise), L = len / 2, slopes: THREE.BufferGeometry[] = [];
   for (const s of [-1, 1]) {
     slopes.push(slope([-L, 0, s * hw, L, 0, s * hw, L, rise, 0, -L, 0, s * hw, L, rise, 0, -L, rise, 0],
       [0, 0, len / tile, 0, len / tile, sl / tile, 0, 0, len / tile, sl / tile, 0, sl / tile]));
   }
-  const ends = [];
+  const ends: THREE.BufferGeometry[] = [];
   for (const s of [-1, 1]) { const g = extrude([[-hw, 0], [hw, 0], [0, rise]], 0.5); g.rotateY(Math.PI / 2).translate(s * (L - 0.25), 0, 0); ends.push(g); }
   return { slopes, ends };
 }
-export function shedRoof(len, w, rise, tile = 5) {                                                  // one slope: y = rise at z = 0 down to y = 0 at z = w
+export function shedRoof(len: number, w: number, rise: number, tile = 5) {                                                  // one slope: y = rise at z = 0 down to y = 0 at z = w
   const sl = Math.hypot(w, rise), L = len / 2;
   return slope([-L, rise, 0, L, 0, w, L, rise, 0, -L, rise, 0, -L, 0, w, L, 0, w],
     [0, 0, len / tile, sl / tile, len / tile, 0, 0, 0, 0, sl / tile, len / tile, sl / tile]);
 }
-export const stretchUV = (g, su, sv) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); return g; };
+export const stretchUV = (g: THREE.BufferGeometry, su: number, sv: number) => { const uv = g.attributes.uv as THREE.BufferAttribute; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv); return g; };
 
 // Wall UVs from the geometry's own box: whole bays of ~`bay` metres per wall; v is 0..1 over the wall height when `vs` is 0, else metres / vs.
-function wallUV(g, bay, vs) {
-  g.computeBoundingBox(); const bb = g.boundingBox, pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv;
+function wallUV(g: THREE.BufferGeometry, bay: number, vs: number) {
+  g.computeBoundingBox(); const bb = g.boundingBox as THREE.Box3, pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv as THREE.BufferAttribute;
   const ex = bb.max.x - bb.min.x, ez = bb.max.z - bb.min.z, eh = bb.max.y - bb.min.y;
   const nx = Math.max(1, Math.round(ex / bay)), nz = Math.max(1, Math.round(ez / bay));
   for (let i = 0; i < pos.count; i++) {
@@ -71,9 +71,12 @@ function wallUV(g, bay, vs) {
 }
 
 // Collects transformed geometry per material key, then merges each key into one mesh.
+// Placement of one part: position, Euler rotation, uniform scale `s` or per-axis `sx/sy/sz`, and wall-UV bay size `wall` (+ `vs`).
+export interface PartOpts { x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number; s?: number; sx?: number; sy?: number; sz?: number; wall?: number; vs?: number }
 export class Parts {
-  constructor() { this.map = new Map(); this.tris = 0; }
-  add(geo, key, o = {}) {
+  map = new Map<string, THREE.BufferGeometry[]>();
+  tris = 0;
+  add(geo: THREE.BufferGeometry, key: string, o: PartOpts = {}) {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     for (const n of Object.keys(g.attributes)) if (n !== 'position' && n !== 'normal' && n !== 'uv') g.deleteAttribute(n);
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
@@ -81,10 +84,9 @@ export class Parts {
       new THREE.Vector3(o.sx ?? o.s ?? 1, o.sy ?? o.s ?? 1, o.sz ?? o.s ?? 1));
     g.applyMatrix4(m);
     if (o.wall) wallUV(g, o.wall, o.vs || 0);
-    if (!this.map.has(key)) this.map.set(key, []);
-    this.map.get(key).push(g); this.tris += g.attributes.position.count / 3; return this;
+    const list = this.map.get(key); if (list) list.push(g); else this.map.set(key, [g]); this.tris += g.attributes.position.count / 3; return this;
   }
-  build(mats, group, shadow = true) {
+  build(mats: Record<string, THREE.Material>, group: THREE.Group, shadow = true) {
     for (const [key, list] of this.map) {
       const mesh = new THREE.Mesh(mergeGeometries(list), mats[key]); mesh.castShadow = shadow && !mats[key].transparent; mesh.receiveShadow = true; mesh.name = key; group.add(mesh);
     }
@@ -93,17 +95,18 @@ export class Parts {
 }
 
 // ── textures: a pair (colour, emissive) per wall type so lit windows follow the scenery's night factor ──
-function pair(w, h, draw) {
+type Ctx = CanvasRenderingContext2D;
+function pair(w: number, h: number, draw: (g: Ctx, e: Ctx, w: number, h: number) => void) {
   const [c, g] = canvas2d(w, h), [ce, ge] = canvas2d(w, h);
   draw(g, ge, w, h);
-  const mk = (cv) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+  const mk = (cv: HTMLCanvasElement) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
   return { map: mk(c), emis: mk(ce) };
 }
-function arch(g, cx, y0, w, h, rise) {                                                            // pointed arch path, y0 = sill (canvas y grows down)
+function arch(g: Ctx, cx: number, y0: number, w: number, h: number, rise: number) {                                                            // pointed arch path, y0 = sill (canvas y grows down)
   g.beginPath(); g.moveTo(cx - w / 2, y0); g.lineTo(cx - w / 2, y0 - h); g.quadraticCurveTo(cx - w * 0.45, y0 - h - rise * 0.8, cx, y0 - h - rise); g.quadraticCurveTo(cx + w * 0.45, y0 - h - rise * 0.8, cx + w / 2, y0 - h); g.lineTo(cx + w / 2, y0); g.closePath();
 }
-function archR(g, cx, y0, w, h) { g.beginPath(); g.moveTo(cx - w / 2, y0); g.lineTo(cx - w / 2, y0 - h); g.arc(cx, y0 - h, w / 2, Math.PI, 0); g.lineTo(cx + w / 2, y0); g.closePath(); }
-function ashlar(g, w, h, base, line, step) {
+function archR(g: Ctx, cx: number, y0: number, w: number, h: number) { g.beginPath(); g.moveTo(cx - w / 2, y0); g.lineTo(cx - w / 2, y0 - h); g.arc(cx, y0 - h, w / 2, Math.PI, 0); g.lineTo(cx + w / 2, y0); g.closePath(); }
+function ashlar(g: Ctx, w: number, h: number, base: string, line: string, step: number) {
   g.fillStyle = base; g.fillRect(0, 0, w, h); g.strokeStyle = line; g.lineWidth = 1;
   for (let y = 0; y < h; y += step) { g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(w, y + 0.5); g.stroke(); for (let x = ((y / step) % 2) * step * 1.5; x < w; x += step * 3) { g.beginPath(); g.moveTo(x + 0.5, y); g.lineTo(x + 0.5, y + step); g.stroke(); } }
 }
@@ -160,15 +163,15 @@ function plainCream() {
     for (const y0 of [h * 0.4, h * 0.82]) { g.fillStyle = '#fff3d2'; g.fillRect(w * 0.22, y0 - h * 0.28, w * 0.56, h * 0.3); g.fillStyle = '#2b3a46'; g.fillRect(w * 0.28, y0 - h * 0.25, w * 0.44, h * 0.25); e.fillStyle = WARM; e.fillRect(w * 0.28, y0 - h * 0.25, w * 0.44, h * 0.25); }
   });
 }
-const plainTex = (hex) => { const [c, g] = canvas2d(32, 32); g.fillStyle = hex; g.fillRect(0, 0, 32, 32); for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`; g.fillRect(Math.random() * 32, Math.random() * 32, 4, 2); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
+const plainTex = (hex: string) => { const [c, g] = canvas2d(32, 32); g.fillStyle = hex; g.fillRect(0, 0, 32, 32); for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.05})`; g.fillRect(Math.random() * 32, Math.random() * 32, 4, 2); } const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
 
-let set = null;
+let set: Record<string, THREE.MeshStandardMaterial> | null = null;
 // The shared material set. Keys are used by every city module; `lit` ones glow at night with the scenery's glow value.
-export function landmarkMaterials() {
+export function landmarkMaterials(): Record<string, THREE.MeshStandardMaterial> {
   if (set) return set;
-  const lit = (p, o = {}) => { const m = new THREE.MeshStandardMaterial({ map: p.map, emissiveMap: p.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9, ...o }); glowMats.push(m); return m; };
-  const flat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...o });
-  const flood = (color, emissive, o = {}) => { const m = flat(color, { emissive, emissiveIntensity: 0, ...o }); glowMats.push(m); return m; };   // floodlit parts: warm self-light at night
+  const lit = (p: { map: THREE.Texture; emis: THREE.Texture }, o: THREE.MeshStandardMaterialParameters = {}) => { const m = new THREE.MeshStandardMaterial({ map: p.map, emissiveMap: p.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.9, ...o }); glowMats.push(m); return m; };
+  const flat = (color: number, o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true, ...o });
+  const flood = (color: number, emissive: number, o: THREE.MeshStandardMaterialParameters = {}) => { const m = flat(color, { emissive, emissiveIntensity: 0, ...o }); glowMats.push(m); return m; };   // floodlit parts: warm self-light at night
   const tiles = glazedTiles();
   const gothic = lit(gothicBay(), surface('stone', [1.5, 3], 0.9)), tower = lit(towerStone(), surface('stone', [2, 3], 0.9)), cream = lit(creamFacade()), wing = lit(plainCream());
   set = {

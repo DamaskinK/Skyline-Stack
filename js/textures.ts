@@ -2,13 +2,16 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 
-export function canvas2d(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
-export function css(hex, f = 1) {
+export function canvas2d(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  return [c, c.getContext('2d') as CanvasRenderingContext2D];   // a fresh 2d canvas always has a context
+}
+export function css(hex: number, f = 1) {
   const c = new THREE.Color(hex);
   c.r = Math.min(1, c.r * f); c.g = Math.min(1, c.g * f); c.b = Math.min(1, c.b * f);
   return '#' + c.getHexString();
 }
-export function toTex(c, repeat = false) {
+export function toTex(c: HTMLCanvasElement, repeat = false) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;   // sharper ground and facades at grazing angles, less shimmer
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -17,13 +20,16 @@ export function toTex(c, repeat = false) {
 
 // One storey: wall, slab bands, four framed windows, balconies on some variants.
 // A second canvas holds only the lit windows and becomes the emissive map at night.
-const facadeCache = new Map();
+// A colour canvas texture and its lit-window (emissive) twin.
+export interface TexPair { map: THREE.CanvasTexture; emis: THREE.CanvasTexture }
+export interface FacadeOpts { gold?: boolean; style?: string }
+const facadeCache = new Map<string, TexPair>();
 const FACADE_H = Math.round(256 * CFG.H / CFG.W);   // canvas aspect = storey aspect (W x H), so windows are not stretched
-export function facade(hex, variant, opts = {}) {
+export function facade(hex: number, variant: number, opts: FacadeOpts = {}): TexPair {
   const key = `${hex}-${variant}-${opts.gold ? 1 : 0}-${opts.style || ''}`;
-  if (facadeCache.has(key)) return facadeCache.get(key);
+  const hit = facadeCache.get(key); if (hit) return hit;
   if (opts.style === 'panel' && !opts.gold) { const res = panelFacade(variant); facadeCache.set(key, res); return res; }
-  if (TYPE_FACADES[opts.style] && !opts.gold) { const res = typeFacade(opts.style, variant); facadeCache.set(key, res); return res; }
+  if (opts.style && TYPE_FACADES[opts.style] && !opts.gold) { const res = typeFacade(opts.style, variant); facadeCache.set(key, res); return res; }
   const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
   x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);   // layout is drawn on a 256x128 grid, stretched to the storey's aspect
   x.fillStyle = css(hex); x.fillRect(0, 0, 256, 128);
@@ -65,7 +71,7 @@ export function facade(hex, variant, opts = {}) {
 // Slovak / Czechoslovak prefab panel house (panelak): light concrete panels, visible joints, regular windows,
 // a coloured loggia band under the windows. Drawn on the same 256x128 storey grid as the default facade.
 const PANEL_ACCENTS = ['#d9772b', '#2f8f9d', '#c9a227'];
-function panelFacade(variant) {
+function panelFacade(variant: number): TexPair {
   const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
   x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);
   const accent = PANEL_ACCENTS[variant % 3];
@@ -100,14 +106,15 @@ function panelFacade(variant) {
 
 // Facades of the other building types, drawn on the same 256x128 storey grid. Placeholders in spirit (only panel is final)
 // but each type already reads differently: wall colour, window shape and the way the lights come on at night.
-const TYPE_FACADES = {
+type TypeFacade = { wall: string; band: string; glass: string[]; lit: string; cols: number };
+const TYPE_FACADES: Record<string, TypeFacade> = {
   hotel:  { wall: '#e8dcc2', band: '#b9a47c', glass: ['#cfe3f2', '#6d94b8', '#34517a'], lit: '#ffd58a', cols: 4 },
   office: { wall: '#a9adb3', band: '#7c8189', glass: ['#9fd3e6', '#4d8fb0', '#25506f'], lit: '#fff0c0', cols: 1 },
   glass:  { wall: '#2d4a66', band: '#1d3248', glass: ['#b8e6f7', '#5fb0d6', '#2a6a96'], lit: '#e8f6ff', cols: 8 },
   deco:   { wall: '#d6c39a', band: '#a07d34', glass: ['#c8dcea', '#6a8fae', '#2f4a68'], lit: '#ffdf8a', cols: 5 },
   neon:   { wall: '#181a2c', band: '#2a2d4a', glass: ['#3a3f80', '#222659', '#12143a'], lit: '#ff5fd2', cols: 6 },
 };
-function typeFacade(style, variant) {
+function typeFacade(style: string, variant: number): TexPair {
   const t = TYPE_FACADES[style];
   const [c, x] = canvas2d(256, FACADE_H), [ce, xe] = canvas2d(256, FACADE_H);
   x.scale(1, FACADE_H / 128); xe.scale(1, FACADE_H / 128);
@@ -153,11 +160,11 @@ export const roofTex = (() => {
 })();
 
 // Ground floor of the player's tower: one texture per building type and sign text (the sign is a city or shop name).
-const lobbyCache = new Map();
-const LOBBY_WALL = { panel: '#cfc9bb', hotel: '#e6d8bd', office: '#8f949b', glass: '#2d4a66', deco: '#cdb98e', neon: '#181a2c' };
-export function lobbyTexture(style, sign) {
+const lobbyCache = new Map<string, TexPair>();
+const LOBBY_WALL: Record<string, string> = { panel: '#cfc9bb', hotel: '#e6d8bd', office: '#8f949b', glass: '#2d4a66', deco: '#cdb98e', neon: '#181a2c' };
+export function lobbyTexture(style: string, sign: string): TexPair {
   const key = `${style}-${sign}`;
-  if (lobbyCache.has(key)) return lobbyCache.get(key);
+  const hit = lobbyCache.get(key); if (hit) return hit;
   const [c, x] = canvas2d(256, 128), [ce, xe] = canvas2d(256, 128);
   const dark = style === 'glass' || style === 'neon';
   x.fillStyle = LOBBY_WALL[style] || LOBBY_WALL.panel; x.fillRect(0, 0, 256, 128);
@@ -185,7 +192,7 @@ export function lobbyTexture(style, sign) {
 
 // Ground floor shops for the background buildings.
 const SHOPS = [['CAFE', '#c0392b'], ['PIZZA', '#e67e22'], ['BANK', '#2c3e50'], ['BOOKS', '#16a085'], ['HOTEL', '#8e44ad'], ['MARKET', '#27ae60'], ['BAKERY', '#d35400'], ['CINEMA', '#c0392b']];
-export function shopTex(i) {
+export function shopTex(i: number) {
   const [name, col] = SHOPS[i % SHOPS.length];
   const [c, x] = canvas2d(256, 128), [ce, xe] = canvas2d(256, 128);
   x.fillStyle = '#e4dccb'; x.fillRect(0, 0, 256, 128);
@@ -202,7 +209,7 @@ export function shopTex(i) {
 }
 
 const BILL = [['BLOXX COLA', '#e74c3c', '#fff'], ['FLY AIR', '#2980b9', '#fff'], ['BUILD HIGH', '#f1c40f', '#222'], ['RETRO FM', '#8e44ad', '#fff']];
-export function billboardTex(i) {
+export function billboardTex(i: number) {
   const [t, bg, fg] = BILL[i % BILL.length];
   const [c, x] = canvas2d(256, 96);
   x.fillStyle = bg; x.fillRect(0, 0, 256, 96); x.strokeStyle = '#fff'; x.lineWidth = 6; x.strokeRect(3, 3, 250, 90);
@@ -243,8 +250,8 @@ export const sidewalkTex = (() => {
 })();
 
 // UVs scaled per face so a facade keeps the size of one storey on any box.
-export function storeyUV(geo, w, h, d) {
-  const uv = geo.attributes.uv;
+export function storeyUV(geo: THREE.BufferGeometry, w: number, h: number, d: number): THREE.BufferGeometry {
+  const uv = geo.attributes.uv as THREE.BufferAttribute;
   for (let f = 0; f < 6; f++) {
     if (f === 2 || f === 3) continue;
     const across = f < 2 ? d : w;
@@ -259,14 +266,14 @@ export function storeyUV(geo, w, h, d) {
 // 'panel': prefab concrete with a coloured loggia band. The second canvas is the lit-window map for night.
 export const STOREY_W = 6, STOREY_H = 3.4;
 const calmCache = new Map();
-export function calmFacade(hex, kind, variant = 0) {
+export function calmFacade(hex: number, kind: string, variant = 0): TexPair {
   const key = `${hex}-${kind}-${variant}`;
   if (calmCache.has(key)) return calmCache.get(key);
   const W = 256, H = 145, [c, x] = canvas2d(W, H), [ce, xe] = canvas2d(W, H);
   x.fillStyle = css(hex); x.fillRect(0, 0, W, H);
   for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(${i % 2 ? '0,0,0' : '255,255,255'},${0.025 + ((i * 37) % 5) * 0.004})`; x.fillRect((i * 97) % W, (i * 53) % H, 3, 2); }
   xe.fillStyle = '#000'; xe.fillRect(0, 0, W, H);
-  const glass = (wx, wy, ww, wh, lit) => {
+  const glass = (wx: number, wy: number, ww: number, wh: number, lit: boolean) => {
     const g = x.createLinearGradient(wx, wy, wx + ww, wy + wh); g.addColorStop(0, '#9fc2dd'); g.addColorStop(0.6, '#56789f'); g.addColorStop(1, '#2f4a70');
     x.fillStyle = g; x.fillRect(wx, wy, ww, wh);
     if (lit) { xe.fillStyle = (variant + wx) % 3 ? '#ffd27a' : '#ffe6a8'; xe.fillRect(wx, wy, ww, wh); }

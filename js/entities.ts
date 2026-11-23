@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG } from './config.js';
 import { scene, blockMats, glowMats } from './world.js';
 import { BUILDING_TYPES } from './building-types.js';
+import type { BuildingType, Vec3 } from './types.js';
 import { facade, roofTex, lobbyTexture, latticeTex } from './textures.js';
 
 const boxGeo = new THREE.BoxGeometry(CFG.W * 0.985, CFG.H * 0.985, CFG.D * 0.985);
@@ -12,9 +13,9 @@ const warnMat = new THREE.LineBasicMaterial({ color: 0xff3344 });
 const topMat = new THREE.MeshStandardMaterial({ map: roofTex, roughness: 1 });
 
 // materials are shared per colour and facade variant
-function blockMaterial(hex, variant, gold, style) {
+function blockMaterial(hex: number, variant: number, gold: boolean, style: string) {
   const key = `${hex}-${variant}-${gold}-${style}`;
-  if (blockMats.has(key)) return blockMats.get(key);
+  const hit = blockMats.get(key); if (hit) return hit;
   const fa = facade(hex, variant, { gold, style });
   const side = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: gold ? 0.3 : 0.75, metalness: gold ? 0.6 : 0 });
   side.userData.gold = gold;
@@ -23,17 +24,17 @@ function blockMaterial(hex, variant, gold, style) {
 }
 // Relief of a prefab panel floor, shared by every floor: window sills and lintels, a loggia slab with its railing under the
 // windows and a slab-edge ledge, on all four faces. Positions follow the panel facade texture (4 windows per face, see textures.js).
-let panelReliefGeo = null;
+let panelReliefGeo: THREE.BufferGeometry | null = null;
 const reliefMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 function panelRelief() {
   if (panelReliefGeo) return panelReliefGeo;
-  const parts = [], H = CFG.H;
-  const add = (w, h, d, x, y, z, ry, hex) => {   // x/y/z in the face's frame: z = out of the wall (face at z = half depth)
+  const parts: THREE.BufferGeometry[] = [], H = CFG.H;
+  const add = (w: number, h: number, d: number, x: number, y: number, z: number, ry: number, hex: number) => {   // x/y/z in the face's frame: z = out of the wall (face at z = half depth)
     const g = new THREE.BoxGeometry(w, h, d).translate(x, y, z).rotateY(ry), c = new THREE.Color(hex), n = g.attributes.position.count, col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { col[3 * i] = c.r; col[3 * i + 1] = c.g; col[3 * i + 2] = c.b; }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.deleteAttribute('uv'); parts.push(g);
   };
-  const fy = (f) => -H / 2 + f * H;                          // height fraction from the floor's underside
+  const fy = (f: number) => -H / 2 + f * H;                          // height fraction from the floor's underside
   for (let face = 0; face < 4; face++) {
     const ry = face * Math.PI / 2, half = (face % 2 ? CFG.D : CFG.W) * 0.985 / 2, wide = half * 2;
     for (let i = 0; i < 4; i++) {
@@ -45,9 +46,10 @@ function panelRelief() {
     add(wide * 0.94, 0.3, 0.05, 0, fy(0.18) + 0.18, half + 0.31, ry, 0xe6e1d4);    // railing
     add(wide, 0.06, 0.07, 0, fy(1) - 0.04, half + 0.035, ry, 0xb8b3a6);            // slab edge
   }
-  panelReliefGeo = mergeGeometries(parts); return panelReliefGeo;
+  const merged = mergeGeometries(parts);   // never null: every part has the same attributes
+  panelReliefGeo = merged; return merged;
 }
-export function makeBlockMesh(hex, golden, variant = 0, style = '') {
+export function makeBlockMesh(hex: number, golden: boolean | undefined, variant = 0, style = '') {
   const g = new THREE.Group();
   const body = new THREE.Mesh(boxGeo, blockMaterial(hex, variant, !!golden, style)); body.castShadow = true; body.receiveShadow = true; g.add(body);
   if (style === 'panel' && !golden) { const rel = new THREE.Mesh(panelRelief(), reliefMat); rel.castShadow = true; rel.receiveShadow = true; g.add(rel); }
@@ -55,10 +57,10 @@ export function makeBlockMesh(hex, golden, variant = 0, style = '') {
   g.userData.warn = warn;
   scene.add(g); return g;
 }
-const lobbyMats = new Map();
-function lobbyMaterial(style, sign) {
+const lobbyMats = new Map<string, THREE.MeshStandardMaterial>();
+function lobbyMaterial(style: string, sign: string) {
   const key = `${style}-${sign}`;
-  if (lobbyMats.has(key)) return lobbyMats.get(key);
+  const hit = lobbyMats.get(key); if (hit) return hit;
   const t = lobbyTexture(style, sign);
   const m = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 });
   glowMats.push(m); lobbyMats.set(key, m); return m;
@@ -66,8 +68,8 @@ function lobbyMaterial(style, sign) {
 const stepMat = new THREE.MeshStandardMaterial({ color: 0x9a968c }), planterMat = new THREE.MeshStandardMaterial({ color: 0x7b6a58 }), bushMat = new THREE.MeshStandardMaterial({ color: 0x3f8f3a, flatShading: true });
 const canopyMat = new THREE.MeshStandardMaterial({ color: 0x2f6f5e, roughness: 0.6 }), canopyTrim = new THREE.MeshStandardMaterial({ color: 0xeee9dc });
 // bx, bz: position; typeId: building type; city: city name for the sign when the type has none
-export function makeFoundation(bx, bz, typeId = 'panel', city = '') {
-  const bt = BUILDING_TYPES[typeId] || BUILDING_TYPES.panel;
+export function makeFoundation(bx: number, bz: number, typeId: string = 'panel', city = '') {
+  const bt = (BUILDING_TYPES as Record<string, BuildingType>)[typeId] || BUILDING_TYPES.panel;
   const g = new THREE.Group();
   const side = lobbyMaterial(bt.facade, bt.sign || (city || 'CITY').toUpperCase());
   const m = new THREE.Mesh(new THREE.BoxGeometry(CFG.W * 1.3, CFG.FOUND_H, CFG.D * 1.3), [side, side, topMat, topMat, side, side]);
@@ -87,10 +89,10 @@ export function makeFoundation(bx, bz, typeId = 'panel', city = '') {
 }
 
 // The top of a finished tower, one per building type. Built around y = 0 at the roof, x/z centred; not added to the scene.
-const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...o });
+const mat = (color: number, o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...o });
 const crownMats = { concrete: mat(0xb9b5ab), dark: mat(0x3b3f52), slate: mat(0x4a4f5e), terracotta: mat(0xa3472e), glass: mat(0x7fc4e0, { roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.8 }), steel: mat(0xd0d4da, { metalness: 0.7, roughness: 0.3 }), stone: mat(0xcdb98e), gold: mat(0xe7c75a, { metalness: 0.6, roughness: 0.3 }), neon: new THREE.MeshBasicMaterial({ color: 0xff5fd2 }) };
-const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y + h / 2, z); o.castShadow = true; return o; };
-const CROWNS = {
+const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y + h / 2, z); o.castShadow = true; return o; };
+const CROWNS: Record<string, (g: THREE.Group) => void> = {
   // flat roof with a parapet and a small lift house
   panel(g) {
     const W = CFG.W, D = CFG.D, p = 0.14, h = 0.45, c = crownMats.concrete;
@@ -138,17 +140,17 @@ const CROWNS = {
     g.add(box(W * 0.6, 0.12, 0.12, crownMats.neon, 0, 0.9, 0));
   },
 };
-export function makeCrown(typeId = 'panel') {
-  const bt = BUILDING_TYPES[typeId] || BUILDING_TYPES.panel;
+export function makeCrown(typeId: string = 'panel') {
+  const bt = (BUILDING_TYPES as Record<string, BuildingType>)[typeId] || BUILDING_TYPES.panel;
   const g = new THREE.Group(); (CROWNS[bt.crown] || CROWNS.panel)(g); return g;
 }
 // A crown standing in the scene (menu demo tower).
-export function makeRoof(pos, typeId = 'panel') {
+export function makeRoof(pos: THREE.Vector3, typeId: string = 'panel') {
   const g = makeCrown(typeId); g.position.copy(pos); scene.add(g); return g;
 }
 
 // ── tower crane: lattice mast, jib, counter-jib, cab, trolley, cable, hook and slings ──
-const latMat = (t) => new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6 });
+const latMat = (t: THREE.Texture) => new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6 });
 const crane = new THREE.Group(); scene.add(crane);
 const mastTex = latticeTex(), jibTex = latticeTex();
 const mast = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 1.4).translate(0, 0.5, 0), latMat(mastTex)); crane.add(mast);
@@ -174,7 +176,7 @@ marker.rotation.x = -Math.PI / 2; scene.add(marker);
 const _v = new THREE.Vector3();
 
 // cx, cz: tower base; jibY: jib height; hook: {x,z}; hy: hook height; block: hanging block {x,y,z} or null; mesh: its mesh
-export function updateCrane(cx, cz, jibY, hx, hy, hz, block, mesh, clock) {
+export function updateCrane(cx: number, cz: number, jibY: number, hx: number, hy: number, hz: number, block: Vec3 | null, mesh: THREE.Object3D | null, clock: number) {
   crane.position.set(cx - 14, 0, cz - 3);
   mast.scale.y = jibY; mastTex.repeat.set(1, jibY / 1.4);
   jib.position.set(16, jibY + 0.6, 3); cjib.position.set(-5, jibY + 0.5, 3);
@@ -185,15 +187,15 @@ export function updateCrane(cx, cz, jibY, hx, hy, hz, block, mesh, clock) {
   hookBlock.rotation.z = Math.atan2(hx - cx, jibY - hy) * 0.8;
   const ty = jibY - 0.3;
   cablePos.set([cx - 0.3, ty, cz, hx - 0.2, hy + 0.4, hz, cx + 0.3, ty, cz, hx + 0.2, hy + 0.4, hz], 0);
-  if (block) {
+  if (block && mesh) {
     [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz], i) => {
       _v.set(sx * CFG.W * 0.45, CFG.H / 2, sz * CFG.D * 0.45).applyEuler(mesh.rotation).multiplyScalar(mesh.scale.x);
       cablePos.set([hx, hy - 0.7, hz, block.x + _v.x, block.y + _v.y, block.z + _v.z], 12 + i * 6);
     });
   } else for (let i = 12; i < 36; i++) cablePos[i] = cablePos[i % 3 + 3];
-  cables.geometry.attributes.position.needsUpdate = true;
+  (cables.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
 }
-export function updateMarker(visible, x, y, z, opacity) {
+export function updateMarker(visible: boolean, x: number, y: number, z: number, opacity: number) {
   marker.visible = visible;
-  if (visible) { marker.position.set(x, y, z); marker.material.opacity = opacity; }
+  if (visible) { marker.position.set(x, y, z); (marker.material as THREE.MeshBasicMaterial).opacity = opacity; }
 }

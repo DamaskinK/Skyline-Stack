@@ -15,6 +15,11 @@ import { installDebug } from './debug.js';
 import { DISTRICT_CITIES } from './levels.js';
 import { applyPostQuality, resizePost, renderFrame, post } from './post.js';
 
+// Handles the browser checks reach through window.
+declare global {
+  interface Window { __music: unknown; __sfx: unknown; __game: unknown; __CFG: unknown; __scene: unknown; __post: unknown }
+}
+
 const game = new Game();
 game.camera = camera;
 game.ui = createUI(game);
@@ -22,7 +27,7 @@ Music.bind(game);
 window.__music = Music;   // director state, log and levels for the browser checks
 window.__sfx = Sfx;
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
-installDebug({ renderer, scene, camera, loadPlot: (n, city = 'kosice') => game.loadPlot(city, DISTRICT_CITIES.find((c) => c.id === city).district.plots[n].id) });
+installDebug({ renderer, scene, camera, loadPlot: (n, city = 'kosice') => game.loadPlot(city, (DISTRICT_CITIES.find((c) => c.id === city)?.district?.plots[n] as { id: string }).id) });
 
 applyQuality(); People.applyTraffic(); resize(); applyPostQuality();
 window.addEventListener('resize', () => { resize(); resizePost(); });
@@ -30,20 +35,20 @@ window.addEventListener('resize', () => { resize(); resizePost(); });
 onSettings((k) => { if (k === 'quality') { applyQuality(); People.applyTraffic(); applyPostQuality(); } });
 window.__post = post;
 
-const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
+const $flash = document.getElementById('flash') as HTMLElement, $vig = document.getElementById('vignette') as HTMLElement;   // both live in index.html
 const camOffsets = CAM_OFFSETS.map((o) => new THREE.Vector3(...o));
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
 let clock = 0, camY = 8;
 
-function render(rdt) {
+function render(rdt: number) {
   clock += rdt;
   const T = game.tower, bv = game.blockView, b = bv ? game.block : null, playing = game.state === 'play' && T;
   game.syncTower(rdt);
   const n = T ? T.n : 0, ph = game.state === 'menu' ? game.weather : game.run ? game.run.wx : game.weather;
 
   // hanging block pops in and tilts a little with the swing
-  if (b) {
+  if (b && bv && T) {
     const mesh = bv.mesh;
     mesh.position.set(b.x, b.y, b.z);
     if (b.state === 'hang') {
@@ -59,10 +64,10 @@ function render(rdt) {
   const hx = playing && game.hook ? game.hook.x : cx + Math.sin(clock * 1.2) * 2;
   const hz = playing && game.hook ? game.hook.z : cz;
   const hy = b && b.state === 'hang' ? b.y + CFG.H / 2 + 1.2 : (playing ? craneY + CFG.dropGap + CFG.H + 1.6 : craneY + 6);
-  updateCrane(cx, cz, jibY, hx, hy, hz, b && b.state === 'hang' ? b : null, b ? bv.mesh : null, clock);
+  updateCrane(cx, cz, jibY, hx, hy, hz, b && b.state === 'hang' ? b : null, b && bv ? bv.mesh : null, clock);
   const top = T && T.n ? T.top() : { x: cx, z: cz };
   const markerOn = !!(playing && b) && Math.max(Math.abs(b.x - top.x), Math.abs(b.z - top.z)) < CFG.W;
-  updateMarker(markerOn, b?.x, T ? T.topY() + 0.02 : 0, b?.z, ph.name === 'Fog' ? 0.45 : 0.22);
+  updateMarker(markerOn, b?.x ?? 0, T ? T.topY() + 0.02 : 0, b?.z ?? 0, ph.name === 'Fog' ? 0.45 : 0.22);
 
   // camera
   if (game.state === 'menu') {
@@ -111,7 +116,7 @@ function render(rdt) {
 
 buildDemo(); People.setWalkers(9);
 let last = performance.now(), acc = 0;
-function frame(now) {
+function frame(now: number) {
   requestAnimationFrame(frame);
   const rdt = Math.min(0.1, (now - last) / 1000); last = now;
   if ((game.state === 'play' || game.state === 'over') && !game.paused) {

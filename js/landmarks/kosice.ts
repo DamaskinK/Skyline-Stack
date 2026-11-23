@@ -2,17 +2,19 @@
 // the State Theatre and, in front of it, the Immaculata column and the Singing Fountain. They stand at their real spots (OSM footprints,
 // frame of the rings: x east, z south, origin = build site), so the OSM footprints of these buildings are hidden (`hide`).
 import * as THREE from 'three';
+import type { LevelAssets } from '../types.js';
 import { glowMats } from '../world.js';
 import { Parts, landmarkMaterials, lathe, box, cyl, extrude, archShape, roundArch, gableRoof, shedRoof, stretchUV } from './style.js';
 
 // OSM names of the footprints the models replace
 export const hide = new Set(['Dóm svätej Alžbety', 'Kaplnka sv. Michala', 'Národné divadlo Košice']);
 // centre and rotation (about y; local +z turns to (sin, cos)) taken from the minimum-area rectangle of each footprint
-const AT = {
+interface At { x: number; z: number; rot: number }
+const AT: Record<'cathedral' | 'theatre' | 'chapel' | 'urban', At> = {
   cathedral: { x: 47.4, z: 81.4, rot: 0 },                        // long axis east-west, apse to the east, towers at the west end
   theatre: { x: -15.9, z: -82.6, rot: 18 * Math.PI / 180 },      // front faces +z local = south-south-east, towards the site
   chapel: { x: 63, z: 120.6, rot: 13 * Math.PI / 180 },
-  urban: { x: 9.3, z: 88.5 },
+  urban: { x: 9.3, z: 88.5, rot: 0 },
 };
 
 // Circles (city frame, metres) the procedural middle ring keeps clear when these landmarks lie beyond the near ring (r = footprint radius + a block's reach)
@@ -21,13 +23,13 @@ export const clearance = [
 ];
 
 // ring of columns / half cylinders helper
-const ring = (n, r, f) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; f(Math.cos(a) * r, Math.sin(a) * r, a); } };
+const ring = (n: number, r: number, f: (x: number, z: number, a: number) => void) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; f(Math.cos(a) * r, Math.sin(a) * r, a); } };
 
 // Baroque spire (lathe, 8 facets): neck, big onion, lantern, small onion, needle. y from 0, about 21 m tall.
-const SPIRE = [[0, 0], [4.7, 0], [4.7, 0.8], [3.6, 1.5], [2.9, 2.4], [2.8, 3.6], [3.4, 4.8], [4.0, 6.2], [4.1, 7.4], [3.4, 8.8], [2.2, 10.2], [1.3, 11.4], [1.2, 12.8], [1.9, 13.0], [1.9, 13.4], [1.2, 13.6],
+const SPIRE: [number, number][] = [[0, 0], [4.7, 0], [4.7, 0.8], [3.6, 1.5], [2.9, 2.4], [2.8, 3.6], [3.4, 4.8], [4.0, 6.2], [4.1, 7.4], [3.4, 8.8], [2.2, 10.2], [1.3, 11.4], [1.2, 12.8], [1.9, 13.0], [1.9, 13.4], [1.2, 13.6],
   [1.2, 14.6], [1.7, 15.6], [1.2, 16.8], [0.4, 18.4], [0.15, 21]];
 
-function cathedral(parts) {
+function cathedral(parts: Parts) {
   // --- nave, aisles, transept, choir, apse ---
   const bay = 6;
   parts.add(box(27, 19, 16), 'gothic', { x: -5.5, y: 0, wall: bay });                             // nave (x -19..8, z +-8)
@@ -75,7 +77,7 @@ function cathedral(parts) {
   parts.add(cyl(6.6, 0.8, 4.2, 4), 'copperDark', { x: -25.5, y: 36, z: 15.5, ry: Math.PI / 4 });
 }
 
-function urbanTower(parts) {                                                                       // bell tower, ~30 m, free-standing next to the west front
+function urbanTower(parts: Parts) {                                                                       // bell tower, ~30 m, free-standing next to the west front
   parts.add(box(8, 20, 8), 'tower', { wall: 4, vs: 9 });
   parts.add(box(9, 1, 9), 'stone', { y: 20 });
   parts.add(cyl(3.6, 3.6, 5, 8), 'stone', { y: 21 });
@@ -83,7 +85,7 @@ function urbanTower(parts) {                                                    
   parts.add(new THREE.SphereGeometry(0.35, 6, 4), 'gold', { y: 36.2 });
 }
 
-function chapel(parts) {                                                                           // St. Michael's chapel, 20 x 15 m, apse east
+function chapel(parts: Parts) {                                                                           // St. Michael's chapel, 20 x 15 m, apse east
   parts.add(box(14, 7.5, 13), 'tower', { x: -2, wall: 5, vs: 9 });
   const g = gableRoof(16, 7.4, 5, 4);
   for (const s of g.slopes) parts.add(s, 'redTile', { x: -2, y: 7.5 }); for (const e of g.ends) parts.add(e, 'stone', { x: -2, y: 7.5 });
@@ -92,7 +94,7 @@ function chapel(parts) {                                                        
   parts.add(box(2.2, 4, 2.2), 'stone', { x: -8, y: 7.5 }); parts.add(cyl(1.6, 0, 3.4, 4), 'copperDark', { x: -8, y: 11.5, ry: Math.PI / 4 });
 }
 
-function theatre(parts) {
+function theatre(parts: Parts) {
   // local frame: facade at z = +26 looking +z, width 33 (x), depth 52; ground 0
   const bay = 5.5;
   parts.add(box(33, 15, 40), 'cream', { z: 6, wall: bay });                                         // main body (z -14..26)
@@ -127,12 +129,12 @@ function theatre(parts) {
   parts.add(new THREE.SphereGeometry(0.45, 6, 4), 'gold', { y: 35.7, z: 4 });
 }
 
-function plagueColumn(parts) {                                                                     // Immaculata: stepped plinth, column, gilded figure
+function plagueColumn(parts: Parts) {                                                                     // Immaculata: stepped plinth, column, gilded figure
   parts.add(cyl(2.4, 2.0, 0.6, 8), 'stoneGrey'); parts.add(cyl(1.7, 1.4, 1.2, 8), 'stoneGrey', { y: 0.6 });
   parts.add(box(2, 2.6, 2), 'stoneGrey', { y: 1.8 }); parts.add(cyl(0.38, 0.3, 4.6, 6), 'cream_flat', { y: 4.4 });
   parts.add(cyl(0.55, 0.4, 0.8, 6), 'cream_flat', { y: 9 }); parts.add(cyl(0.3, 0.2, 1.5, 5), 'gold', { y: 9.8 }); parts.add(new THREE.SphereGeometry(0.22, 5, 4), 'gold', { y: 11.5 });
 }
-function fountain(parts) {                                                                         // Singing Fountain: round basin, water, glass-like jets
+function fountain(parts: Parts) {                                                                         // Singing Fountain: round basin, water, glass-like jets
   parts.add(cyl(4.6, 4.4, 0.7, 12), 'stoneGrey'); parts.add(cyl(4.1, 4.1, 0.05, 12), 'water', { y: 0.55 });
   parts.add(cyl(0.2, 0.2, 3.2, 5), 'water', { y: 0.6 });
   ring(6, 2.2, (x, z) => parts.add(cyl(0.12, 0.12, 1.6, 4), 'water', { x, y: 0.6, z }));
@@ -141,17 +143,17 @@ function fountain(parts) {                                                      
 // The cathedral can come from a Blender-built GLB (scripts/blender/cathedral.py, three LODs on one atlas) instead of the procedural parts.
 // Flag: add ?cathedral=procedural to the page URL to keep the procedural one (fallback, also used when the GLB failed to load).
 const CATHEDRAL_LOD_DIST = [0, 150, 380];
-function blenderCathedral(src) {
+function blenderCathedral(srcNode: THREE.Object3D) {
   const lod = new THREE.LOD(); lod.name = 'st-elisabeth';
-  const levels = [];
-  src = src.clone(true);                                                                                    // the GLTF scene is cached: never take nodes out of it
+  const levels: THREE.Object3D[] = [];
+  const src = srcNode.clone(true);                                                                                    // the GLTF scene is cached: never take nodes out of it
   src.traverse((o) => { const m = /^cathedral_LOD(\d)$/.exec(o.name); if (m) levels[+m[1]] = o; });     // a node with two materials arrives as a Group of two meshes
-  const tris = (o) => { let t = 0; o.traverse((m) => { if (m.isMesh) t += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return t; };
+  const tris = (o: THREE.Object3D) => { let t = 0; o.traverse((m) => { if (m instanceof THREE.Mesh) t += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return t; };
   levels.forEach((m, i) => {
     if (!m) return;
     m.parent?.remove(m); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
     m.traverse((mesh) => {
-      if (!mesh.isMesh) return;
+      if (!(mesh instanceof THREE.Mesh)) return;
       mesh.castShadow = i < 2; mesh.receiveShadow = true;
       const mat = mesh.material = mesh.material.clone();                                                       // own material: the glow below must not touch the cached one
       if (mat.emissiveMap) { mat.emissive.set(0xffffff); mat.emissiveIntensity = 0; glowMats.push(mat); }          // lit windows and floodlit stone follow the scenery glow
@@ -163,23 +165,23 @@ function blenderCathedral(src) {
   return lod;
 }
 
-export function build(assets) {
+export function build(assets?: LevelAssets) {
   const mats = landmarkMaterials(), root = new THREE.Group(); root.name = 'kosice-landmarks';
-  const place = (name, a, fn, extra) => {
-    const g = new THREE.Group(); g.name = name; g.position.set(a.x, 0, a.z); g.rotation.y = a.rot || 0;
+  const place = (name: string, a: At, fn: (p: Parts) => void) => {
+    const g = new THREE.Group(); g.name = name; g.position.set(a.x, 0, a.z); g.rotation.y = a.rot;
     const p = new Parts(); fn(p); p.build(mats, g); root.add(g); return g;
   };
-  const useGlb = assets?.cathedral && new URLSearchParams(location.search).get('cathedral') !== 'procedural';
+  const glb = assets?.cathedral, useGlb = glb && new URLSearchParams(location.search).get('cathedral') !== 'procedural';
   let cat;
   if (useGlb) {
     cat = new THREE.Group(); cat.name = 'st-elisabeth'; cat.position.set(AT.cathedral.x, 0, AT.cathedral.z); cat.rotation.y = AT.cathedral.rot;
-    const lod = blenderCathedral(assets.cathedral); cat.add(lod); cat.userData.tris = lod.userData.tris; root.add(cat);
+    const lod = blenderCathedral(glb); cat.add(lod); cat.userData.tris = lod.userData.tris; root.add(cat);
   } else cat = place('st-elisabeth', AT.cathedral, cathedral);
-  place('st-urban', { x: AT.urban.x, z: AT.urban.z }, urbanTower);
+  place('st-urban', AT.urban, urbanTower);
   place('st-michael-chapel', AT.chapel, chapel);
   const th = place('state-theatre', AT.theatre, theatre);
   // Immaculata column and Singing Fountain stand on the theatre's axis in front of it (local +z), outside the 28 m plaza
-  const axis = (d) => ({ x: AT.theatre.x + Math.sin(AT.theatre.rot) * d, z: AT.theatre.z + Math.cos(AT.theatre.rot) * d });
+  const axis = (d: number) => ({ x: AT.theatre.x + Math.sin(AT.theatre.rot) * d, z: AT.theatre.z + Math.cos(AT.theatre.rot) * d, rot: 0 });
   place('fountain', axis(40), fountain);
   place('immaculata', axis(55), plagueColumn);
   root.userData.stats = { cathedral: cat.userData.tris, theatre: th.userData.tris };

@@ -1,6 +1,6 @@
 # CLAUDE.md - Skyline Stack
 
-Browser tower-stacking game in Three.js (r160, TypeScript moving in next to plain JS, esbuild). University project, not for sale.
+Browser tower-stacking game in Three.js (r160, strict TypeScript, esbuild). University project, not for sale.
 Working title **Skyline Stack**; code and README may still say "Tower Bloxx 3D" until the rename task.
 One developer. Talk to them in the language they write in (Russian); everything written to the repo is in English.
 
@@ -13,13 +13,13 @@ npm install
 npm run serve        # http://localhost:8000, no-cache dev server
 npm run preview      # serve the built dist/ at http://localhost:8001
 npm run build        # bundle into dist/
-npm run typecheck   # tsc --noEmit (strict for .ts, allowJs for the rest)
+npm run typecheck   # tsc --noEmit (strict, no JavaScript under js/)
 npm test             # typecheck + Vitest (simulation core, tests/core)
 ```
 
 ## Layout
-`index.html` markup, `css/` styles, `js/` game code (.js and .ts mixed, S0003) (`config.js` holds all balance numbers), `vendor/` Three.js,
-`docs/` brief and ADRs, `work/plans/` specs, `work/tasks/<ID>-<topic>/NN-*.md` tickets.
+`index.html` markup, `css/` styles, `js/` game code, all TypeScript (`config.ts` holds all balance numbers; imports keep the `.js` ending, the dev server and esbuild resolve it to `.ts`), `vendor/` Three.js,
+`docs/` brief and ADRs, `scripts/*.mjs` and `tests/browser/*.mjs` (Node tooling, plain ESM on purpose, not typechecked), `work/plans/` specs, `work/tasks/<ID>-<topic>/NN-*.md` tickets.
 
 ## Work flow (copied from the Alium repo)
 - Large or unclear work: brief or instruction -> grilling (terms to `GLOSSARY.md`, hard decisions to `docs/adr/`)

@@ -2,17 +2,21 @@
 // One merged, vertex-coloured mesh per person (one draw call, 200-400 triangles). Arms and legs swing in the vertex
 // shader: every vertex carries a limb id, so a person costs no extra draw calls and no skeleton.
 import * as THREE from 'three';
+import type { Outfit } from './styles.js';
 
-const pick = (list, rnd) => list[Math.floor(rnd() * list.length)];
-const col = (v, rnd) => (Array.isArray(v) ? pick(v, rnd) : v);
-const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+type Rnd = () => number;
+type Col = number | number[];
+
+const pick = <T>(list: T[], rnd: Rnd): T => list[Math.floor(rnd() * list.length)];
+const col = (v: Col, rnd: Rnd): number => (Array.isArray(v) ? pick(v, rnd) : v);
+const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 
 const HIP = 0.58, SHOULDER = 1.0;
 // limb ids: 0 body, 1 left arm, 2 right arm, 3 left leg, 4 right leg
 
-export function buildFigure(o, skin, rnd = Math.random) {
-  const parts = [];
-  const add = (g, c, limb = 0) => parts.push([g, c, limb]);
+export function buildFigure(o: Outfit, skin: number, rnd: Rnd = Math.random): THREE.BufferGeometry {
+  const parts: [THREE.BufferGeometry, number, number][] = [];
+  const add = (g: THREE.BufferGeometry, c: number, limb = 0) => parts.push([g, c, limb]);
   const top = col(o.top, rnd), bottom = col(o.bottom ?? 0x23252b, rnd), shoes = col(o.shoes ?? 0x2a2a2a, rnd);
   const hair = col(o.hair ?? 0x2b1d14, rnd);
   const garment = o.garment || 'trousers', coat = o.coat || 'none', coatC = coat !== 'none' ? col(o.coatCol ?? top, rnd) : top;
@@ -69,7 +73,7 @@ export function buildFigure(o, skin, rnd = Math.random) {
   add(box(0.06, 0.07, 0.06, 0, 1.06, 0), skin);
   add(new THREE.SphereGeometry(0.125, 8, 6).scale(0.95, 1.05, 1).translate(0, 1.18, 0), skin);
   add(box(0.025, 0.03, 0.02, 0.045, 1.19, 0.125), 0x2b1d14); add(box(0.025, 0.03, 0.02, -0.045, 1.19, 0.125), 0x2b1d14);   // eyes
-  const cap = (r, y, c, t = 0.55) => add(new THREE.SphereGeometry(r, 8, 4, 0, Math.PI * 2, 0, Math.PI * t).translate(0, y, 0), c);
+  const cap = (r: number, y: number, c: number, t = 0.55) => add(new THREE.SphereGeometry(r, 8, 4, 0, Math.PI * 2, 0, Math.PI * t).translate(0, y, 0), c);
   const head = o.headwear;
   if (head === 'ghutra') {
     const w = col(o.headCol ?? 0xffffff, rnd);
@@ -91,7 +95,7 @@ export function buildFigure(o, skin, rnd = Math.random) {
   }
 
   // merge, adding the per-vertex limb id
-  let count = 0; const gs = parts.map(([g, c, l]) => { const n = g.index ? g.toNonIndexed() : g; count += n.attributes.position.count; return [n, new THREE.Color(c), l]; });
+  let count = 0; const gs = parts.map(([g, c, l]): [THREE.BufferGeometry, THREE.Color, number] => { const n = g.index ? g.toNonIndexed() : g; count += n.attributes.position.count; return [n, new THREE.Color(c), l]; });
   const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), cl = new Float32Array(count * 3), limb = new Float32Array(count);
   let off = 0;
   for (const [g, c, l] of gs) {
@@ -117,7 +121,7 @@ export function makeFigureMaterial() {
   const u = { uPhase: { value: 0 }, uAmp: { value: 0 }, uRaise: { value: 0 } };
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
   m.userData.u = u;
-  m.onBeforeCompile = (sh) => {
+  m.onBeforeCompile = (sh: { uniforms: Record<string, unknown>; vertexShader: string }) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
       .replace('void main() {', 'attribute float aLimb; uniform float uPhase, uAmp, uRaise;\nvoid main() {')

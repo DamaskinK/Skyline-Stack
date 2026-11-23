@@ -418,7 +418,7 @@ function newFlight() {
 newFlight(); flight.t = 12;
 const balloon = new THREE.Group();
 {
-  const [c, x] = canvas2d(256, 64) as [HTMLCanvasElement, CanvasRenderingContext2D]; ['#e74c3c', '#f1c40f', '#3498db', '#ffffff'].forEach((col, i) => { for (let k = i; k < 16; k += 4) { x.fillStyle = col; x.fillRect(k * 16, 0, 16, 64); } });
+  const [c, x] = canvas2d(256, 64); ['#e74c3c', '#f1c40f', '#3498db', '#ffffff'].forEach((col, i) => { for (let k = i; k < 16; k += 4) { x.fillStyle = col; x.fillRect(k * 16, 0, 16, 64); } });
   const env = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 12), new THREE.MeshStandardMaterial({ map: toTex(c), roughness: 0.7 })); env.scale.y = 1.2; env.position.y = 7;
   const basket = new THREE.Mesh(box(1.6, 1.2, 1.6, 0, 0.6, 0), new THREE.MeshStandardMaterial({ color: 0x8b5a2b }));
   const ropes = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([-0.8, 1.2, -0.8, -2, 3.6, -2, 0.8, 1.2, -0.8, 2, 3.6, -2, -0.8, 1.2, 0.8, -2, 3.6, 2, 0.8, 1.2, 0.8, 2, 3.6, 2], 3)), new THREE.LineBasicMaterial({ color: 0x333333 }));

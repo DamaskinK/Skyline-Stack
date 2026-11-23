@@ -3,19 +3,23 @@ import * as THREE from 'three';
 import { aimSun } from './world.js';
 import { windClock } from './vegetation.js';
 
-export function installDebug({ renderer, scene, camera, loadPlot = null }) {
-  const targets = new Map();
+type V3 = [number, number, number];
+export interface DebugHost { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; loadPlot?: ((n: number, city?: string) => unknown) | null }
+declare global { interface Window { __debug: unknown } }
+
+export function installDebug({ renderer, scene, camera, loadPlot = null }: DebugHost) {
+  const targets = new Map<string, THREE.WebGLRenderTarget>();
   const cam = new THREE.PerspectiveCamera();
-  const target = (w, h) => {
+  const target = (w: number, h: number): THREE.WebGLRenderTarget => {
     const k = `${w}x${h}`;
     if (!targets.has(k)) targets.set(k, new THREE.WebGLRenderTarget(w, h, { colorSpace: THREE.SRGBColorSpace }));
-    return targets.get(k);
+    return targets.get(k) as THREE.WebGLRenderTarget;
   };
 
   // Render the scene from one camera pose into an offscreen target and return its RGBA bytes.
   // The sun is aimed at `sunFocus` the same way the game aims it at the camera's look point.
   const focus = new THREE.Vector3();
-  function snap(pos, look, w = 320, h = 180, sunFocus = look) {
+  function snap(pos: V3, look: V3, w = 320, h = 180, sunFocus: V3 = look) {
     cam.fov = camera.fov; cam.near = camera.near; cam.far = camera.far; cam.aspect = w / h; cam.updateProjectionMatrix();
     cam.position.set(...pos); cam.lookAt(...look); cam.updateMatrixWorld();
     aimSun(focus.set(...sunFocus));
@@ -29,29 +33,29 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }) {
   //  'depth':  the camera moves 4 mm (sun fixed). A clean scene changes only along edges; z-fighting flips surfaces.
   //  'shadow': the camera stays, the sun's aim point moves 4 cm, as it does every frame while the camera follows the
   //            tower. Stable shadows do not change at all; a swimming shadow map shimmers along every shadow edge.
-  function flicker({ kind = 'depth', radius = 44, height = 24, look = [0, 2, 0], arc = Math.PI * 2, pairs = 12, w = 320, h = 180, tol = 40 } = {}) {
+  function flicker({ kind = 'depth', radius = 44, height = 24, look = [0, 2, 0] as V3, arc = Math.PI * 2, pairs = 12, w = 320, h = 180, tol = 40 } = {}) {
     const out = [], m4 = new THREE.Matrix4(), tp = new THREE.Vector3(), ts = new THREE.Vector3();
     // a pose whose camera sits inside a tree crown shows the crown cut by the near plane, which says nothing about the ground: skip it
-    const inTree = (p) => {
+    const inTree = (p: V3) => {
       let hit = false;
       scene.traverse((o) => {
-        if (hit || !o.userData.tree) return;
+        if (hit || !o.userData.tree || !(o instanceof THREE.InstancedMesh)) return;   // trees are instanced meshes
         for (let i = 0; i < o.count && !hit; i++) { o.getMatrixAt(i, m4); m4.decompose(tp, new THREE.Quaternion(), ts); if (Math.hypot(tp.x - p[0], tp.z - p[2]) < 2.6 * ts.x && p[1] < tp.y + 6 * ts.y) hit = true; }
       });
       return hit;
     };
     windClock.frozen = performance.now() / 1000;
     for (let i = 0; i < pairs; i++) {
-      const a = (i / pairs) * arc, p = [Math.cos(a) * radius, height, Math.sin(a) * radius];
+      const a = (i / pairs) * arc, p: V3 = [Math.cos(a) * radius, height, Math.sin(a) * radius];
       if (inTree(p)) continue;
-      let A, B;
+      let A: Uint8Array, B: Uint8Array;
       if (kind === 'shadow') {
         A = snap(p, look, w, h, look);
         B = snap(p, look, w, h, [look[0] + 0.04, look[1] + 0.03, look[2] - 0.02]);
       } else {
         const d = [0.004, 0.002, -0.004];
         A = snap(p, look, w, h, look);
-        B = snap(p.map((v, k) => v + d[k]), look, w, h, look);
+        B = snap([p[0] + d[0], p[1] + d[1], p[2] + d[2]], look, w, h, look);
       }
       let changed = 0;
       for (let j = 0; j < A.length; j += 4) {
