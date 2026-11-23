@@ -18,3 +18,4 @@ Developer, 2026-11-23: use TypeScript instead of plain JavaScript.
 ## Limits
 - No behaviour changes; simulation stays deterministic; all browser checks stay green after each batch.
 - Not in parallel with other builders (touches every file).
+- Change after 01: the dev server compiles each .ts file on request (esbuild transform) and the import map stays; no dev bundling.
