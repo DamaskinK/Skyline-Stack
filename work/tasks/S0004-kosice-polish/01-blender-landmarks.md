@@ -5,7 +5,7 @@
 **Blocked by:** 00
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Cathedral polish: roof glazed tiles mostly yellow and green diamonds like the real one; sharp stone at close range
       (tiling stone texture with trim detail instead of a low-res atlas, optional normal map); fix the "mesh not valid"
