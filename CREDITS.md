@@ -14,8 +14,6 @@ Every external file used by the game, with its source and licence. Add a row whe
 | Music "Folk Round" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100357 | CC-BY 4.0 | Kosice track (`assets/audio/music/kosice.mp3`) |
 | Music "Dvorak Polka" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100249 | CC-BY 4.0 | Prague track (`prague.mp3`, not wired yet) |
 | Music "Empacotatron" | Fupi | https://opengameart.org/node/180427 | CC0 | Newtown track (`assets/audio/music/newtown.mp3`, the OGG original mixed down to MP3 for Safari) |
-| Music "Desert City" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100564 | CC-BY 4.0 | Dubai track (`dubai.mp3`, not wired yet) |
-| Music "Jazz Brunch" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700074 | CC-BY 4.0 | New York track (`new-york.mp3`, not wired yet) |
 | Music "Neon Laser Horizon" | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2000023 | CC-BY 4.0 | Tokyo track (`tokyo.mp3`, not wired yet) |
 | Sound "Little Whoosh 2" | ch_ase | https://freesound.org/people/ch_ase/sounds/423799/ | CC0 | block drop (`assets/audio/sfx/drop.mp3`) |
 | Sound "Low Thud" | Qvantor | https://freesound.org/people/Qvantor/sounds/879272/ | CC0 | landing and the collapse layers (`land.mp3`) |
@@ -41,14 +39,6 @@ Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
 
 "Dvorak Polka" Kevin MacLeod (incompetech.com)
-Licensed under Creative Commons: By Attribution 4.0 License
-http://creativecommons.org/licenses/by/4.0/
-
-"Desert City" Kevin MacLeod (incompetech.com)
-Licensed under Creative Commons: By Attribution 4.0 License
-http://creativecommons.org/licenses/by/4.0/
-
-"Jazz Brunch" Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
 

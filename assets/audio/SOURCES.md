@@ -7,8 +7,6 @@ Kevin MacLeod tracks (CC-BY 4.0) need the credit line from the research file. Th
 - music/newtown.mp3 | Empacotatron (full track, the original OGG mixed down to MP3 for Safari with scripts/blender/ogg_to_mp3.py) | Fupi | https://opengameart.org/node/180427 | CC0 | 1615245 bytes
 - music/kosice.mp3 | Folk Round | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100357 | CC-BY 4.0 | 7472358 bytes
 - music/prague.mp3 | Dvorak Polka | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100249 | CC-BY 4.0 | 3865971 bytes
-- music/dubai.mp3 | Desert City | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100564 | CC-BY 4.0 | 3679550 bytes
-- music/new-york.mp3 | Jazz Brunch | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700074 | CC-BY 4.0 | 10341722 bytes
 - music/tokyo.mp3 | Neon Laser Horizon | Kevin MacLeod | https://incompetech.com/music/royalty-free/index.html?isrc=USUAN2000023 | CC-BY 4.0 | 3573716 bytes
 - sfx/drop.mp3 | Little Whoosh 2 | ch_ase | https://freesound.org/people/ch_ase/sounds/423799/ | CC0 | 25536 bytes
 - sfx/land.mp3 | Low Thud | Qvantor | https://freesound.org/people/Qvantor/sounds/879272/ | CC0 | 4368 bytes
