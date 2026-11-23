@@ -14,8 +14,8 @@ const errors = [], fails = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(e.message));
 await page.addInitScript((q) => {
-  if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.removeItem('tb3d_district_v1'); localStorage.removeItem('tb3d_progress_v3'); }
-  const k = 'tb3d_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false, difficulty: 'easy' }));
+  if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.removeItem('skyline_district_v1'); localStorage.removeItem('skyline_progress_v3'); }
+  const k = 'skyline_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false, difficulty: 'easy' }));
 }, quality);
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fails.push(m); };
 await page.goto(app, { waitUntil: 'load' });
@@ -76,7 +76,7 @@ async function playPlot(plotId, shot) {
 let r = await playPlot('edge', true);
 ok(/COUNTED/.test(r.text) && !/NOT COUNTED/.test(r.text), 'plot 1 counted');
 ok(r.hud.np[0] === 190 && r.hud.np[2] === -150, 'city moved so plot 1 site is at the tower');
-const st = await page.evaluate(() => JSON.parse(localStorage.getItem('tb3d_district_v1')).cities.newtown.plots.edge);
+const st = await page.evaluate(() => JSON.parse(localStorage.getItem('skyline_district_v1')).cities.newtown.plots.edge);
 ok(st.counted && st.bestHeight >= 3 && st.residents > 0, `plot 1 saved ${JSON.stringify(st)}`);
 await page.evaluate(() => document.querySelector('#btnPlotMap').click()); await page.waitForTimeout(900);
 await page.screenshot({ path: join(out, `map-after-1-${quality}.png`) });
@@ -85,7 +85,7 @@ ok(r.hud.tw >= 1, 'plot 2 shows the finished tower of plot 1');
 await snapPng('far-tower', [10, 10, 16], [-340, 8, 25]);
 await page.evaluate(() => document.querySelector('#btnPlotMap').click()); await page.waitForTimeout(600);
 await page.evaluate(() => {
-  const k = 'tb3d_district_v1', d = JSON.parse(localStorage.getItem(k));
+  const k = 'skyline_district_v1', d = JSON.parse(localStorage.getItem(k));
   for (const id of ['outer-ring', 'inner-ring']) d.cities.newtown.plots[id] = { stars: 3, bestHeight: 40, residents: 0, counted: true };
   localStorage.setItem(k, JSON.stringify(d));
 });

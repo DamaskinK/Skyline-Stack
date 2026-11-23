@@ -1,7 +1,7 @@
 const { chromium } = await import(process.cwd() + '/node_modules/playwright/index.mjs');
 const browser = await chromium.launch({ headless: true, executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-await page.addInitScript(() => localStorage.setItem('tb3d_settings_v2', JSON.stringify({ quality: 'high', hints: false })));
+await page.addInitScript(() => localStorage.setItem('skyline_settings_v2', JSON.stringify({ quality: 'high', hints: false })));
 await page.goto('http://localhost:8000', { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug); await page.waitForTimeout(800);
 for (const n of [4, 3, 4]) {

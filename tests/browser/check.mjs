@@ -40,7 +40,7 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(e.message));
 await page.addInitScript((q) => {
-  try { const k = 'tb3d_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false })); } catch { /* ignore */ }
+  try { const k = 'skyline_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false })); } catch { /* ignore */ }
 }, quality);
 
 await page.goto(app, { waitUntil: 'load' });

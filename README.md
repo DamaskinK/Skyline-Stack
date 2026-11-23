@@ -1,6 +1,6 @@
-# Tower Bloxx 3D
+# Skyline Stack
 
-A retro tower-stacking game in Three.js. Drop swinging floors from a crane and build the tallest tower you can, while wind, weather and sway physics make each floor harder than the last.
+A tower-stacking game in Three.js with an arcade look. Drop swinging floors from a crane and build the tallest tower you can, while wind, weather and sway physics make each floor harder than the last.
 
 ## Run it
 
@@ -59,7 +59,7 @@ Everything is deterministic: the same drops in the same conditions always give t
 
 ```
 index.html          page markup: HUD and menu screens
-css/style.css       retro arcade styling
+css/style.css       UI styling (Unbounded and Figtree fonts, arcade colours)
 js/main.js          entry point, frame loop, camera
 js/config.js        all balance numbers, difficulty presets, weather phases
 js/physics.js       wind, crane swing, tower sway, stability rule
@@ -70,7 +70,8 @@ js/fx.js            particles, rain, snow, lightning, people with umbrellas
 js/textures.js      procedural canvas textures (facades, shops, billboards)
 js/audio.js         synthesised sound effects and chiptune music
 js/ui.js            menus, settings, high scores, HUD
-js/settings.js      settings and high scores in localStorage
+js/strings.js       every UI text in one place
+js/settings.js      settings and progress in localStorage (keys skyline_*; old tb3d_* keys are copied once)
 vendor/three.module.js   Three.js r160
 build.mjs           bundles everything into dist/
 ```

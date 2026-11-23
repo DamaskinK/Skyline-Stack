@@ -16,7 +16,7 @@ async function open(blockTrack) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('console', (m) => { if (m.type() === 'error' && !(blockTrack && /Failed to load resource/.test(m.text()))) errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.addInitScript(() => { try { localStorage.setItem('tb3d_settings_v2', JSON.stringify({ quality: 'low', hints: false, music: 0.35, sfx: 0.7, muted: false })); } catch { /* ignore */ } });
+  await page.addInitScript(() => { try { localStorage.setItem('skyline_settings_v2', JSON.stringify({ quality: 'low', hints: false, music: 0.35, sfx: 0.7, muted: false })); } catch { /* ignore */ } });
   if (blockTrack) await page.route('**/kosice.mp3', (r) => r.abort());
   await page.goto(app, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game && window.__music, null, { timeout: 15000 });

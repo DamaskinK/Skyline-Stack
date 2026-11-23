@@ -9,6 +9,7 @@ import { makeBlockMesh, makeFoundation, makeRoof, makeCrown } from './entities.j
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
+import { S } from './strings.js';
 import { settings, loadScores, loadDistrictProgress, saveDistrictResult } from './settings.js';
 import { levelById, cityById, nextLevel } from './levels.js';
 import { resultCounts, plotStars, plotResidents, towerBonuses, districtTotals, nextPlot, plotOf } from './core/district.js';
@@ -159,31 +160,31 @@ export class Game {
         break;
       }
       case 'drop': Sfx.drop(); break;
-      case 'anchor': this.ui.popup('ANCHOR', '#52d9ff'); Sfx.anchor(); break;
-      case 'lightningWarning': this.flashV = Math.max(this.flashV, 0.25); this.ui.banner('Lightning incoming', 1.5); Sfx.rumble(); break;
+      case 'anchor': this.ui.popup(S.pop.anchor, '#52d9ff'); Sfx.anchor(); break;
+      case 'lightningWarning': this.flashV = Math.max(this.flashV, 0.25); this.ui.banner(S.banner.lightning, 1.5); Sfx.rumble(); break;
       case 'lightning': this.flashV = 1; strikeBolt(ev.x, ev.y, ev.z); Sfx.thunder(); break;
-      case 'bounce': this.ui.popup('BOING', '#ff5fa2', true); Sfx.bounce(); FX.dust({ x: ev.x, y: ev.y, z: ev.z }, 0.5); break;
+      case 'bounce': this.ui.popup(S.pop.boing, '#ff5fa2', true); Sfx.bounce(); FX.dust({ x: ev.x, y: ev.y, z: ev.z }, 0.5); break;
       case 'slip': this.blockToDebris({ ...ev }); Sfx.miss(); break;
       case 'miss': this.blockToDebris({ ...ev, av: { x: 1, y: 0.5, z: -1.5 } }); Sfx.miss(); break;
       case 'land': this.onLand(ev); break;
-      case 'goldenNext': this.ui.banner('Golden block next', 2); break;
-      case 'anchorGained': this.ui.banner('+1 anchor', 2); break;
+      case 'goldenNext': this.ui.banner(S.banner.goldenNext, 2); break;
+      case 'anchorGained': this.ui.banner(S.banner.anchorGained, 2); break;
       case 'weather': this.ui.weather((this.run as Run).wx); Sfx.whoosh(); break;
-      case 'gustWarning': this.ui.banner('Sandstorm gust incoming', 1.5); Sfx.rumble(); break;
+      case 'gustWarning': this.ui.banner(S.banner.gust, 1.5); Sfx.rumble(); break;
       case 'gust': this.shake = Math.max(this.shake, 0.4); Sfx.whoosh(); break;
-      case 'quakeWarning': this.ui.banner(`Earthquake at floor ${ev.floor}`, 3); break;
-      case 'quake': this.shake = CFG.quakeTime; this.ui.banner('EARTHQUAKE', CFG.quakeTime); Sfx.crash(); break;
+      case 'quakeWarning': this.ui.banner(S.banner.quakeWarning(ev.floor), 3); break;
+      case 'quake': this.shake = CFG.quakeTime; this.ui.banner(S.banner.quake, CFG.quakeTime); Sfx.crash(); break;
       case 'collapse': {
         const meshes = this.floorMeshes.splice(ev.from); this.floorViews.splice(ev.from);
         ev.items.forEach((it, j) => this.addDebris({ mesh: meshes[j], p: it.p, v: it.v, av: it.av }));
         this.shake = 0.8; this.flashV = Math.max(this.flashV, 0.3);
         if (ev.items[0]) FX.dust(ev.items[0].p, 2);
         Sfx.crash();
-        this.ui.popup(`COLLAPSE −${ev.count}`, '#ff4d5e');
+        this.ui.popup(S.pop.collapse(ev.count), '#ff4d5e');
         break;
       }
-      case 'lifeLost': if (ev.reason) this.ui.popup(ev.reason, '#ff4d5e'); break;
-      case 'target': this.ui.popup('TARGET REACHED', '#ffd34d'); Sfx.golden(); break;
+      case 'lifeLost': if (ev.reason) this.ui.popup(S.pop.reasons[ev.reason] ?? ev.reason, '#ff4d5e'); break;
+      case 'target': this.ui.popup(S.pop.target, '#ffd34d'); Sfx.golden(); break;
       case 'over': this.gameOver(ev.result); break;
       default: break;
     }
@@ -202,10 +203,10 @@ export class Game {
     this.ui.bumpFloor();
     if (perfect) {
       FX.sparks(roof); FX.ring(new THREE.Vector3(roof.x, roof.y + 0.05, roof.z), 0xffd34d);
-      this.ui.popup(ev.combo > 1 ? `PERFECT ×${ev.combo}` : 'PERFECT', '#ffb627');
-    } else if (good) this.ui.popup('GOOD', '#5dff9b');
-    else { this.ui.popup('RISKY', '#ff4d5e'); this.shake = Math.max(this.shake, 0.25); }
-    if (ev.golden) { this.ui.popup('GOLDEN · CALM', '#ffd34d', true); Sfx.golden(); FX.ring(new THREE.Vector3(roof.x, roof.y + 0.05, roof.z), 0xffffff); }
+      this.ui.popup(S.pop.perfect(ev.combo), '#ffb627');
+    } else if (good) this.ui.popup(S.pop.good, '#5dff9b');
+    else { this.ui.popup(S.pop.risky, '#ff4d5e'); this.shake = Math.max(this.shake, 0.25); }
+    if (ev.golden) { this.ui.popup(S.pop.golden, '#ffd34d', true); Sfx.golden(); FX.ring(new THREE.Vector3(roof.x, roof.y + 0.05, roof.z), 0xffffff); }
   }
 
   // Facade style of the current building type; special blocks keep their own colour and plain facade.

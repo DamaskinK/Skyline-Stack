@@ -12,7 +12,7 @@ const fails = [], ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); i
 for (const n of plots) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = []; page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('pageerror', (e) => errors.push(e.message));
-  await page.addInitScript((q) => { const k = 'tb3d_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false })); }, quality);
+  await page.addInitScript((q) => { const k = 'skyline_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false })); }, quality);
   await page.goto(app, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });
   await page.waitForTimeout(600);

@@ -4,10 +4,10 @@ const browser = await chromium.launch({ headless: true, executablePath: '/Applic
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type()==='error') errs.push(m.text()); });
 await page.addInitScript((q) => {
-  localStorage.setItem('tb3d_settings_v2', JSON.stringify({ quality: q, hints: false }));
+  localStorage.setItem('skyline_settings_v2', JSON.stringify({ quality: q, hints: false }));
   // all plots counted so district towers appear
   const mk = (ids, h) => Object.fromEntries(ids.map((id, i) => [id, { stars: 1, bestHeight: h[i], residents: 0, counted: true }]));
-  if (!location.hash) localStorage.setItem('tb3d_district_v1', JSON.stringify({ v: 2, cities: {
+  if (!location.hash) localStorage.setItem('skyline_district_v1', JSON.stringify({ v: 2, cities: {
     kosice: { opened: true, goalReached: false, plots: mk(['terasa','juzna','kulturpark','hlavna-south','cathedral'], [12,15,18,22,26]) },
     newtown: { opened: true, goalReached: false, plots: mk(['edge','park-row','outer-ring','inner-ring','plaza'], [12,15,18,22,26]) } } }));
   const live = { buf: 0, tex: 0, vao: 0, prog: 0 }; window.__live = live;

@@ -1,7 +1,7 @@
 # CLAUDE.md - Skyline Stack
 
 Browser tower-stacking game in Three.js (r160, strict TypeScript, esbuild). University project, not for sale.
-Working title **Skyline Stack**; code and README may still say "Tower Bloxx 3D" until the rename task.
+The game is called **Skyline Stack** (renamed in S0001 18; old `tb3d_*` storage keys are copied once to `skyline_*`).
 One developer. Talk to them in the language they write in (Russian); everything written to the repo is in English.
 
 Read first: `docs/BRIEF.md` (goals and every decision so far), then the plan in `work/plans/` and the open tasks.
@@ -36,7 +36,7 @@ npm test             # typecheck + Vitest (simulation core, tests/core)
   CC0 first; CC-BY only with credit; OpenStreetMap data is ODbL (attribution).
 - Original work only: no name, art, music, levels or rules copied from existing tower-stacking games.
 - Quality presets (Low / Medium / High) stay; Low must run on a phone.
-- UI text in English, kept in one place for later translation.
+- UI text in English, kept in one place for later translation: `js/strings.ts` (static page texts use `data-t` keys in `index.html`).
 
 ## Agents and models
 The main session (Opus) talks to the developer, grills, plans, reviews and picks what is next; it does not build.

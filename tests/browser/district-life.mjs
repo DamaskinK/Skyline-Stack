@@ -17,8 +17,8 @@ for (const n of steps) {
   const errors = []; page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(([q, n, order, heights]) => {
     const plots = {}; order.slice(0, n).forEach((id, i) => { plots[id] = { stars: 3, bestHeight: heights[i], residents: 20, counted: true }; });
-    localStorage.setItem('tb3d_district_v1', JSON.stringify({ v: 2, cities: { kosice: { plots, opened: true, goalReached: false } } }));
-    const k = 'tb3d_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false }));
+    localStorage.setItem('skyline_district_v1', JSON.stringify({ v: 2, cities: { kosice: { plots, opened: true, goalReached: false } } }));
+    const k = 'skyline_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false }));
   }, [quality, n, ORDER, HEIGHT]);
   await page.goto(app, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });

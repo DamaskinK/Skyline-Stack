@@ -25,17 +25,17 @@ export const CFG = {
 // Multipliers on top of CFG. "meters" feed the bars on the difficulty screen (0..1).
 export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
   easy: {
-    label: 'EASY', lives: 5, perfect: 0.12, good: 0.3, swingAmp: 0.75, swingSpeed: 0.8, wind: 0.6, sway: 0.7, slide: 0.6, score: 0.75,
+    label: 'Easy', lives: 5, perfect: 0.12, good: 0.3, swingAmp: 0.75, swingSpeed: 0.8, wind: 0.6, sway: 0.7, slide: 0.6, score: 0.75,
     desc: 'Slow crane, light wind, wide perfect window and 5 lives.',
     meters: { crane: 0.3, wind: 0.3, precision: 0.3, lives: 1 },
   },
   normal: {
-    label: 'NORMAL', lives: 3, perfect: 0.08, good: 0.25, swingAmp: 1, swingSpeed: 1, wind: 1, sway: 1, slide: 1, score: 1,
+    label: 'Normal', lives: 3, perfect: 0.08, good: 0.25, swingAmp: 1, swingSpeed: 1, wind: 1, sway: 1, slide: 1, score: 1,
     desc: 'The intended balance. Weather starts to bite after floor 30.',
     meters: { crane: 0.6, wind: 0.6, precision: 0.6, lives: 0.6 },
   },
   hard: {
-    label: 'HARD', lives: 3, perfect: 0.06, good: 0.2, swingAmp: 1.2, swingSpeed: 1.2, wind: 1.35, sway: 1.25, slide: 1.3, score: 1.6,
+    label: 'Hard', lives: 3, perfect: 0.06, good: 0.2, swingAmp: 1.2, swingSpeed: 1.2, wind: 1.35, sway: 1.25, slide: 1.3, score: 1.6,
     desc: 'Fast crane, strong gusts, tight perfects. Score ×1.6.',
     meters: { crane: 0.95, wind: 0.95, precision: 0.9, lives: 0.6 },
   },

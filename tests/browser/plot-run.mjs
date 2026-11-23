@@ -13,8 +13,8 @@ const errors = [], fails = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(e.message));
 await page.addInitScript((q) => {
-  if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.removeItem('tb3d_district_v1'); localStorage.removeItem('tb3d_progress_v3'); }
-  const k = 'tb3d_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false, difficulty: 'easy' }));
+  if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.removeItem('skyline_district_v1'); localStorage.removeItem('skyline_progress_v3'); }
+  const k = 'skyline_settings_v2'; const s = JSON.parse(localStorage.getItem(k) || '{}'); localStorage.setItem(k, JSON.stringify({ ...s, quality: q, hints: false, difficulty: 'easy' }));
 }, quality);
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fails.push(m); };
 await page.goto(app, { waitUntil: 'load' });
@@ -55,7 +55,7 @@ const snapPng = (name, pos, look) => page.evaluate(([pos, look]) => {
 let r = await playPlot(0, 'terasa');
 ok(/COUNTED/.test(r.text) && !/NOT COUNTED/.test(r.text), 'plot 1 result says counted');
 ok(r.hud.req.length > 0, 'HUD shows the requirement');
-const st1 = await page.evaluate(() => JSON.parse(localStorage.getItem('tb3d_district_v1')).cities.kosice.plots.terasa);
+const st1 = await page.evaluate(() => JSON.parse(localStorage.getItem('skyline_district_v1')).cities.kosice.plots.terasa);
 ok(st1.counted && st1.bestHeight >= 3 && st1.residents > 0, `plot 1 saved ${JSON.stringify(st1)}`);
 await page.evaluate(() => document.querySelector('#btnPlotMap').click());
 await page.waitForTimeout(900);
@@ -73,7 +73,7 @@ await page.evaluate(() => document.querySelector('#btnPlotMap').click());
 await page.waitForTimeout(600);
 // force the goal: three more counted plots with plenty of height, then look at the result screen text for "next city opened"
 await page.evaluate(() => {
-  const k = 'tb3d_district_v1', d = JSON.parse(localStorage.getItem(k));
+  const k = 'skyline_district_v1', d = JSON.parse(localStorage.getItem(k));
   d.cities.kosice.plots.kulturpark = { stars: 3, bestHeight: 40, residents: 0, counted: true };
   d.cities.kosice.plots['hlavna-south'] = { stars: 3, bestHeight: 40, residents: 0, counted: true };
   localStorage.setItem(k, JSON.stringify(d));
@@ -81,7 +81,7 @@ await page.evaluate(() => {
 r = await playPlot(4, 'cathedral');
 console.log(r.text.replace(/\n+/g, ' | '));
 ok(/Next city opened/i.test(r.text), 'next city opened shown at the goal');
-const res = await page.evaluate(() => JSON.parse(localStorage.getItem('tb3d_district_v1')).cities.kosice);
+const res = await page.evaluate(() => JSON.parse(localStorage.getItem('skyline_district_v1')).cities.kosice);
 ok(res.goalReached === true, 'goalReached saved');
 console.log(errors.length ? 'console errors: ' + errors.join(' | ') : 'no console errors');
 ok(errors.length === 0, 'no console errors');

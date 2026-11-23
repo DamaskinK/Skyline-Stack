@@ -1,7 +1,7 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
 import { BUILDING_TYPES, buildingTypeById } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
-import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
+import { NAME_KEY, settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById, DISTRICT_CITIES, LEVELS } from './levels.js';
 import { showDistrictTowers, clearDistrictTowers } from './district-towers.js';
 import { loadDistrictProgress } from './settings.js';
@@ -9,6 +9,7 @@ import { cityProgress } from './core/district-progress.js';
 import { requirementText } from './district-map.js';
 import { createDistrictMap } from './district-map.js';
 import { Sfx } from './audio.js';
+import { S, UI, applyStrings } from './strings.js';
 import { People } from './fx.js';
 import { buildDemo, clearDemo } from './game.js';
 import type { Game, GameUi, GameMode } from './game.js';
@@ -36,6 +37,7 @@ const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? ''
 const hex = (c: number): string => '#' + c.toString(16).padStart(6, '0');
 
 export function createUI(game: Game): GameUi {
+  applyStrings();
   // ── screen stack ──
   let stack: string[] = [];
   const screens = $$('.screen');
@@ -60,11 +62,11 @@ export function createUI(game: Game): GameUi {
 
   // ── logo ──
   const tileCols = ['#4f7cff', '#e86f4f', '#3fd07a', '#ffc531', '#ff5fa2'];
-  [...'TOWER'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[i % 5]; d.style.animationDelay = `${i * 0.08}s, ${i * 0.15}s`; $('#logoTop').appendChild(d); });
-  [...'BLOXX'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[(i + 2) % 5]; d.style.animationDelay = `${0.4 + i * 0.08}s, ${0.7 + i * 0.15}s`; $('#logoBot').appendChild(d); });
+  [...'SKYLINE'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[i % 5]; d.style.animationDelay = `${i * 0.07}s, ${i * 0.15}s`; $('#logoTop').appendChild(d); });
+  [...'STACK'].forEach((ch, i) => { const d = document.createElement('div'); d.className = 'lt'; d.textContent = ch; d.style.background = tileCols[(i + 2) % 5]; d.style.animationDelay = `${0.5 + i * 0.07}s, ${0.8 + i * 0.15}s`; $('#logoBot').appendChild(d); });
   function renderTitleBest() {
     const e = loadScores('kosice')[0];
-    $('#titleBest').innerHTML = e ? `BEST TOWER <b>${e.score}</b> · ${e.floors} FL` : 'NO RECORDS YET. BE THE FIRST.';
+    $('#titleBest').innerHTML = e ? S.bestTower(e.score, e.floors ?? 0) : S.noRecords;
   }
 
   // ── navigation ──
@@ -81,30 +83,29 @@ export function createUI(game: Game): GameUi {
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
     const m = d.meters, bar = (v: number): string => `<span class="meter"><i style="width:${v * 100}%"></i></span>`;
-    b.innerHTML = `<b>${d.label}</b><span>${d.desc}</span><span class="meters"><span>Crane</span>${bar(m.crane)}<span>Wind</span>${bar(m.wind)}<span>Precision</span>${bar(m.precision)}<span>Lives</span><span>${'♥'.repeat(d.lives)}</span></span>`;
+    b.innerHTML = `<b>${d.label}</b><span>${d.desc}</span><span class="meters"><span>${S.meterLbl.crane}</span>${bar(m.crane)}<span>${S.meterLbl.wind}</span>${bar(m.wind)}<span>${S.meterLbl.precision}</span>${bar(m.precision)}<span>${S.meterLbl.lives}</span><span>${'♥'.repeat(d.lives)}</span></span>`;
     b.onclick = () => { pickDiff = k as DifficultyId; Sfx.ui(); syncNew(); };
     dc.appendChild(b);
   }
   function syncNew() {
     for (const b of $$('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === pickDiff));
     for (const b of $$('[data-endless]')) b.setAttribute('aria-pressed', String(b.dataset.endless === pickCity));
-    $('#modeNote').textContent = `ENDLESS: one tower on the ${pickCity === 'newtown' ? 'Newtown plaza' : 'Kosice city centre plot'}, as high as you can.`
-      + ' The weather keeps changing as you climb. Districts are played from the cards below.';
+    $('#modeNote').textContent = S.endlessNote(pickCity === 'newtown');
   }
   syncNew();
   // Mode cards: Kosice level (with its best stars) and Endless. The world map (ticket 20) will replace this.
   function renderModes() {
     $('#modeCards').innerHTML =
-      `<button type="button" class="card-opt" data-mode="endless" data-endless="kosice"><b>ENDLESS · KOSICE</b><span class="sub">No target, as high as you can</span></button>`
-      + `<button type="button" class="card-opt" data-mode="endless" data-endless="newtown"><b>ENDLESS · NEWTOWN</b><span class="sub">The made-up city, open from the start</span></button>`;
+      `<button type="button" class="card-opt" data-mode="endless" data-endless="kosice"><b>${S.endlessKosice[0]}</b><span class="sub">${S.endlessKosice[1]}</span></button>`
+      + `<button type="button" class="card-opt" data-mode="endless" data-endless="newtown"><b>${S.endlessNewtown[0]}</b><span class="sub">${S.endlessNewtown[1]}</span></button>`;
     for (const b of $$('[data-endless]')) b.onclick = () => { pickMode = 'endless'; pickCity = b.dataset.endless as string; Sfx.ui(); syncNew(); };
     syncNew();
     $('#districtCards').innerHTML = DISTRICT_CITIES.filter((c) => c.built).map((c) =>
-      `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${(c.district as District).goal} residents</span></button>`).join('');
+      `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city}</b><span class="sub">${S.districtCard(!!c.fictional, c.country, (c.district as District).goal)}</span></button>`).join('');
     // a city that the goal of the one before opened, but that is not built yet (shown, not playable)
     const opened = loadDistrictProgress().cities;
     $('#districtCards').innerHTML += LEVELS.filter((c) => !c.built && opened[c.id]?.opened).map((c) =>
-      `<button type="button" class="card-opt" disabled><b>${c.city.toUpperCase()}</b><span class="sub">${c.country} · opened, not built yet</span></button>`).join('');
+      `<button type="button" class="card-opt" disabled><b>${c.city}</b><span class="sub">${S.districtClosed(c.country)}</span></button>`).join('');
     for (const b of $$('[data-district]')) b.onclick = () => { Sfx.init(); Sfx.uiOk(); districtMap.render(b.dataset.district); show('sMap'); };
   }
   // District map (S0002 05). Play loads the scene of the plot and runs it with the plot's rules.
@@ -148,18 +149,18 @@ export function createUI(game: Game): GameUi {
   async function loadWith(load: (setP: (p: number) => void) => Promise<AssetError[]>): Promise<void> {
     const bar = $('#loadBar'), fill = bar.querySelector('i') as HTMLElement, text = $('#loadText');
     const setP = (p: number): void => { fill.style.width = `${(p * 100).toFixed(0)}%`; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); };
-    setP(0); text.classList.remove('err'); text.textContent = 'Fetching the city...';
+    setP(0); text.classList.remove('err'); text.textContent = S.fetching;
     show('sLoading', false);
     try {
       const errors = await load(setP);
       if (errors.length) {
         text.classList.add('err');
-        text.textContent = `Some files did not load (${errors.map((e: AssetError) => e.url.split('/').pop()).join(', ')}). Playing without them.`;
+        text.textContent = S.filesFailed(errors.map((e: AssetError) => e.url.split('/').pop()).join(', '));
         await new Promise((r) => setTimeout(r, 1800));
       }
     } catch (e) {
       text.classList.add('err');
-      text.textContent = `Could not load the city: ${e instanceof Error ? e.message : String(e)}. Playing the basic scene.`;
+      text.textContent = S.loadFailed(e instanceof Error ? e.message : String(e));
       await new Promise((r) => setTimeout(r, 2200));
     }
   }
@@ -183,9 +184,9 @@ export function createUI(game: Game): GameUi {
   bindVol('#volMusic', 'music'); bindVol('#volSfx', 'sfx');
   let resetArm = 0;
   $('#btnReset').onclick = () => {
-    if (Date.now() - resetArm < 3000) { resetScores(); $('#btnReset').textContent = 'DONE'; resetArm = 0; return; }
-    resetArm = Date.now(); $('#btnReset').textContent = 'SURE? CLICK AGAIN';
-    setTimeout(() => { $('#btnReset').textContent = 'RESET'; }, 3000);
+    if (Date.now() - resetArm < 3000) { resetScores(); $('#btnReset').textContent = S.resetDone; resetArm = 0; return; }
+    resetArm = Date.now(); $('#btnReset').textContent = S.resetConfirm;
+    setTimeout(() => { $('#btnReset').textContent = UI['set.reset']; }, 3000);
   };
   function syncSettings() {
     for (const seg of $$('.seg')) for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(String(settings[seg.dataset.set as keyof Settings]) === b.dataset.v));
@@ -200,14 +201,14 @@ export function createUI(game: Game): GameUi {
   function renderScores(el: HTMLElement, cityId: string): void {
     const list = loadScores(cityId).slice(0, 10);
     el.innerHTML = list.length
-      ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc(String(s.diff || 'normal').toUpperCase())}</span></td><td>${s.floors} fl</td><td class="sc">${s.score}</td></tr>`).join('')
-      : '<tr><td class="empty">No scores yet. Your first tower goes here.</td></tr>';
+      ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc(UI['diff.' + (s.diff || 'normal')] || s.diff)}</span></td><td>${S.floorsShort(s.floors ?? 0)}</td><td class="sc">${s.score}</td></tr>`).join('')
+      : `<tr><td class="empty">${S.noScores}</td></tr>`;
   }
 
   // ── help ──
-  $('#helpBlocks').innerHTML = Object.values(BTYPES).filter((b) => b.hint).map((b) => `<li><span class="swatch" style="background:${hex(b.color)}"></span><b>${b.label.toUpperCase()}</b>${b.hint}</li>`).join('');
-  $('#helpTypes').innerHTML = Object.values(BUILDING_TYPES).map((t) => `<li><b>${t.label.toUpperCase()}</b>${t.hint}</li>`).join('');
-  $('#helpWeather').innerHTML = Object.values(WEATHER).map((p) => `<li>${WX_ICONS[p.name]}<b>${p.name.toUpperCase()}</b>${p.text}</li>`).join('') + '<li>Each city has its own weather by floor and its own events. A warning comes before every hit.</li>';
+  $('#helpBlocks').innerHTML = Object.values(BTYPES).filter((b) => b.hint).map((b) => `<li><span class="swatch" style="background:${hex(b.color)}"></span><b>${b.label}</b>${b.hint}</li>`).join('');
+  $('#helpTypes').innerHTML = Object.values(BUILDING_TYPES).map((t) => `<li><b>${t.label}</b>${t.hint}</li>`).join('');
+  $('#helpWeather').innerHTML = Object.values(WEATHER).map((p) => `<li>${WX_ICONS[p.name]}<b>${p.name}</b>${p.text}</li>`).join('') + `<li>${UI['help.weatherNote']}</li>`;
 
   // ── keyboard ──
   window.addEventListener('keydown', (e) => {
@@ -253,7 +254,7 @@ export function createUI(game: Game): GameUi {
   }
   $('#btnPause').onclick = togglePause; $('#btnResume').onclick = togglePause;
   $('#btnRestart').onclick = () => { game.paused = false; restart(); };
-  function syncMute() { $('#muteX').hidden = !settings.muted; $('#muteWave').hidden = settings.muted; $('#btnMute').setAttribute('aria-label', settings.muted ? 'Unmute sound' : 'Mute sound'); }
+  function syncMute() { $('#muteX').hidden = !settings.muted; $('#muteWave').hidden = settings.muted; $('#btnMute').setAttribute('aria-label', settings.muted ? S.muteOff : S.muteOn); }
   function toggleMute() { setSetting('muted', !settings.muted); syncMute(); }
   function cycleCam() { game.camMode = (game.camMode + 1) % 3; setSetting('camera', game.camMode); }
   $('#btnMute').onclick = toggleMute; $('#btnCam').onclick = cycleCam;
@@ -276,9 +277,9 @@ export function createUI(game: Game): GameUi {
     e.preventDefault();
     if (game.saved || !game.lastResult || game.levelDef) return;
     const r = game.lastResult;
-    addScore(game.cityId as string, { name: ($<HTMLInputElement>('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
-    try { localStorage.setItem('tb3d_name', $<HTMLInputElement>('#name').value); } catch { /* storage blocked */ }
-    game.saved = true; $<HTMLButtonElement>('#btnSave').disabled = true; $('#btnSave').textContent = 'SAVED'; Sfx.uiOk();
+    addScore(game.cityId as string, { name: ($<HTMLInputElement>('#name').value || S.defaultName).slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
+    try { localStorage.setItem(NAME_KEY, $<HTMLInputElement>('#name').value); } catch { /* storage blocked */ }
+    game.saved = true; $<HTMLButtonElement>('#btnSave').disabled = true; $('#btnSave').textContent = S.saved; Sfx.uiOk();
     renderScores($('#overHs'), game.cityId as string);
   });
 
@@ -299,7 +300,7 @@ export function createUI(game: Game): GameUi {
     },
     banner(text, sec) { bannerText = text; bannerT = sec; },
     weather(ph) {
-      $('#wxCardIcon').innerHTML = WX_ICONS[ph.name]; $('#wxCardName').textContent = ph.name.toUpperCase(); $('#wxCardText').textContent = settings.hints ? ph.text : '';
+      $('#wxCardIcon').innerHTML = WX_ICONS[ph.name]; $('#wxCardName').textContent = ph.name; $('#wxCardText').textContent = settings.hints ? ph.text : '';
       const c = $('#wxCard'); c.hidden = true; void c.offsetWidth; c.hidden = false; wxTimer = 3.2;
     },
     bumpFloor() { const el = $('#floorBig'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); },
@@ -307,38 +308,39 @@ export function createUI(game: Game): GameUi {
     plotDone(r, plot, city) {
       $('#hud').hidden = true;
       const q = plot.require || {}, p = r.plot, share = p.landings ? Math.round(100 * p.perfects / p.landings) : 0, why = [];
-      if (!p.reached) why.push(`the tower did not reach ${plot.target} floors (best ${r.floors})`);
-      if (p.reached && q.maxLivesLost != null && p.livesLost > q.maxLivesLost) why.push(`${p.livesLost} lives lost, the limit is ${q.maxLivesLost}`);
-      if (p.reached && q.minPerfectShare != null && !(p.landings > 0 && p.perfects / p.landings >= q.minPerfectShare)) why.push(`${share} % perfect landings, ${Math.round(q.minPerfectShare * 100)} % needed`);
-      $('#plotTitle').textContent = r.counts ? `${plot.name.toUpperCase()} BUILT` : `${plot.name.toUpperCase()} NOT COUNTED`;
+      if (!p.reached) why.push(S.whyShort(plot.target, r.floors));
+      if (p.reached && q.maxLivesLost != null && p.livesLost > q.maxLivesLost) why.push(S.whyLives(p.livesLost, q.maxLivesLost));
+      if (p.reached && q.minPerfectShare != null && !(p.landings > 0 && p.perfects / p.landings >= q.minPerfectShare)) why.push(S.whyPerfect(share, Math.round(q.minPerfectShare * 100)));
+      $('#plotTitle').textContent = r.counts ? S.plotBuilt(plot.name) : S.plotNotCounted(plot.name);
       $('#plotCount').className = `verdict ${r.counts ? 'ok' : 'bad'}`;
       $('#plotCount').innerHTML = r.counts
-        ? `<b>COUNTED</b> You met the requirement: ${esc(requirementText(plot))}.`
-        : `<b>NOT COUNTED</b> ${esc(why.join('; '))}. Needed: ${esc(requirementText(plot))}.`;
+        ? `<b>${S.counted}</b> ${esc(S.metRequirement(requirementText(plot)))}`
+        : `<b>${S.notCounted}</b> ${esc(S.neededRequirement(why.join('; '), requirementText(plot)))}`;
       $('#plotStars').innerHTML = [1, 2, 3].map((i) => STAR(i <= r.stars)).join('');
-      $('#plotStars').setAttribute('aria-label', `${r.stars} of 3 stars`);
-      const bon = [r.bonuses.view ? 'VIEW +20 %' : '', r.bonuses.skyline ? 'SKYLINE +15 %' : ''].filter(Boolean).join(' · ');
-      $('#plotStats').innerHTML = `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">PERFECTS</span><b>${p.perfects}/${p.landings}</b></div><div><span class="lbl">LIVES LOST</span><b>${p.livesLost}</b></div>`
-        + (r.counts ? `<div><span class="lbl">RESIDENTS</span><b>${r.residents}</b></div><div><span class="lbl">BONUS</span><b>${bon || 'NONE'}</b></div>` : `<div><span class="lbl">BEST HERE</span><b>${r.best} FL</b></div>`);
+      $('#plotStars').setAttribute('aria-label', S.starsOf(r.stars));
+      const bon = [r.bonuses.view ? S.bonusView : '', r.bonuses.skyline ? S.bonusSkyline : ''].filter(Boolean).join(' · ');
+      const st = (label: string, v: string): string => `<div><span class="lbl">${label}</span><b>${v}</b></div>`;
+      $('#plotStats').innerHTML = st(S.stat.height, S.floorsShort(r.floors)) + st(S.stat.perfects, `${p.perfects}/${p.landings}`) + st(S.stat.livesLost, String(p.livesLost))
+        + (r.counts ? st(S.stat.residents, String(r.residents)) + st(S.stat.bonus, bon || S.none) : st(S.stat.bestHere, S.floorsShort(r.best)));
       const t = r.totals, pct = Math.min(100, Math.round(t.residents / t.goal * 100));
-      $('#plotDistrict').innerHTML = `<div class="lbl">${esc(city.city.toUpperCase())} DISTRICT · RESIDENTS <b>${t.residents}</b> / ${t.goal}</div>`
-        + `<div class="bar res" role="progressbar" aria-label="Residents towards the goal" aria-valuemin="0" aria-valuemax="${t.goal}" aria-valuenow="${t.residents}"><i style="width:${pct}%"></i></div>`
-        + `<div class="lbl">${t.counted} / ${t.plots} PLOTS BUILT · ${t.stars} / ${t.maxStars} STARS</div>`
-        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : city.fictional ? 'Newtown has no next city; keep building it.' : 'Next city opened.'}</div>` : '');
+      $('#plotDistrict').innerHTML = `<div class="lbl">${S.districtLine(esc(city.city), t.residents, t.goal)}</div>`
+        + `<div class="bar res" role="progressbar" aria-label="${S.residentsProgress}" aria-valuemin="0" aria-valuemax="${t.goal}" aria-valuenow="${t.residents}"><i style="width:${pct}%"></i></div>`
+        + `<div class="lbl">${S.plotsBuilt(t.counted, t.plots, t.stars, t.maxStars)}</div>`
+        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? S.goalReached : S.goalReachedEarlier}</b> ${r.nextCity ? S.nextCityOpened(esc(r.nextCity.city)) : city.fictional ? S.noNextCity : S.nextCityOpenedPlain}</div>` : '');
       stack = []; show('sPlot');
     },
     gameOver(r, record) {
       $('#hud').hidden = true;
       const lv = !!game.levelDef;   // a failed level run: result screen, no high-score form
-      $('#overTitle').textContent = lv ? `${(game.levelDef as Level).city.toUpperCase()} FAILED` : 'GAME OVER';
+      $('#overTitle').textContent = lv ? S.levelFailed((game.levelDef as Level).city) : S.gameOver;
       $('#newRecord').hidden = lv || !record;
       $('#saveForm').hidden = lv; $('#overHs').hidden = lv;
-      $('#btnAgain').textContent = lv ? 'RETRY' : 'PLAY AGAIN';
-      $('#overStats').innerHTML = lv
-        ? `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">STARS</span><b>0 / 3</b></div>`
-        : `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
-      $<HTMLButtonElement>('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
-      try { $<HTMLInputElement>('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
+      $('#btnAgain').textContent = lv ? S.retry : S.playAgain;
+      const st = (label: string, v: string): string => `<div><span class="lbl">${label}</span><b>${v}</b></div>`;
+      $('#overStats').innerHTML = lv ? st(S.stat.height, S.floorsShort(r.floors)) + st(S.stat.stars, '0 / 3')
+        : st(S.stat.score, String(r.score)) + st(S.stat.height, S.floorsShort(r.floors)) + st(S.stat.residents, String(r.pop));
+      $<HTMLButtonElement>('#btnSave').disabled = false; $('#btnSave').textContent = UI['over.save'];
+      try { $<HTMLInputElement>('#name').value = localStorage.getItem(NAME_KEY) || S.defaultName; } catch { /* storage blocked */ }
       if (!lv) renderScores($('#overHs'), game.cityId as string);
       stack = []; show('sOver');
       if (record) Sfx.fanfare();
@@ -348,27 +350,27 @@ export function createUI(game: Game): GameUi {
       if (bannerT > 0) { bannerT -= rdt; setText('banner', bannerText); } else setText('banner', '');
       if ($('#hud').hidden) return;
       const T = game.tower, n = T ? T.n : 0, ph = game.weather, w = game.wind;
-      setText('hTarget', game.levelDef ? `TARGET ${n} / ${game.levelDef.target}` : '');
+      setText('hTarget', game.levelDef ? S.hudTarget(n, game.levelDef.target) : '');
       const pd = game.plotDef, rr = game.run as Run;   // a plot run always has its run
-      setText('hReq', !pd ? '' : [pd.require.maxLivesLost != null ? `LOSE AT MOST ${pd.require.maxLivesLost}: LOST ${rr.diff.lives - rr.lives}` : '',
-        pd.require.minPerfectShare != null ? `${Math.round(pd.require.minPerfectShare * 100)} % PERFECT: ${rr.landings ? Math.round(100 * rr.perfects / rr.landings) : 0} %` : ''].filter(Boolean).join(' · ') || 'NO EXTRA REQUIREMENT');
+      setText('hReq', !pd ? '' : [pd.require.maxLivesLost != null ? S.hudLivesMax(pd.require.maxLivesLost, rr.diff.lives - rr.lives) : '',
+        pd.require.minPerfectShare != null ? S.hudPerfect(Math.round(pd.require.minPerfectShare * 100), rr.landings ? Math.round(100 * rr.perfects / rr.landings) : 0) : ''].filter(Boolean).join(' · ') || S.hudNoReq);
       $('#hReq').classList.toggle('bad', !!pd && ((pd.require.maxLivesLost != null && rr.diff.lives - rr.lives > pd.require.maxLivesLost) || (pd.require.minPerfectShare != null && rr.landings >= 4 && rr.perfects / rr.landings < pd.require.minPerfectShare)));
       setText('hScore', String(game.score));
       setText('hPop', String(game.pop));
       setText('floorBig', String(n));
-      setText('hMeters', `${Math.round(n * CFG.METERS_PER_FLOOR)} M`);
+      setText('hMeters', S.meters(Math.round(n * CFG.METERS_PER_FLOOR)));
       const pipsOn = game.goldenNext ? 5 : game.combo % CFG.goldenEvery;
       setHTML('pips', Array.from({ length: 5 }, (_, i) => `<i class="${i < pipsOn ? 'on' : ''}"></i>`).join(''));
       $('#pips').classList.toggle('gold', !!game.goldenNext);
-      setText('hCombo', game.combo > 0 ? `COMBO ×${Math.min(5, 1 + 0.5 * game.combo)}` : game.goldenNext ? 'GOLDEN NEXT' : '');
+      setText('hCombo', game.combo > 0 ? S.combo(Math.min(5, 1 + 0.5 * game.combo)) : game.goldenNext ? S.goldenNext : '');
       setHTML('hLives', Array.from({ length: game.diff.lives }, (_, i) => HEART(i < game.lives)).join(''));
       setText('hWind', `${w.speed.toFixed(1)} m/s`);
-      setText('hTrend', w.trend > 0.08 ? 'GUSTING ▲' : w.trend < -0.08 ? 'EASING ▼' : 'STEADY');
+      setText('hTrend', w.trend > 0.08 ? S.trendUp : w.trend < -0.08 ? S.trendDown : S.trendSteady);
       $('#arrow').setAttribute('transform', `rotate(${((w.angle - camAz + Math.PI / 2) * 180 / Math.PI).toFixed(1)})`);
       setText('hWeather', ph.name);
       setHTML('wxIcon', WX_ICONS[ph.name]);
       const nx = game.run ? game.run.nextWeather() : null;
-      setText('hNextWeather', nx ? `${nx.wx.name.toUpperCase()} IN ${nx.left} FL` : '');
+      setText('hNextWeather', nx ? S.nextWeather(nx.wx.name, nx.left) : '');
       const stab = T ? Math.max(0, Math.min(1, 1 - T.dyn.r)) : 1;
       stabFill.style.width = `${(stab * 100).toFixed(0)}%`;
       stabFill.style.background = stab > 0.6 ? 'var(--ok)' : stab > 0.3 ? 'var(--warn)' : 'var(--bad)';
@@ -381,9 +383,9 @@ export function createUI(game: Game): GameUi {
       setHTML('hNext', `<span class="swatch" style="background:${hex(nt.color)}"></span><span class="mid">${nt.label}</span>`);
       const cb = game.block ? BTYPES[game.block.type] : null;
       const bty = game.run && buildingTypeById(game.run.buildingType);
-      setText('hType', bty ? bty.label.toUpperCase() : '');
+      setText('hType', bty ? bty.label : '');
       $('#hType').title = bty ? bty.hint : '';
-      setText('nextHint', !settings.hints ? '' : cb && cb.hint ? `NOW: ${cb.hint}` : nt.hint ? `NEXT: ${nt.hint}` : bty && game.drops < 6 ? `${bty.label.toUpperCase()}: ${bty.hint}` : '');
+      setText('nextHint', !settings.hints ? '' : cb && cb.hint ? S.hintNow(cb.hint) : nt.hint ? S.hintNext(nt.hint) : bty && game.drops < 6 ? `${bty.label}: ${bty.hint}` : '');
       $('#hint').hidden = !(settings.hints && game.state === 'play' && game.drops < 3 && game.block && game.block.state === 'hang');
     },
   };

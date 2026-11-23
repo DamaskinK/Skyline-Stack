@@ -1,6 +1,7 @@
 // District map screen (S0002 ticket 05): a stylised top-down map of one city's five plots, the path from the outskirts to
 // the centre, a card per plot (type, target, requirement, bonuses, stars) and the residents bar towards the goal.
 // Plot positions come from the plot data (lat/lon, or x/z metres for Newtown); nothing is placed by hand.
+import { S } from './strings.js';
 import { BUILDING_TYPES } from './building-types.js';
 import { cityById } from './levels.js';
 import { loadDistrictProgress } from './settings.js';
@@ -11,14 +12,13 @@ import type { District, GridXZ, Level, Plot, PlotStates, PlotState } from './typ
 
 const esc = (s: unknown): string => String(s).replace(/[<>&"]/g, '');
 const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-const LANDMARK_NAMES: Record<string, string> = { 'st-elisabeth': 'St Elisabeth Cathedral', 'state-theatre': 'State Theatre', hlavna: 'Hlavna street', 'clock-tower': 'the Meridian Clock Tower', 'lantern-bridge': 'the Lantern Bridge' };
-const landmarkName = (id: string): string => LANDMARK_NAMES[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+const landmarkName = (id: string): string => S.landmarks[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 export function requirementText(plot: Pick<Plot, 'target' | 'require'>): string {
   const q = plot.require || {};
-  const parts = [`reach ${plot.target} floors`];
-  if (q.maxLivesLost != null) parts.push(`lose at most ${q.maxLivesLost} ${q.maxLivesLost === 1 ? 'life' : 'lives'}`);
-  if (q.minPerfectShare != null) parts.push(`at least ${Math.round(q.minPerfectShare * 100)} % perfect landings`);
+  const parts = [S.req.reach(plot.target)];
+  if (q.maxLivesLost != null) parts.push(S.req.lives(q.maxLivesLost));
+  if (q.minPerfectShare != null) parts.push(S.req.perfect(Math.round(q.minPerfectShare * 100)));
   return parts.join(', ');
 }
 
@@ -51,9 +51,9 @@ export function createDistrictMap({ onPlay, onBack }: DistrictMapHandlers): Dist
   function bonusLines(plot: Plot): string {
     const b = plotBonuses(plot);
     const view = b.view
-      ? `<li><b class="c-ok">VIEW +${Math.round(VIEW_BONUS * 100)} %</b> sees ${plot.landmarksInView.map(landmarkName).map(esc).join(', ')} from ${VIEW_MIN_FLOORS} floors up</li>`
-      : '<li class="off"><b>VIEW</b> no landmark in sight here</li>';
-    const sky = `<li><b class="c-ok">SKYLINE +${Math.round(SKYLINE_BONUS * 100)} %</b> a built tower within ${SKYLINE_RADIUS_M} m that differs by ${SKYLINE_MIN_DIFF}+ floors</li>`;
+      ? `<li>${S.viewBonus(Math.round(VIEW_BONUS * 100), plot.landmarksInView.map(landmarkName).map(esc).join(', '), VIEW_MIN_FLOORS)}</li>`
+      : `<li class="off">${S.noView}</li>`;
+    const sky = `<li>${S.skyline(Math.round(SKYLINE_BONUS * 100), SKYLINE_RADIUS_M, SKYLINE_MIN_DIFF)}</li>`;
     return view + sky;
   }
 
@@ -66,12 +66,12 @@ export function createDistrictMap({ onPlay, onBack }: DistrictMapHandlers): Dist
     if (!selected || !d.plots.some((p) => p.id === selected)) selected = (next || d.plots[d.plots.length - 1]).id;
     const playable = !!city.built;
 
-    $('#mapTitle').textContent = `${city.city.toUpperCase()} DISTRICT`;
-    $('#mapSub').textContent = city.fictional ? 'A made-up city. Build outward from the edge estate to the plaza.' : 'Five plots from the outskirts to the centre. Reach the residents goal to open the next city.';
+    $('#mapTitle').textContent = S.mapTitle(city.city);
+    $('#mapSub').textContent = city.fictional ? S.mapSubFictional : S.mapSubReal;
     const pct = Math.min(100, Math.round(tot.residents / tot.goal * 100));
-    $('#mapRes').innerHTML = `<div class="lbl">RESIDENTS <b>${tot.residents}</b> / ${tot.goal}${progress.goalReached || tot.residents >= tot.goal ? ' · GOAL REACHED' : ''}</div>`
-      + `<div class="bar res" role="progressbar" aria-label="Residents towards the goal" aria-valuemin="0" aria-valuemax="${tot.goal}" aria-valuenow="${tot.residents}"><i style="width:${pct}%"></i></div>`
-      + `<div class="lbl">${tot.counted} / ${tot.plots} PLOTS BUILT · ${tot.stars} / ${tot.maxStars} STARS</div>`;
+    $('#mapRes').innerHTML = `<div class="lbl">${S.mapResidents(tot.residents, tot.goal, progress.goalReached || tot.residents >= tot.goal)}</div>`
+      + `<div class="bar res" role="progressbar" aria-label="${S.residentsProgress}" aria-valuemin="0" aria-valuemax="${tot.goal}" aria-valuenow="${tot.residents}"><i style="width:${pct}%"></i></div>`
+      + `<div class="lbl">${S.plotsBuilt(tot.counted, tot.plots, tot.stars, tot.maxStars)}</div>`;
 
     // map: path + faint rings around the centre plot, markers as real buttons over the SVG
     const pos = layoutPlots(d.plots), W = 640, H = 400, c = pos[pos.length - 1];
@@ -86,24 +86,24 @@ export function createDistrictMap({ onPlay, onBack }: DistrictMapHandlers): Dist
       + d.plots.map((p, i) => {
         const s = stateOf(city, plots, p);
         return `<button type="button" class="pin ${s.kind}${p.id === selected ? ' sel' : ''}" data-plot="${esc(p.id)}" style="left:${(pos[i].x / W * 100).toFixed(2)}%;top:${(pos[i].y / H * 100).toFixed(2)}%" `
-          + `aria-label="Plot ${i + 1}: ${esc(p.name)}, ${s.kind === 'locked' ? 'locked' : s.kind}"><span>${i + 1}</span></button>`
+          + `aria-label="${S.plotAria(i + 1, esc(p.name), S.kind[s.kind])}"><span>${i + 1}</span></button>`
           + `<span class="pinlbl${i % 2 ? "" : " up"}" style="left:${(pos[i].x / W * 100).toFixed(2)}%;top:${(pos[i].y / H * 100).toFixed(2)}%">${esc(p.name)}</span>`;
       }).join('');
 
     $('#plotCards').innerHTML = d.plots.map((p, i) => {
       const s = stateOf(city, plots, p), t = BUILDING_TYPES[p.buildingType] || { label: p.buildingType };
       const rate = RESIDENTS_PER_FLOOR[p.buildingType] ?? DEFAULT_RESIDENTS_PER_FLOOR;
-      const status = s.kind === 'built' ? `BUILT · ${plotResidents(d, plots, p.id)} residents · best ${s.st.bestHeight} fl`
-        : s.kind === 'open' ? (s.st.bestHeight ? `OPEN · best so far ${s.st.bestHeight} fl, requirement missed` : 'OPEN') : 'LOCKED · build the plot before it first';
-      const why = !s.open ? (s.kind === 'built' ? 'Built earlier. Counted plots before it first to play it again.' : '')
-        : !playable ? 'This city is not built yet.' : '';
+      const status = s.kind === 'built' ? S.statusBuilt(plotResidents(d, plots, p.id), s.st.bestHeight)
+        : s.kind === 'open' ? (s.st.bestHeight ? S.statusOpenMissed(s.st.bestHeight) : S.statusOpen) : S.statusLocked;
+      const why = !s.open ? (s.kind === 'built' ? S.whyBuilt : '')
+        : !playable ? S.whyNotBuilt : '';
       return `<article class="pcard ${s.kind}${p.id === selected ? ' sel' : ''}" data-plot="${esc(p.id)}" aria-label="${esc(p.name)}">`
-        + `<header><span class="num">${i + 1}</span><b>${esc(p.name).toUpperCase()}</b><span class="stars sm" role="img" aria-label="${s.st.stars} of 3 stars">${[1, 2, 3].map((n) => STAR(n <= s.st.stars)).join('')}</span></header>`
-        + `<div class="meta"><span class="tag">${esc(t.label).toUpperCase()}</span><span>${p.target} floors · ${rate} residents per floor</span></div>`
-        + `<p class="req">Count it: ${requirementText(p)}.</p>`
+        + `<header><span class="num">${i + 1}</span><b>${esc(p.name)}</b><span class="stars sm" role="img" aria-label="${S.starsOf(s.st.stars)}">${[1, 2, 3].map((n) => STAR(n <= s.st.stars)).join('')}</span></header>`
+        + `<div class="meta"><span class="tag">${esc(t.label)}</span><span>${S.plotMeta(p.target, rate)}</span></div>`
+        + `<p class="req">${S.countIt(requirementText(p))}</p>`
         + `<ul class="bon">${bonusLines(p)}</ul>`
         + `<div class="foot2"><span class="st">${status}</span>`
-        + (s.open ? `<button type="button" class="btn sm${s.kind === 'open' && (next && next.id === p.id) ? '' : ' ghost'}" data-play="${esc(p.id)}"${playable ? '' : ' disabled'}>${s.kind === 'built' ? 'REPLAY' : 'PLAY'} ▶</button>` : '')
+        + (s.open ? `<button type="button" class="btn sm${s.kind === 'open' && (next && next.id === p.id) ? '' : ' ghost'}" data-play="${esc(p.id)}"${playable ? '' : ' disabled'}>${s.kind === 'built' ? S.replay : S.play}</button>` : '')
         + `</div>${why ? `<p class="why">${why}</p>` : ''}</article>`;
     }).join('');
 

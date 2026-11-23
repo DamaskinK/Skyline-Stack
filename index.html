@@ -3,46 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tower Bloxx 3D</title>
+<title>Skyline Stack</title>
 <link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Unbounded:wght@500;700;800&display=swap">
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
 </head>
 <body>
 <!--BODY-->
-<canvas id="c" aria-label="Tower Bloxx 3D game scene"></canvas>
+<canvas id="c" aria-label="Skyline Stack game scene"></canvas>
 <div id="vignette"></div>
 <div id="flash"></div>
 
-<!-- ── in-game HUD ── -->
+<!-- ── in-game HUD ── (all visible text comes from js/strings.ts: data-t = text, data-t-aria = aria-label) -->
 <div id="hud" hidden>
   <div class="hud tl">
     <div class="box chip">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L15 9 L22 9 L16.5 13.5 L18.5 21 L12 16.5 L5.5 21 L7.5 13.5 L2 9 L9 9 Z" fill="#ffb627" stroke="#000" stroke-width="1.5"/></svg>
-      <div><div class="lbl" id="hScoreLbl">SCORE</div><div class="v" id="hScore">0</div></div>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L15 9 L22 9 L16.5 13.5 L18.5 21 L12 16.5 L5.5 21 L7.5 13.5 L2 9 L9 9 Z" fill="#ffb627" stroke="#0b1026" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      <div><div class="lbl" data-t="hud.score"></div><div class="v" id="hScore">0</div></div>
     </div>
     <div class="box chip">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="4" fill="#ffd2a6" stroke="#000" stroke-width="1.5"/><path d="M4 22 C4 14 20 14 20 22 Z" fill="#52d9ff" stroke="#000" stroke-width="1.5"/></svg>
-      <div><div class="lbl" id="hPopLbl">RESIDENTS</div><div class="v" id="hPop">0</div></div>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="4" fill="#ffd2a6" stroke="#0b1026" stroke-width="1.5"/><path d="M4 22 C4 14 20 14 20 22 Z" fill="#52d9ff" stroke="#0b1026" stroke-width="1.5"/></svg>
+      <div><div class="lbl" data-t="hud.residents"></div><div class="v" id="hPop">0</div></div>
     </div>
   </div>
   <div class="hud tc">
-    <div class="lbl">FLOOR</div>
+    <div class="lbl" data-t="hud.floor"></div>
     <div id="floorBig">0</div>
-    <div class="lbl" id="hMeters">0 M</div>
+    <div class="lbl" id="hMeters">0 m</div>
     <div class="pips" id="pips"><i></i><i></i><i></i><i></i><i></i></div>
     <div class="lbl" id="hCombo"></div>
   </div>
   <div class="hud tr">
     <div class="ctl">
-      <button class="icon" type="button" id="btnMute" aria-label="Mute sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 H7 L12 4 V20 L7 15 H3 Z" fill="currentColor"/><path id="muteWave" d="M15 8 Q19 12 15 16 M17 5 Q23 12 17 19" stroke="currentColor" stroke-width="2" fill="none"/><path id="muteX" d="M15 9 L21 15 M21 9 L15 15" stroke="currentColor" stroke-width="2.5" hidden/></svg></button>
-      <button class="icon" type="button" id="btnCam" aria-label="Change camera"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="15" height="11" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M17 11 L22 8 V17 L17 14 Z" fill="currentColor"/></svg></button>
-      <button class="icon" type="button" id="btnPause" aria-label="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" fill="currentColor"/><rect x="14" y="4" width="5" height="16" fill="currentColor"/></svg></button>
+      <button class="icon" type="button" id="btnMute" aria-label="Mute sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9 H7 L12 4 V20 L7 15 H3 Z" fill="currentColor"/><path id="muteWave" d="M15 8 Q19 12 15 16 M17 5 Q23 12 17 19" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path id="muteX" d="M15 9 L21 15 M21 9 L15 15" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" hidden/></svg></button>
+      <button class="icon" type="button" id="btnCam" data-t-aria="hud.camera"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="15" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M17 11 L22 8 V17 L17 14 Z" fill="currentColor"/></svg></button>
+      <button class="icon" type="button" id="btnPause" data-t-aria="hud.pause"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="14" y="4" width="5" height="16" rx="1.5" fill="currentColor"/></svg></button>
     </div>
-    <div class="lives" id="hLives" aria-label="Lives"></div>
-    <div class="tag" id="hDiff">NORMAL</div>
+    <div class="lives" id="hLives" data-t-aria="hud.lives"></div>
+    <div class="tag" id="hDiff">Normal</div>
     <div class="lbl" id="hTarget"></div>
     <div class="lbl req" id="hReq"></div>
   </div>
@@ -50,70 +51,69 @@
     <div class="chip">
       <svg id="compass" viewBox="-32 -32 64 64" aria-hidden="true">
         <circle r="29" fill="rgba(0,0,0,.35)" stroke="#2c3a78" stroke-width="3"/>
-        <g id="arrow"><path d="M-18 0 H12 M4 -8 L14 0 L4 8" stroke="#52d9ff" stroke-width="5" fill="none"/></g>
+        <g id="arrow"><path d="M-18 0 H12 M4 -8 L14 0 L4 8" stroke="#52d9ff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
       </svg>
       <div>
-        <div class="lbl">WIND</div>
+        <div class="lbl" data-t="hud.wind"></div>
         <div class="mid" id="hWind">0 m/s</div>
-        <div class="lbl" id="hTrend" style="margin-top:5px"></div>
+        <div class="lbl sub" id="hTrend"></div>
       </div>
     </div>
-    <div class="chip"><span id="wxIcon"></span><div><div class="mid" id="hWeather">Clear</div><div class="lbl" id="hNextWeather" style="margin-top:5px"></div></div></div>
+    <div class="chip"><span id="wxIcon"></span><div><div class="mid" id="hWeather">Clear</div><div class="lbl sub" id="hNextWeather"></div></div></div>
   </div>
   <div class="hud br box">
-    <div><div class="lbl">STABILITY</div><div class="bar" id="stabBar"><i></i></div></div>
-    <div><div class="lbl">SLOW-MO <span class="desk">[SHIFT]</span></div><div class="bar" id="focusBar"><i></i></div></div>
-    <button type="button" class="btn sm" id="anchorBtn">ANCHOR <span class="desk">[A]</span> · <span id="hAnchor">1</span></button>
-    <div><span class="lbl">NEXT </span><span id="hNext"></span></div>
+    <div><div class="lbl" data-t="hud.stability"></div><div class="bar" id="stabBar"><i></i></div></div>
+    <div><div class="lbl"><span data-t="hud.slowmo"></span> <span class="desk" data-t="hud.slowmoKey"></span></div><div class="bar" id="focusBar"><i></i></div></div>
+    <button type="button" class="btn sm" id="anchorBtn"><span data-t="hud.anchor"></span> <span class="desk" data-t="hud.anchorKey"></span> <span class="count" id="hAnchor">1</span></button>
+    <div><span class="lbl" data-t="hud.next"></span> <span id="hNext"></span></div>
     <div id="nextHint"></div>
     <div id="hType" class="btype"></div>
   </div>
-  <div id="banner"></div>
-  <div id="hint" hidden>Tap or press SPACE when the block is over the tower</div>
+  <div id="banner" role="status" aria-live="polite"></div>
+  <div id="hint" hidden data-t="hud.hint"></div>
 </div>
 <div id="wxCard" class="box" hidden><span id="wxCardIcon"></span><div><b id="wxCardName"></b><span id="wxCardText"></span></div></div>
 <div id="popups"></div>
-<div id="touch"><button id="tFocus" type="button" class="btn">SLOW-MO</button></div>
+<div id="touch"><button id="tFocus" type="button" class="btn" data-t="hud.slowmo"></button></div>
 
 <!-- ── title screen ── -->
 <section class="screen" id="sTitle">
   <div class="title-wrap">
-    <div class="logo" aria-label="Tower Bloxx 3D">
-      <div class="logo-row" id="logoTop"></div>
-      <div class="logo-row" id="logoBot"></div>
-      <div class="badge3d">3D</div>
-    </div>
-    <p class="tagline">STACK · BALANCE · SURVIVE THE WEATHER</p>
+    <h1 class="logo" aria-label="Skyline Stack">
+      <span class="logo-row" id="logoTop" aria-hidden="true"></span>
+      <span class="logo-row" id="logoBot" aria-hidden="true"></span>
+    </h1>
+    <p class="tagline" data-t="title.tagline"></p>
     <nav class="menu" aria-label="Main menu">
-      <button type="button" class="mi" data-go="sNew"><span class="cur">▶</span>PLAY</button>
-      <button type="button" class="mi" data-go="sScores"><span class="cur">▶</span>HIGH SCORES</button>
-      <button type="button" class="mi" data-go="sSettings"><span class="cur">▶</span>SETTINGS</button>
-      <button type="button" class="mi" data-go="sHelp"><span class="cur">▶</span>HOW TO PLAY</button>
+      <button type="button" class="mi" data-go="sNew" data-t="menu.play"></button>
+      <button type="button" class="mi" data-go="sScores" data-t="menu.scores"></button>
+      <button type="button" class="mi" data-go="sSettings" data-t="menu.settings"></button>
+      <button type="button" class="mi" data-go="sHelp" data-t="menu.help"></button>
     </nav>
     <div class="best" id="titleBest"></div>
   </div>
-  <div class="foot"><span class="blink">PRESS ENTER</span><span class="desk"> · ↑↓ to choose · ESC back</span></div>
+  <div class="foot"><span class="desk" data-t="title.foot"></span></div>
 </section>
 
-<!-- ── new game: mode + difficulty ── -->
+<!-- ── new game: endless, districts, difficulty ── -->
 <section class="screen" id="sNew" hidden>
   <div class="panel wide">
-    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>NEW GAME</h2></header>
-    <h3>MODE</h3>
-    <div class="cards three" role="group" aria-label="Mode" id="modeCards"></div>
+    <header><button type="button" class="back" data-back data-t-aria="common.back"></button><h2 data-t="new.title"></h2></header>
+    <h3 data-t="new.endless"></h3>
+    <div class="cards two" role="group" data-t-aria="new.endless" id="modeCards"></div>
     <p class="note" id="modeNote"></p>
-    <h3>DISTRICT MODE</h3>
-    <div class="cards two" role="group" aria-label="Districts" id="districtCards"></div>
-    <h3>DIFFICULTY</h3>
-    <div class="cards three" role="group" aria-label="Difficulty" id="diffCards"></div>
-    <div class="actions"><button type="button" class="btn big" id="btnStart">START ▶</button></div>
+    <h3 data-t="new.districts"></h3>
+    <div class="cards two" role="group" data-t-aria="new.districts" id="districtCards"></div>
+    <h3 data-t="new.difficulty"></h3>
+    <div class="cards three" role="group" data-t-aria="new.difficulty" id="diffCards"></div>
+    <div class="actions"><button type="button" class="btn big" id="btnStart" data-t="new.start"></button></div>
   </div>
 </section>
 
 <!-- ── district map ── -->
 <section class="screen" id="sMap" hidden>
   <div class="panel wide map">
-    <header><button type="button" class="back" id="mapBack" aria-label="Back">◀</button><div><h2 id="mapTitle">DISTRICT</h2><p class="note" id="mapSub"></p></div></header>
+    <header><button type="button" class="back" id="mapBack" data-t-aria="common.back"></button><div><h2 id="mapTitle"></h2><p class="note" id="mapSub"></p></div></header>
     <div class="mapgrid">
       <div class="mapcol">
         <div id="mapRes" class="resbox"></div>
@@ -127,16 +127,16 @@
 <!-- ── settings ── -->
 <section class="screen" id="sSettings" hidden>
   <div class="panel">
-    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>SETTINGS</h2></header>
+    <header><button type="button" class="back" data-back data-t-aria="common.back"></button><h2 data-t="set.title"></h2></header>
     <div class="rows">
-      <div class="row"><span class="rl">Default difficulty</span><div class="seg" data-set="difficulty"><button type="button" data-v="easy">EASY</button><button type="button" data-v="normal">NORMAL</button><button type="button" data-v="hard">HARD</button></div></div>
-      <div class="row"><label class="rl" for="volMusic">Music</label><input type="range" id="volMusic" min="0" max="100" step="5"><output id="volMusicV"></output></div>
-      <div class="row"><label class="rl" for="volSfx">Sound effects</label><input type="range" id="volSfx" min="0" max="100" step="5"><output id="volSfxV"></output></div>
-      <div class="row"><span class="rl">Graphics</span><div class="seg" data-set="quality"><button type="button" data-v="low">LOW</button><button type="button" data-v="medium">MEDIUM</button><button type="button" data-v="high">HIGH</button></div></div>
-      <div class="row"><span class="rl">Camera</span><div class="seg" data-set="camera"><button type="button" data-v="0">FRONT</button><button type="button" data-v="1">SIDE</button><button type="button" data-v="2">TOP</button></div></div>
-      <div class="row"><span class="rl">Screen shake</span><div class="seg" data-set="shake"><button type="button" data-v="true">ON</button><button type="button" data-v="false">OFF</button></div></div>
-      <div class="row"><span class="rl">Tips and hints</span><div class="seg" data-set="hints"><button type="button" data-v="true">ON</button><button type="button" data-v="false">OFF</button></div></div>
-      <div class="row"><span class="rl">High scores</span><button type="button" class="btn sm danger" id="btnReset">RESET</button></div>
+      <div class="row"><span class="rl" data-t="set.difficulty"></span><div class="seg" data-set="difficulty"><button type="button" data-v="easy" data-t="diff.easy"></button><button type="button" data-v="normal" data-t="diff.normal"></button><button type="button" data-v="hard" data-t="diff.hard"></button></div></div>
+      <div class="row"><label class="rl" for="volMusic" data-t="set.music"></label><input type="range" id="volMusic" min="0" max="100" step="5"><output id="volMusicV"></output></div>
+      <div class="row"><label class="rl" for="volSfx" data-t="set.sfx"></label><input type="range" id="volSfx" min="0" max="100" step="5"><output id="volSfxV"></output></div>
+      <div class="row"><span class="rl" data-t="set.graphics"></span><div class="seg" data-set="quality"><button type="button" data-v="low" data-t="set.low"></button><button type="button" data-v="medium" data-t="set.medium"></button><button type="button" data-v="high" data-t="set.high"></button></div></div>
+      <div class="row"><span class="rl" data-t="set.camera"></span><div class="seg" data-set="camera"><button type="button" data-v="0" data-t="set.front"></button><button type="button" data-v="1" data-t="set.side"></button><button type="button" data-v="2" data-t="set.top"></button></div></div>
+      <div class="row"><span class="rl" data-t="set.shake"></span><div class="seg" data-set="shake"><button type="button" data-v="true" data-t="set.on"></button><button type="button" data-v="false" data-t="set.off"></button></div></div>
+      <div class="row"><span class="rl" data-t="set.hints"></span><div class="seg" data-set="hints"><button type="button" data-v="true" data-t="set.on"></button><button type="button" data-v="false" data-t="set.off"></button></div></div>
+      <div class="row"><span class="rl" data-t="set.scores"></span><button type="button" class="btn sm danger" id="btnReset" data-t="set.reset"></button></div>
     </div>
   </div>
 </section>
@@ -144,7 +144,7 @@
 <!-- ── high scores ── -->
 <section class="screen" id="sScores" hidden>
   <div class="panel">
-    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>HIGH SCORES</h2></header>
+    <header><button type="button" class="back" data-back data-t-aria="common.back"></button><h2 data-t="scores.title"></h2></header>
     <table class="hs" id="hsTable"></table>
   </div>
 </section>
@@ -152,30 +152,20 @@
 <!-- ── how to play ── -->
 <section class="screen" id="sHelp" hidden>
   <div class="panel wide">
-    <header><button type="button" class="back" data-back aria-label="Back">◀</button><h2>HOW TO PLAY</h2></header>
+    <header><button type="button" class="back" data-back data-t-aria="common.back"></button><h2 data-t="help.title"></h2></header>
     <div class="help">
       <div>
-        <h3>CONTROLS</h3>
-        <ul class="keys">
-          <li><kbd>SPACE</kbd> or <kbd>CLICK</kbd> drop the block</li>
-          <li>hold <kbd>SHIFT</kbd> slow-mo (refills by itself)</li>
-          <li><kbd>A</kbd> anchor: freeze the sway for 3 s</li>
-          <li><kbd>C</kbd> camera · <kbd>P</kbd> pause · <kbd>M</kbd> mute</li>
-        </ul>
-        <h3>LANDING</h3>
-        <ul class="keys">
-          <li><b class="c-amber">PERFECT</b> centred: combo, calmer tower, slow-mo refill</li>
-          <li><b class="c-ok">GOOD</b> close enough</li>
-          <li><b class="c-bad">RISKY</b> the offset makes the tower lean</li>
-          <li>Over half a block off and it slips. That costs a life.</li>
-        </ul>
+        <h3 data-t="help.controls"></h3>
+        <ul class="keys" data-t="help.controlsList"></ul>
+        <h3 data-t="help.landing"></h3>
+        <ul class="keys" data-t="help.landingList"></ul>
       </div>
       <div>
-        <h3>BLOCKS</h3>
+        <h3 data-t="help.blocks"></h3>
         <ul class="keys" id="helpBlocks"></ul>
-        <h3>BUILDING TYPES</h3>
+        <h3 data-t="help.types"></h3>
         <ul class="keys" id="helpTypes"></ul>
-        <h3>WEATHER</h3>
+        <h3 data-t="help.weather"></h3>
         <ul class="keys" id="helpWeather"></ul>
       </div>
     </div>
@@ -185,21 +175,21 @@
 <!-- ── loading a level ── -->
 <section class="screen dim" id="sLoading" hidden>
   <div class="panel narrow">
-    <header><h2 id="loadTitle">LOADING</h2></header>
-    <div class="bar load" id="loadBar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
-    <p class="note" id="loadText">Fetching the city...</p>
+    <header><h2 id="loadTitle" data-t="load.title"></h2></header>
+    <div class="bar load" id="loadBar" role="progressbar" data-t-aria="load.title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+    <p class="note" id="loadText"></p>
   </div>
 </section>
 
 <!-- ── pause ── -->
 <section class="screen dim" id="sPause" hidden>
   <div class="panel narrow">
-    <header><h2>PAUSED</h2></header>
+    <header><h2 data-t="pause.title"></h2></header>
     <nav class="menu small">
-      <button type="button" class="mi" id="btnResume"><span class="cur">▶</span>RESUME</button>
-      <button type="button" class="mi" id="btnRestart"><span class="cur">▶</span>RESTART</button>
-      <button type="button" class="mi" data-go="sSettings"><span class="cur">▶</span>SETTINGS</button>
-      <button type="button" class="mi" id="btnQuit"><span class="cur">▶</span>QUIT TO MENU</button>
+      <button type="button" class="mi" id="btnResume" data-t="pause.resume"></button>
+      <button type="button" class="mi" id="btnRestart" data-t="pause.restart"></button>
+      <button type="button" class="mi" data-go="sSettings" data-t="menu.settings"></button>
+      <button type="button" class="mi" id="btnQuit" data-t="pause.quit"></button>
     </nav>
   </div>
 </section>
@@ -207,28 +197,28 @@
 <!-- ── district plot result ── -->
 <section class="screen dim" id="sPlot" hidden>
   <div class="panel">
-    <header><h2 id="plotTitle">PLOT RESULT</h2></header>
+    <header><h2 id="plotTitle"></h2></header>
     <div class="verdict" id="plotCount"></div>
-    <div class="stars" id="plotStars" role="img" aria-label="Stars"></div>
+    <div class="stars" id="plotStars" role="img"></div>
     <div class="stats" id="plotStats"></div>
     <div class="resbox" id="plotDistrict"></div>
-    <div class="actions"><button type="button" class="btn" id="btnPlotMap">DISTRICT MAP</button><button type="button" class="btn ghost" id="btnPlotRetry">RETRY</button></div>
+    <div class="actions"><button type="button" class="btn" id="btnPlotMap" data-t="plot.toMap"></button><button type="button" class="btn ghost" id="btnPlotRetry" data-t="plot.retry"></button></div>
   </div>
 </section>
 
 <!-- ── game over ── -->
 <section class="screen dim" id="sOver" hidden>
   <div class="panel">
-    <header><h2 id="overTitle">GAME OVER</h2></header>
-    <div class="record" id="newRecord" hidden>NEW RECORD</div>
+    <header><h2 id="overTitle"></h2></header>
+    <div class="record" id="newRecord" hidden data-t="over.record"></div>
     <div class="stats" id="overStats"></div>
     <form class="actions" id="saveForm">
-      <label class="lbl" for="name" style="width:100%">YOUR NAME FOR THE HIGH SCORES</label>
-      <input type="text" id="name" maxlength="12" value="PLAYER" autocomplete="off">
-      <button type="submit" class="btn" id="btnSave">SAVE</button>
+      <label class="lbl" for="name" data-t="over.name"></label>
+      <input type="text" id="name" maxlength="12" value="Player" autocomplete="off">
+      <button type="submit" class="btn" id="btnSave" data-t="over.save"></button>
     </form>
     <table class="hs" id="overHs"></table>
-    <div class="actions"><button type="button" class="btn" id="btnAgain">PLAY AGAIN</button><button type="button" class="btn ghost" id="btnMenu">MENU</button></div>
+    <div class="actions"><button type="button" class="btn" id="btnAgain"></button><button type="button" class="btn ghost" id="btnMenu" data-t="over.menu"></button></div>
   </div>
 </section>
 <!--/BODY-->

@@ -1,6 +1,8 @@
 // Player settings and progress, kept in this browser's localStorage.
-const KEY = 'tb3d_settings_v2';
-const PROGRESS = 'tb3d_progress_v3';
+const KEY = 'skyline_settings_v2';
+const PROGRESS = 'skyline_progress_v3';
+const DISTRICT = 'skyline_district_v1';
+export const NAME_KEY = 'skyline_name_v1';
 import type { DistrictProgress, PlotResult, EndlessEntry, Progress, Settings } from './types.js';
 import { sanitize, recordLevel, recordEndless } from './core/stars.js';
 import { LEVELS, levelById, cityById, nextLevel } from './levels.js';
@@ -10,6 +12,19 @@ const DEFAULTS: Settings = { difficulty: 'normal', sfx: 0.7, music: 0.35, qualit
 
 function read(key: string): unknown { try { return JSON.parse(localStorage.getItem(key) ?? 'null'); } catch { return null; } }
 function write(key: string, v: unknown): void { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage blocked: settings last for this visit only */ } }
+
+// The game used to be called Tower Bloxx 3D and stored its data under "tb3d_*" keys. The first load under the new name
+// copies each old value to its new key (once, only when the new key is empty) so no progress is lost; the old keys stay untouched.
+const OLD_KEYS: Record<string, string> = { tb3d_settings_v2: KEY, tb3d_progress_v3: PROGRESS, tb3d_district_v1: DISTRICT, tb3d_name: NAME_KEY };
+export function migrateOldKeys(): void {
+  try {
+    for (const [old, now] of Object.entries(OLD_KEYS)) {
+      const v = localStorage.getItem(old);
+      if (v !== null && localStorage.getItem(now) === null) localStorage.setItem(now, v);
+    }
+  } catch { /* storage blocked: nothing to carry over */ }
+}
+migrateOldKeys();
 
 export const settings: Settings = { ...DEFAULTS, ...((read(KEY) as Partial<Settings> | null) || {}) };
 const listeners: SettingsListener[] = [];
@@ -28,7 +43,6 @@ export function resetScores(): void { const p = loadProgress(); p.endless = {}; 
 
 // District progress (S0002): per city, per plot. Own versioned key; the S0001 key above stays as it is (Endless scores
 // and level stars still live there). The first load without district data carries Kosice level progress onto its last plot.
-const DISTRICT = 'tb3d_district_v1';
 export function loadDistrictProgress(): DistrictProgress {
   const p = sanitizeDistrict(read(DISTRICT));
   const kosice = levelById('kosice')?.district;
