@@ -2,7 +2,7 @@
 const KEY = 'tb3d_settings_v2';
 const PROGRESS = 'tb3d_progress_v3';
 import { sanitize, recordLevel, recordEndless } from './core/stars.js';
-import { LEVELS, levelById, cityById } from './levels.js';
+import { LEVELS, levelById, cityById, nextLevel } from './levels.js';
 import { sanitizeDistrict, recordCityPlot, migrateFromLevels, cityProgress } from './core/district-progress.js';
 
 const DEFAULTS = { difficulty: 'normal', sfx: 0.7, music: 0.35, quality: 'high', shake: true, hints: true, muted: false, camera: 0 };
@@ -33,7 +33,7 @@ export function loadDistrictProgress() {
 }
 export function saveDistrictResult(cityId, plotId, result) {
   const city = cityById(cityId);
-  const next = recordCityPlot(loadDistrictProgress(), cityId, city.district, plotId, result);
+  const next = recordCityPlot(loadDistrictProgress(), cityId, city.district, plotId, result, nextLevel(cityId)?.id || null);
   write(DISTRICT, next);
   return cityProgress(next, cityId);
 }

@@ -28,13 +28,16 @@ export function sanitizeDistrict(raw) {
 export const cityProgress = (progress, cityId) => progress.cities[cityId] || emptyCity();
 
 // Record a finished plot attempt for a city (district = city.district). Returns a new progress object.
-export function recordCityPlot(progress, cityId, district, plotId, result) {
+// `nextCityId`: the city that opens when the residents goal is reached for the first time (it gets `opened: true`).
+export function recordCityPlot(progress, cityId, district, plotId, result, nextCityId = null) {
   const p = sanitizeDistrict(JSON.parse(JSON.stringify(progress)));
   const city = p.cities[cityId] || emptyCity();
   city.plots = recordPlot(district, city.plots, plotId, result);
   city.opened = true;
-  city.goalReached = city.goalReached || goalReached(district, city.plots);
+  const first = !city.goalReached && goalReached(district, city.plots);
+  city.goalReached = city.goalReached || first;
   p.cities[cityId] = city;
+  if (first && nextCityId) p.cities[nextCityId] = { ...(p.cities[nextCityId] || emptyCity()), opened: true };
   return p;
 }
 

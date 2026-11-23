@@ -36,7 +36,6 @@ export function applyQuality() {
   sun.castShadow = q !== 'low';
   const size = q === 'high' ? 2048 : 1024;
   if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-  if (traffic) traffic.setCount(q === 'low' ? 14 : 34);
 }
 export function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);

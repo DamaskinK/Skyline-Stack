@@ -24,6 +24,12 @@ describe('district progress store', () => {
     expect(cityProgress(p2, 'newtown').plots.edge.counted).toBe(true);
     expect(cityProgress(p2, 'kosice')).toEqual(cityProgress(p1, 'kosice'));
   });
+  it('opens the next city when the residents goal is reached for the first time, not before', () => {
+    let p = recordCityPlot(emptyDistrictProgress(), 'kosice', { ...D, goal: 100 }, 'terasa', good(12), 'prague');
+    expect(cityProgress(p, 'prague').opened).toBe(true);            // 12 floors x 14 residents = 168 >= 100
+    p = recordCityPlot(emptyDistrictProgress(), 'kosice', { ...D, goal: 99999 }, 'terasa', good(12), 'prague');
+    expect(cityProgress(p, 'prague').opened).toBe(false);
+  });
   it('survives a JSON round trip', () => {
     const p = recordCityPlot(emptyDistrictProgress(), 'kosice', D, 'terasa', good(14));
     expect(sanitizeDistrict(JSON.parse(JSON.stringify(p)))).toEqual(p);

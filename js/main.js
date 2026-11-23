@@ -23,9 +23,9 @@ window.__sfx = Sfx;
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
 installDebug({ renderer, scene, camera, loadPlot: (n, city = 'kosice') => game.loadPlot(city, DISTRICT_CITIES.find((c) => c.id === city).district.plots[n].id) });
 
-applyQuality(); resize(); applyPostQuality();
+applyQuality(); People.applyTraffic(); resize(); applyPostQuality();
 window.addEventListener('resize', () => { resize(); resizePost(); });
-onSettings((k) => { if (k === 'quality') { applyQuality(); applyPostQuality(); } });
+onSettings((k) => { if (k === 'quality') { applyQuality(); People.applyTraffic(); applyPostQuality(); }   // the car count follows the preset and the finished plots });
 window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');

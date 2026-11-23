@@ -114,6 +114,11 @@ describe('residents and bonuses', () => {
     p = rec(p, 'far', 40);
     expect(towerBonuses(d, p, 'far').skyline).toBe(false);     // too far from every tower
   });
+  it('lets the skyline bonus be earned in Kosice, whose plots lie up to 1.3 km apart', () => {
+    let p = {}; for (let i = 0; i < 5; i++) p = build(p, ids[i], good(D.plots[i].target));
+    expect(ids.some((id) => towerBonuses(D, p, id).skyline)).toBe(true);
+    expect(towerBonuses(D, p, 'juzna').skyline).toBe(true);    // 15 vs 22 floors, 900 m from the Main Street plot
+  });
 });
 
 describe('goal', () => {

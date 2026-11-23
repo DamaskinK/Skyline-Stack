@@ -10,7 +10,7 @@ export const VIEW_BONUS = 0.2;            // +20 % residents for a tower that se
 export const VIEW_MIN_FLOORS = 10;        // ... once its upper floors reach this height
 export const SKYLINE_BONUS = 0.15;        // +15 % residents for a tower whose neighbour differs clearly in height ...
 export const SKYLINE_MIN_DIFF = 6;        // ... by at least this many floors
-export const SKYLINE_RADIUS_M = 800;      // neighbours = towers of plots at most this far apart (metres)
+export const SKYLINE_RADIUS_M = 1000;     // neighbours = towers of plots at most this far apart (metres)
 
 export const emptyPlot = () => ({ stars: 0, bestHeight: 0, residents: 0, counted: false });
 export const plotOf = (plots, id) => (plots && plots[id]) || emptyPlot();

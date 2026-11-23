@@ -2,8 +2,8 @@
 import { BUILDING_TYPES } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
-import { levelById, DISTRICT_CITIES } from './levels.js';
-import { showDistrictTowers } from './district-towers.js';
+import { levelById, DISTRICT_CITIES, LEVELS } from './levels.js';
+import { showDistrictTowers, clearDistrictTowers } from './district-towers.js';
 import { loadDistrictProgress } from './settings.js';
 import { cityProgress } from './core/district-progress.js';
 import { requirementText } from './district-map.js';
@@ -95,6 +95,10 @@ export function createUI(game) {
     syncNew();
     $('#districtCards').innerHTML = DISTRICT_CITIES.filter((c) => c.built).map((c) =>
       `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${c.district.goal} residents</span></button>`).join('');
+    // a city that the goal of the one before opened, but that is not built yet (shown, not playable)
+    const opened = loadDistrictProgress().cities;
+    $('#districtCards').innerHTML += LEVELS.filter((c) => !c.built && opened[c.id]?.opened).map((c) =>
+      `<button type="button" class="card-opt" disabled><b>${c.city.toUpperCase()}</b><span class="sub">${c.country} · opened, not built yet</span></button>`).join('');
     for (const b of $$('[data-district]')) b.onclick = () => { Sfx.init(); Sfx.uiOk(); districtMap.render(b.dataset.district); show('sMap'); };
   }
   // District map (S0002 05). Play loads the scene of the plot and runs it with the plot's rules.
@@ -125,6 +129,8 @@ export function createUI(game) {
     const pid = plotId || (plots ? plots[plots.length - 1].id : null);
     if (pid && (game.levelId !== level || game.loadedPlotId !== pid || mode === 'plot')) await loadPlot(level, pid);
     else if (!pid && game.levelId !== level) await loadLevel(level);
+    // the plot being played stands on its own site: the district towers around it are rebuilt without it (the map showed it too)
+    if (pid) showDistrictTowers(level, pid, cityProgress(loadDistrictProgress(), level).plots); else clearDistrictTowers();
     clearDemo(); hideScreens();
     if (mode === 'plot') game.startPlot(level, pid, diff); else game.start(mode, diff, level);
     starting = false;
@@ -247,6 +253,7 @@ export function createUI(game) {
   function toMenu() {
     game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
+    clearDistrictTowers();                    // the menu tower stands at the origin: no finished tower on that spot
     stack = []; show('sTitle'); buildDemo(); People.setWalkers(9);
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
@@ -308,7 +315,7 @@ export function createUI(game) {
       $('#plotDistrict').innerHTML = `<div class="lbl">${esc(city.city.toUpperCase())} DISTRICT · RESIDENTS <b>${t.residents}</b> / ${t.goal}</div>`
         + `<div class="bar res" role="progressbar" aria-label="Residents towards the goal" aria-valuemin="0" aria-valuemax="${t.goal}" aria-valuenow="${t.residents}"><i style="width:${pct}%"></i></div>`
         + `<div class="lbl">${t.counted} / ${t.plots} PLOTS BUILT · ${t.stars} / ${t.maxStars} STARS</div>`
-        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : city.fictional ? 'The whole district is built.' : 'Next city opened.'}</div>` : '');
+        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : city.fictional ? 'Newtown has no next city; keep building it.' : 'Next city opened.'}</div>` : '');
       stack = []; show('sPlot');
     },
     gameOver(r, record) {
