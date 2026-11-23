@@ -7,6 +7,7 @@ import { buildNearRing } from './near-ring.js';
 import { buildMiddleFar } from './far-ring.js';
 import { landmarkHide, buildLandmarks, landmarkClear } from './landmarks/index.js';
 import { cityById } from './levels.js';
+import { towerCircles } from './core/placement.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
 import { Trams } from './trams.js';
@@ -68,7 +69,9 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
   if (!osm) { Trams.use(null); People.setParked(null); }
   if (osm) {
     const off = plot && plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
-    const near = buildNearRing(osm, assets, landmarkHide(id));
+    // the finished towers of the other plots that stand inside this extract keep their site free (js/core/placement.ts)
+    const city = cityById(id), towers = plot && plotOsm && city?.district ? towerCircles(city.site, city.district.plots, plot.id, osm.half) : [];
+    const near = buildNearRing(osm, assets, landmarkHide(id), towers);
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);

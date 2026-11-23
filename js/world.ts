@@ -6,6 +6,9 @@ import { settings } from './settings.js';
 import { NEWTOWN } from './levels.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { surface } from './surfaces.js';
+import { NEWTOWN_GRID, newtownFurniture, newtownSite, newtownPlaced, hits, footprint, auditObjects } from './core/placement.js';
+import { boxRing, ringRing } from './core/geometry2d.js';
+import type { Placed, Kind } from './core/placement.js';
 import type { District, Grade, GridXZ, Landmark, Plot, QualityId, Weather } from './types.js';
 import { facade, roofTex, shopTex, billboardTex, pavingTex, grassTex, sidewalkTex, puffTex, storeyUV, canvas2d, toTex } from './textures.js';
 
@@ -230,6 +233,26 @@ function cityBlock(x: number, z: number, w: number, d: number, h: number, hex: n
 }
 // Blocks keep away from the district plots (the tower and its camera need room) and from the landmarks.
 const SITES: [number, number, number][] = [...(NEWTOWN.district as District).plots.map((p): [number, number, number] => [(p.site as GridXZ).x, (p.site as GridXZ).z, 36]), ...(NEWTOWN.landmarks as Landmark[]).map((l): [number, number, number] => [l.x, l.z, l.r + 10])];
+// Everything the procedural city places, as footprints, for the placement audit (S0004 00; __debug.placementAudit). A house or tree is only
+// placed where the site (ring roads, footways, plot sites) and everything placed before it leave room: the checks come after the random draws,
+// so the stream of numbers is the same as without them.
+export const procPlaced: Placed[] = [];
+const NEWTOWN_SITE = newtownSite(((NEWTOWN.district as District).plots as GridPlot[]).map((p) => p.site));
+const FURNITURE = newtownFurniture();
+procPlaced.push(...newtownPlaced(FURNITURE));
+// The audit of everything placed above, by category (the same rules as the Kosice near ring, js/core/placement.ts).
+export function auditProcedural(): { counts: Record<string, number>; byCategory: Record<string, number> } {
+  const counts: Record<string, number> = {}, byCategory: Record<string, number> = {};
+  for (const o of procPlaced) counts[o.kind] = (counts[o.kind] || 0) + 1;
+  for (const f of auditObjects(NEWTOWN_SITE, procPlaced)) byCategory[f.cat] = (byCategory[f.cat] || 0) + 1;
+  return { counts, byCategory };
+}
+function placeProc(kind: Kind, x: number, z: number, rot = 0, ring?: number[]): boolean {
+  const o: Placed = { kind, x, z, rot, ring: ring || footprint(kind, x, z, rot) };
+  if (hits(NEWTOWN_SITE, o).length) return false;
+  for (const q of procPlaced) if (Math.abs(q.x - x) < 80 && Math.abs(q.z - z) < 80 && ringRing(o.ring, q.ring) < 0.05 && q.kind !== 'hedge' && q.kind !== 'pole') return false;
+  procPlaced.push(o); return true;
+}
 const clearOfSites = (x: number, z: number, half: number): boolean => SITES.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r + half);
 const isRoad = (x: number, z: number, pad: number): boolean => Math.abs(Math.abs(x) - ROAD) < pad || Math.abs(Math.abs(z) - ROAD) < pad;
 for (let i = 0, made = 0; i < 160 && made < 84; i++) {
@@ -240,7 +263,7 @@ for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   const along = (x * -9 + z * -22) / 23.8, across = Math.abs(x * 22 - z * 9) / 23.8;
   if (along > 0 && across < 12 + Math.max(w, d) / 2) continue;
   const tall = r > 120 ? 20 + rnd() * 90 : 6 + rnd() * rnd() * 50;
-  if (!clearOfSites(x, z, Math.max(w, d) / 2)) continue;   // after the random draws above, so the stream stays as it was
+  if (!clearOfSites(x, z, Math.max(w, d) / 2) || !placeProc('block', x, z, 0, boxRing(x, z, w / 2 + 0.2, d / 2 + 0.2, 0))) continue;   // after the random draws above, so the stream stays as it was
   cityBlock(x, z, w, d, tall, palette[made % palette.length], made % 3, made); made++;
 }
 function finishBlocks(props: typeof roofPropList, boards: typeof billboards, parent: THREE.Object3D): void {
@@ -263,7 +286,8 @@ finishBlocks(roofPropList, billboards, nearProc);
     const a = fr() * Math.PI * 2, r = 310 + fr() * 170, x = Math.cos(a) * r, z = Math.sin(a) * r, w = 9 + fr() * 12, d = 9 + fr() * 12;
     const along = (x * -9 + z * -22) / 23.8, across = Math.abs(x * 22 - z * 9) / 23.8;
     if (along > 0 && across < 12 + Math.max(w, d) / 2) continue;
-    cityBlock(x, z, w, d, 20 + fr() * 90, palette[i % palette.length], i % 3, i + 100);
+    const tallFar = 20 + fr() * 90;
+    if (placeProc('block', x, z, 0, boxRing(x, z, w / 2 + 0.2, d / 2 + 0.2, 0))) cityBlock(x, z, w, d, tallFar, palette[i % palette.length], i % 3, i + 100);
   }
   finishBlocks(farProps, farBoards, backdrop);
 }
@@ -274,28 +298,24 @@ for (let i = 0; i < 120; i++) {
   const a = rnd() * Math.PI * 2, r = 30 + rnd() * 34;
   const x = Math.cos(a) * r, z = Math.sin(a) * r;
   if (isRoad(x, z, ROAD_W / 2 + 4) || (Math.abs(x) < 39 && Math.abs(z) < 39)) continue;
-  trees.push([x, z, 0.8 + rnd() * 0.6, Math.floor(rnd() * 3)]);
+  const sc = 0.8 + rnd() * 0.6, v = Math.floor(rnd() * 3);
+  if (placeProc('tree', x, z)) trees.push([x, z, sc, v]);
 }
 // parkland round every plot away from the plaza: trees in a loose ring, kept off the roads (own random stream, the scene above stays as it was)
 {
   let st = 313; const pr = () => { st = (st * 16807) % 2147483647; return (st - 1) / 2147483646; };
   for (const p of PLOT_PADS) for (let i = 0; i < 16; i++) {
     const a = pr() * Math.PI * 2, r = 28 + pr() * 26, x = p.site.x + Math.cos(a) * r, z = p.site.z + Math.sin(a) * r, sc = 0.8 + pr() * 0.6, v = Math.floor(pr() * 3);
-    if (!isRoad(x, z, ROAD_W / 2 + 4) && clearOfSites(x, z, 2)) trees.push([x, z, sc, v]);
+    if (!isRoad(x, z, ROAD_W / 2 + 4) && clearOfSites(x, z, 2) && placeProc('tree', x, z)) trees.push([x, z, sc, v]);
   }
 }
-for (let k = -33; k <= 33; k += 3) for (const s of [-1, 1]) { if (Math.abs(k) > 6) { bushes.push([k, s * 36.5]); bushes.push([s * 36.5, k]); } }
-for (let k = -30; k <= 30; k += 12) for (const s of [-1, 1]) { lamps.push([k, s * 34, s > 0 ? Math.PI : 0]); lamps.push([s * 34, k, s > 0 ? -Math.PI / 2 : Math.PI / 2]); }
-for (let k = -150; k <= 150; k += 22) for (const s of [-1, 1]) for (const o of [-1, 1]) {
-  if (Math.abs(k) < 40) continue;
-  lamps.push([k, s * ROAD + o * (ROAD_W / 2 + 0.6), o > 0 ? Math.PI : 0]); lamps.push([s * ROAD + o * (ROAD_W / 2 + 0.6), k, o > 0 ? -Math.PI / 2 : Math.PI / 2]);
-}
-for (let k = -24; k <= 24; k += 16) for (const s of [-1, 1]) { benches.push([k + 4, s * 32, s > 0 ? Math.PI : 0]); benches.push([s * 32, k + 4, s > 0 ? -Math.PI / 2 : Math.PI / 2]); }
+// the plaza edge, the footways of the ring roads and the plaza seats: laid out in js/core/placement.ts (audited there, no random numbers)
+bushes.push(...FURNITURE.bushes); lamps.push(...FURNITURE.lamps); benches.push(...FURNITURE.benches);
 for (const [x, z] of [[-26, -26], [26, -26], [-26, 26], [26, 26]]) for (let i = 0; i < 24; i++) flowers.push([x + (rnd() - 0.5) * 5, z + (rnd() - 0.5) * 5, Math.floor(rnd() * 4)]);
 
 // Same vegetation as the OpenStreetMap near ring (js/vegetation.js): full trees with wind sway, hedge rows, flower beds.
 addTrees(nearProc, trees, 0);
-addHedges(nearProc, bushes.map(([x, z]) => [x, z, x === 36.5 || x === -36.5 ? Math.PI / 2 : 0, 1.1]), 0);
+addHedges(nearProc, bushes.map(([x, z]) => [x, z, Math.abs(x) === NEWTOWN_GRID.hedge ? Math.PI / 2 : 0, 1.1]), 0);
 addFlowerBeds(nearProc, [[-26, -26], [26, -26], [-26, 26], [26, 26]].map(([x, z], i) => [x, z, i * 0.8, 5.5, 3.2]), 0.06);
 const benchGeo = mergeColored([[box(2.2, 0.15, 0.7, 0, 0.55, 0), 0x9c6b3e], [box(2.2, 0.6, 0.12, 0, 0.9, -0.3), 0x9c6b3e], [box(0.12, 0.55, 0.6, -0.95, 0.27, 0), 0x333333], [box(0.12, 0.55, 0.6, 0.95, 0.27, 0), 0x333333]]);
 instanced(benchGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 }), benches, ([x, z, r], o) => { o.position.set(x, GROUND_Y.walk, z); o.rotation.y = r; }, true, nearProc);

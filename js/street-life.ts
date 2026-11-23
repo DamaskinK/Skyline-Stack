@@ -3,13 +3,12 @@
 // sit, stand and cyclists ride. Returns data for People (js/fx.js): { sit, stand, bikeRoutes, basins }.
 import * as THREE from 'three';
 import { glowMats } from './world.js';
-import { Builder, LAYER, PLAZA_HALF, polyArea, insideRing, hash, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
-import type { Vec } from './near-ring.js';
+import { Builder, LAYER, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
+import type { Plan } from './core/placement.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 const Y = 0.05;                       // ground height of the footways
 const BIKE_COLOR = 0xa8483c, MARK = 0xf2efe6;
-const BASIN_MAX = 1500;               // same limit as near-ring.js: smaller water is a basin
 type Part = [THREE.BufferGeometry, number];     // geometry, colour
 const cyl = (r0: number, r1: number, h: number, y: number, seg = 8) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(0, y, 0);
 const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
@@ -49,7 +48,6 @@ function offsetLine(p: number[], off: number): number[] {         // polyline mo
   }
   return out;
 }
-function lengthOf(p: number[]): number { let l = 0; for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return l; }
 function dashes(b: Builder, p: number[], y: number, every = 3, len = 1.3, w = 0.12): void {
   let carry = 0;
   for (let i = 0; i + 3 < p.length; i += 2) {
@@ -73,139 +71,25 @@ function strip(b: Builder, p: number[], w: number, y: number, color: number): vo
   }
 }
 
-// What the near ring hands to the street life: where to add, and the placement tests (inside a building, on the plaza, inside the extract minus a margin).
-export interface LifeHost { group: THREE.Group; inBuilding: (x: number, z: number) => boolean; clearPlaza: (x: number, z: number) => boolean; bbIn: (x: number, z: number, m?: number) => boolean }
+// What the near ring hands to the street life: where to add, and the plan (js/core/placement.ts) that says where everything stands.
+export interface LifeHost { group: THREE.Group; plan: Plan }
 export interface Spot { x: number; z: number; rot: number; y?: number; mate?: boolean }
 export interface LifeRoute { p: number[]; len: number; d: number }
-export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, inBuilding, clearPlaza, bbIn }: LifeHost) {
-  const basins = osm.water.filter((g) => Math.abs(polyArea(g.p)) < BASIN_MAX).map((g) => g.p);
-  const nearBasin = (x: number, z: number, m: number): boolean => {
-    for (const p of basins) {
-      if (insideRing(p, x, z)) return true;
-      for (let i = 0, n = p.length / 2; i < n; i++) {   // distance to each edge
-        const j = (i + 1) % n, x0 = p[2 * i], z0 = p[2 * i + 1], dx = p[2 * j] - x0, dz = p[2 * j + 1] - z0, l2 = dx * dx + dz * dz || 1;
-        const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / l2));
-        if (Math.hypot(x - x0 - dx * t, z - z0 - dz * t) < m) return true;
-      }
-    }
-    return false;
-  };
-  const bikeLines: [number[], number][] = [];                 // [polyline, half width] of every bike lane: no furniture on them
-  const onBike = (x: number, z: number): boolean => {
-    for (const [p, h] of bikeLines) for (let i = 0; i + 3 < p.length; i += 2) {
-      const x0 = p[i], z0 = p[i + 1], dx = p[i + 2] - x0, dz = p[i + 3] - z0, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / l2));
-      if (Math.hypot(x - x0 - dx * t, z - z0 - dz * t) < h) return true;
-    }
-    return false;
-  };
-  const free = (x: number, z: number): boolean => bbIn(x, z, 10) && !clearPlaza(x, z) && !inBuilding(x, z) && !nearBasin(x, z, 2.5) && !onBike(x, z);
-
-  // ── bike lanes ──
-  const bikeB = new Builder(), markB = new Builder(), bikeRoutes: LifeRoute[] = [];
-  const dOf = (p: number[]): number => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
-  for (const r of osm.roads) {
-    if (r.bike !== 2 || lengthOf(r.p) < 20) continue;               // own cycle paths: red surface, dashed centre line
-    bikeLines.push([r.p, r.w / 2 + 1.2]); strip(bikeB, r.p, r.w, LAYER.bike, BIKE_COLOR); dashes(markB, r.p, LAYER.mark);
-    bikeRoutes.push({ p: r.p, len: lengthOf(r.p), d: dOf(r.p) });
+export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, plan }: LifeHost) {
+  const basins = plan.site.basins.map((b) => b.r);
+  // ── bike lanes: the planned pieces, already cut at houses and water ──
+  const bikeB = new Builder(), markB = new Builder();
+  for (const l of plan.bikeLanes) {
+    strip(bikeB, l.p, l.w, LAYER.bike, BIKE_COLOR);
+    if (l.cycleway) dashes(markB, l.p, LAYER.mark); else strip(markB, offsetLine(l.p, 0.8), 0.1, LAYER.mark, MARK);
   }
-  // lanes on streets: tagged ones, else the main streets close to the square (the data has few cycle tags)
-  let lanes = osm.roads.filter((r) => r.k === 'street' && r.bike === 1 && lengthOf(r.p) > 40);
-  if (lanes.length < 5) {
-    const extra = osm.roads.filter((r) => r.k === 'street' && !r.bike && r.w >= 7 && lengthOf(r.p) > 70).map((r) => ({ r, d: dOf(r.p) })).filter((o) => o.d > 22 && o.d < 190).sort((a, b) => a.d - b.d);
-    lanes = lanes.concat(extra.slice(0, 5 - lanes.length).map((o) => o.r));
-  }
-  lanes.forEach((r, k) => {
-    for (const side of [1, -1]) {
-      const p0 = offsetLine(r.p, side * (r.w / 2 - 0.95)), p = side > 0 ? p0 : (() => { const q: number[] = []; for (let i = p0.length - 2; i >= 0; i -= 2) q.push(p0[i], p0[i + 1]); return q; })();   // travel with the traffic on each side
-      bikeLines.push([p, 2]); strip(bikeB, p, 1.5, LAYER.bike, BIKE_COLOR);
-      strip(markB, offsetLine(p, 0.8), 0.1, LAYER.mark, MARK);
-      if (k < 4) bikeRoutes.push({ p, len: lengthOf(p), d: dOf(p) });
-    }
-  });
+  const bikeRoutes: LifeRoute[] = plan.bikeRoutes;
   if (!bikeB.empty) { const m = mesh(bikeB, layerMat(null, 'bike', { vertexColors: true, roughness: 0.95 }), group); (m as THREE.Mesh).name = 'bike-lanes'; }
   if (!markB.empty) mesh(markB, layerMat(null, 'mark', { vertexColors: true, roughness: 0.9 }), group);
 
-  // ── furniture along the footways ──
-  const items: Record<string, number[][]> = { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: number[][] = [], sit: Spot[] = [], stand: Spot[] = [];
-  const walks = osm.roads.filter((r) => (r.k === 'walk' || r.k === 'path') && !r.bike).map((r) => ({ r, d: dOf(r.p), len: lengthOf(r.p) })).filter((o) => o.len > 25 && o.d < 200).sort((a, b) => a.d - b.d);
-  const KINDS = ['bench', 'bin', 'planter', 'bench', 'rack', 'bollard', 'bin', 'bench', 'planter'];
-  let idx = 0, kiosks = 0;
-  for (const { r } of walks) {
-    if (items.bin.length + benches.length > 150) break;
-    let acc = 8 + hash(r.p[0], r.p[1]) * 10;
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 1) continue;
-      const tx = dx / l, tz = dz / l, nx = -tz, nz = tx;
-      for (let s = acc; s < l; s += 17 + hash(s, idx) * 8) {
-        const kind = KINDS[idx++ % KINDS.length], side = (idx & 1) ? 1 : -1, off = r.w / 2 + 0.9;
-        const x = x0 + tx * s + nx * off * side, z = z0 + tz * s + nz * off * side;
-        if (!free(x, z)) continue;
-        const faceRoad = Math.atan2(nx * side, nz * side);                   // direction towards the path
-        if (kind === 'bench') {
-          const th = Math.atan2(-tz, tx) + (side > 0 ? Math.PI : 0);          // long axis along the path, seat facing it
-          benches.push([x, Y, z, th]);
-          if (hash(x, z) < 0.6) sit.push({ x: x + tx * 0.4, z: z + tz * 0.4, rot: th, y: Y });
-          if (hash(z, x) < 0.35) sit.push({ x: x - tx * 0.45, z: z - tz * 0.45, rot: th, y: Y });
-        } else if (kind === 'rack') items.rack.push([x, Y, z, Math.atan2(-tz, tx)]);
-        else items[kind].push([x, Y, z, faceRoad]);
-        if (kind === 'planter' && hash(x, z) < 0.5) stand.push({ x: x + nx * -side * 1.6, z: z + nz * -side * 1.6, rot: faceRoad + Math.PI, mate: true });
-        if (kiosks < 4 && hash(z, x) < 0.06 && Math.hypot(x, z) > 20) { items.kiosk.push([x + nx * side * 1.6, Y, z + nz * side * 1.6, faceRoad + Math.PI]); stand.push({ x: x + nx * side * 0.2, z: z + nz * side * 0.2, rot: faceRoad + Math.PI, mate: true }); kiosks++; }
-      }
-      acc = ((acc - l) % 20 + 20) % 20;
-    }
-  }
-  // bollards around the basins, a few
-  for (const p of basins) { for (let i = 0, n = p.length / 2; i < n; i += 3) { const x = p[2 * i], z = p[2 * i + 1], d = Math.hypot(x, z) || 1; const bx = x + (x / d) * 0.8, bz = z + (z / d) * 0.8; if (!clearPlaza(bx, bz) && bbIn(bx, bz, 10) && !inBuilding(bx, bz) && items.bollard.length < 80) items.bollard.push([bx, Y, bz, 0]); } }
-  // bus stops and street signs on streets
-  let stops = 0, signs = 0;
-  for (const r of osm.roads.filter((q) => q.k === 'street' && q.w >= 6)) {
-    const d = dOf(r.p); if (d < 25 || d > 190) continue;
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 30) continue;
-      const tx = dx / l, tz = dz / l, nx = -tz, nz = tx, side = hash(x0, z0) < 0.5 ? 1 : -1, off = r.w / 2 + 2.2;
-      const x = x0 + tx * l * 0.5 + nx * off * side, z = z0 + tz * l * 0.5 + nz * off * side;
-      if (!free(x, z)) continue;
-      if (stops < 3 && l > 45) { items.stop.push([x, Y, z, Math.atan2(nx * side, nz * side) + Math.PI]); stops++; stand.push({ x: x + 0.2, z: z + 0.4, rot: Math.atan2(-nx * side, -nz * side), mate: false }); }
-      else if (signs < 10) { items.sign.push([x0 + tx * 3 + nx * (r.w / 2 + 0.6) * side, Y, z0 + tz * 3 + nz * (r.w / 2 + 0.6) * side, Math.atan2(tx, tz)]); signs++; }
-    }
-  }
-  // ── shopfronts on the walls beside the streets, market stalls and street musicians, nearest to the square first ──
-  const taken = [...Object.values(items).flat(), ...benches].map((q) => [q[0], q[2]]);
-  const clearOf = (x: number, z: number, m: number): boolean => taken.every(([a, b]) => Math.hypot(a - x, b - z) > m);
-  const shopSpots: (Spot & { d: number })[] = [], spotRoads = osm.roads.filter((r) => r.k !== 'main' && r.k !== 'rail' && lengthOf(r.p) > 20).map((r) => ({ r, d: dOf(r.p) })).filter((q) => q.d < 170).sort((a, b) => a.d - b.d);
-  for (const { r } of spotRoads) {
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 8) continue;
-      const tx = dx / l, tz = dz / l;
-      for (let s = 4 + hash(x0, z0) * 6; s < l - 3; s += 11 + hash(s, z0) * 5) for (const side of [1, -1]) {
-        const nx = -tz * side, nz = tx * side, px = x0 + tx * s, pz = z0 + tz * s;
-        for (let t = r.w / 2 + 1.2; t < r.w / 2 + 9; t += 0.6) {
-          const wx = px + nx * t, wz = pz + nz * t; if (!bbIn(wx, wz, 12)) break;
-          if (clearPlaza(wx, wz)) break;
-          if (inBuilding(wx, wz)) {
-            const fx = px + nx * (t - 0.35), fz = pz + nz * (t - 0.35);
-            if (t > r.w / 2 + 1.8 && !onBike(fx, fz) && !nearBasin(fx, fz, 3) && shopSpots.every((q) => Math.hypot(q.x - fx, q.z - fz) > 9)) shopSpots.push({ x: fx, z: fz, rot: Math.atan2(-nx, -nz), d: Math.hypot(fx, fz) });
-            break;
-          }
-        }
-      }
-    }
-  }
-  shopSpots.sort((a, b) => a.d - b.d); shopSpots.length = Math.min(shopSpots.length, 16);
-  const cand: (Spot & { d: number })[] = [];
-  for (const { r } of walks) {
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 6) continue;
-      const tx = dx / l, tz = dz / l;
-      for (let s = 3 + hash(z0, x0) * 5; s < l - 2; s += 13) {
-        const side: number = ((cand.length + i) & 1) ? 1 : -1, off = r.w / 2 + 2.6, x: number = x0 + tx * s - tz * side * off, z = z0 + tz * s + tx * side * off;
-        if (free(x, z) && clearOf(x, z, 3.5) && Math.hypot(x, z) > 13 && cand.every((q) => Math.hypot(q.x - x, q.z - z) > 7)) cand.push({ x, z, rot: Math.atan2(tz * side, -tx * side) + Math.PI, d: Math.hypot(x, z) });
-      }
-    }
-  }
-  cand.sort((a, b) => a.d - b.d);
-  const roomy = (q: Spot): boolean => { let k = 0; for (let a = 0; a < 8; a++) if (free(q.x + Math.cos(a * 0.785) * 3.6, q.z + Math.sin(a * 0.785) * 3.6)) k++; return k >= 7; };   // room for an audience
-  const roomyList = cand.filter((q) => roomy(q)), musicians = [roomyList[1] || roomyList[0], roomyList[4]].filter((q, i, a) => q && a.indexOf(q) === i), stalls = cand.filter((q) => !musicians.includes(q)).slice(0, 8);
+  // ── furniture along the footways, seats and standing spots ──
+  const { items, benches } = plan, sit: Spot[] = plan.sit.map((q) => ({ ...q, y: Y })), stand: Spot[] = plan.stand;
+  const shopSpots = plan.shops, stalls: Spot[] = plan.stalls, musicians: Spot[] = plan.musicians;
   const batch = (name: string, parts: () => Part[], list: Spot[], tint: boolean, shadow = false): THREE.InstancedMesh | null => {
     if (!list.length) return null;
     const im = new THREE.InstancedMesh(mergeParts(parts()), name.includes('glass') ? glassMat : furnitureMat, list.length), c = new THREE.Color();
@@ -233,5 +117,5 @@ export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, inBu
     im.castShadow = true; im.receiveShadow = true; im.name = 'furniture-' + name; group.add(im);
   }
   instanceKit(kit.bench, benches, 0, group, { lengthFit: 2.0 });
-  return { sit, stand, bikeRoutes, basins, events: life, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: lanes.length, shops: shopSpots.length, stalls: stalls.length, musicians: musicians.length } };
+  return { sit, stand, bikeRoutes, basins, events: life, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: plan.bikeLanes.filter((l) => !l.cycleway).length, shops: shopSpots.length, stalls: stalls.length, musicians: musicians.length } };
 }

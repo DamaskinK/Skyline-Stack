@@ -60,7 +60,7 @@ export function addTrees(group: THREE.Object3D, trees: TreeSpec[], baseY: number
       o.position.set(x, baseY, z); o.scale.set(s * (0.9 + h * 0.25), s * (0.85 + ((h * 7) % 1) * 0.4), s * (0.9 + h * 0.25)); o.rotation.y = x; o.updateMatrix(); im.setMatrixAt(i, o.matrix);
       im.setColorAt(i, c.setHex(TINTS[Math.floor(h * 997) % TINTS.length]));
     });
-    im.castShadow = true; im.receiveShadow = true; im.onBeforeRender = tick; im.userData.tree = true; group.add(im);
+    im.castShadow = true; im.receiveShadow = true; im.onBeforeRender = tick; im.userData.tree = true; im.userData.placed = 'tree'; group.add(im);
   }
 }
 // Hedge lumps [x, z, rotation, scale]: dark-green rounded blobs in rows.
@@ -73,7 +73,7 @@ export function addHedges(group: THREE.Object3D, list: [number, number, number, 
     o.position.set(x, baseY + 0.45 * s, z); o.rotation.y = r; o.scale.setScalar(s); o.updateMatrix(); im.setMatrixAt(i, o.matrix);
     im.setColorAt(i, c.setHex([0xffffff, 0xe8f6d0, 0xd6ecc6][i % 3]));
   });
-  im.castShadow = true; im.receiveShadow = true; group.add(im);
+  im.castShadow = true; im.receiveShadow = true; im.userData.placed = 'hedge'; group.add(im);
 }
 // Flower beds [x, z, rotation, length, width]: a soil bed with a scatter of coloured blooms, one instanced mesh each for soil and blooms.
 export function addFlowerBeds(group: THREE.Object3D, beds: [number, number, number, number, number][], baseY: number): void {
@@ -91,5 +91,5 @@ export function addFlowerBeds(group: THREE.Object3D, beds: [number, number, numb
       bloom.setMatrixAt(i * PER + k, o.matrix); bloom.setColorAt(i * PER + k, c.setHex(rnd(k * 3, i) > 0.35 ? main : alt));
     }
   });
-  soil.receiveShadow = true; bloom.castShadow = false; bloom.receiveShadow = true; group.add(soil, bloom);
+  soil.userData.placed = 'bed'; soil.receiveShadow = true; bloom.castShadow = false; bloom.receiveShadow = true; group.add(soil, bloom);
 }

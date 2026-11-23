@@ -1,7 +1,8 @@
 // Hooks for the browser check scripts (tests/browser). Nothing here runs unless a script calls it.
 import * as THREE from 'three';
-import { aimSun } from './world.js';
+import { aimSun, auditProcedural } from './world.js';
 import { windClock } from './vegetation.js';
+import { auditScene, auditMiddle } from './placement-audit.js';
 
 type V3 = [number, number, number];
 export interface DebugHost { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; loadPlot?: ((n: number, city?: string) => unknown) | null }
@@ -76,5 +77,14 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
     };
   }
 
-  window.__debug = { snap, flicker, info, loadPlot };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
+  // placement audit of the built scene (S0004 00): the near ring's trees, furniture, shops ... against the real size of everything else; counts per category
+  function placementAudit() {
+    const near = scene.getObjectByName('near-ring');
+    if (!near) { const p = auditProcedural(); return { procedural: true, middle: {}, counts: p.counts, byCategory: p.byCategory, planByCategory: {}, mismatches: [], sample: [] }; }
+    const a = auditScene(near);
+    const mid = scene.getObjectByName('middle-far-ring'), middle = mid ? auditMiddle(mid) : {};
+    return { middle, counts: a.counts, byCategory: a.byCategory, planByCategory: a.planFindings, mismatches: a.mismatches, sample: a.findings.slice(0, 8) };
+  }
+
+  window.__debug = { snap, flicker, info, loadPlot, placementAudit };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }

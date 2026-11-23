@@ -12,6 +12,8 @@ import { cityById } from './levels.js';
 import { loadDistrictProgress } from './settings.js';
 import { tileRoofTex, roofTex, STOREY_H, STOREY_W } from './textures.js';
 import type { Vec } from './near-ring.js';
+import { ringBox, ringRing, circleRing, boxHit } from './core/geometry2d.js';
+import type { Box4 } from './core/geometry2d.js';
 import type { Pt2 } from './types.js';
 
 const EXT = 4800;                      // terrain radius
@@ -25,6 +27,7 @@ function fbm(x: number, z: number, o = 4): number { let s = 0, a = 0.5, f = 1; f
 const bearing = (x: number, z: number): number => { let b = Math.atan2(x, -z) * 180 / Math.PI; if (b < 0) b += 360; return b; };   // 0 north, 90 east
 const gauss = (b: number, c: number, w: number): number => { let d = Math.abs(b - c); if (d > 180) d = 360 - d; return Math.exp(-((d / w) ** 2)); };
 const riverX = (z: number): number => -1800 + 160 * Math.sin(z / 1100);
+const RIVER_CLEAR = 60;                // the river is up to 96 m wide (34 + 14 either side of its centre); houses stay this far from its centre line
 
 // ground height at (x, z): flat city basin, rounded wooded hills rising from ~1.5 km, tallest in the north and north-west
 // Frame of the city: origin = the city's site. A district plot far from it is built with `plot` set: the rings are offset by the plot's position
@@ -155,6 +158,24 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
   const group = new THREE.Group(); group.name = 'middle-far-ring';
   group.position.set(-plot.x, 0, -plot.z);                                           // city frame -> frame of the plot
   const inNear = (x: number, z: number): boolean => Math.max(Math.abs(x - plot.x), Math.abs(z - plot.z)) < inner || clear.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
+  // a footprint (not only its centre) must stay out of the square the near ring fills, the circles round finished towers and landmarks, the river
+  // and every footprint placed before it (S0004 00); the rings placed are kept on userData for the placement audit
+  const nearBox: Box4 = [plot.x - inner, plot.z - inner, plot.x + inner, plot.z + inner], clearRings = clear.map((c) => circleRing(c.x, c.z, c.r, 16));
+  const footprints: { ring: number[]; box: Box4; kind: string }[] = [], grid = new Map<string, number[]>();
+  const fits = (ring: number[]): boolean => {
+    const b = ringBox(ring);
+    if (boxHit(b, nearBox)) return false;
+    for (let i = 0; i < ring.length; i += 2) if (Math.abs(ring[i] - riverX(ring[i + 1])) < RIVER_CLEAR) return false;
+    for (const c of clearRings) if (ringRing(ring, c) === 0) return false;
+    for (let gx = Math.floor(b[0] / 64); gx <= Math.floor(b[2] / 64); gx++) for (let gz = Math.floor(b[1] / 64); gz <= Math.floor(b[3] / 64); gz++)
+      for (const i of grid.get(`${gx},${gz}`) || []) if (boxHit(b, footprints[i].box, 0.5) && ringRing(ring, footprints[i].ring) < 0.5) return false;
+    return true;
+  };
+  const keep = (ring: number[], kind: string): void => {
+    const b = ringBox(ring), i = footprints.push({ ring, box: b, kind }) - 1;
+    for (let gx = Math.floor(b[0] / 64); gx <= Math.floor(b[2] / 64); gx++) for (let gz = Math.floor(b[1] / 64); gz <= Math.floor(b[3] / 64); gz++) { const k = `${gx},${gz}`; (grid.get(k) || grid.set(k, []).get(k) as number[]).push(i); }
+  };
+  group.userData.footprints = footprints; group.userData.rules = { near: nearBox, clear: clearRings, riverX, riverClear: RIVER_CLEAR };
   group.add(terrainMesh(), riverMesh());
 
   const walls = new Map<string, { kind: string; hex: number; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder();
@@ -165,10 +186,12 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
   const blocksView = (x0: number, z0: number, h: number): boolean => { const x = x0 - plot.x, z = z0 - plot.z; return h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60; };
   const panelHex = [0xe7e3d9, 0xd9ddd8, 0xe8dcc6, 0xdfe4e6];
   let count = 0;
-  const place = (kind: string, hex: number, v: number, cx: number, cz: number, w: number, d: number, rot: number, storeys: number, roof: string, rcol: THREE.Color | null, ty: number): void => {
+  const place = (kind: string, hex: number, v: number, cx: number, cz: number, w: number, d: number, rot: number, storeys: number, roof: string, rcol: THREE.Color | null, ty: number): boolean => {
     const h = storeys * STOREY_H;
-    if (blocksView(cx, cz, h)) return;
+    if (blocksView(cx, cz, h)) return false;
     const p = rectRing(cx, cz, w, d, rot), y0 = ty - 3;
+    if (!fits(p)) return false;
+    keep(p, kind);
     addWalls(wallB(kind, hex, v), p, y0, h + 3);
     if (roof === 'hip') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color); else if (roof === 'low') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color, 1.3);
     else if (roof !== 'open') {
@@ -177,6 +200,7 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
       for (const [i, j, k] of tris) flats.tri([pts[i].x, ty + h, pts[i].y], [pts[j].x, ty + h, pts[j].y], [pts[k].x, ty + h, pts[k].y], [0, 1, 0], (q) => [q[0] / 8, q[2] / 8]);
     }
     count++;
+    return true;
   };
   const pick = <T,>(a: T[], r: number): T => a[Math.floor(r * a.length * 0.999)];
   for (let iu = -30; iu <= 30; iu++) for (let iv = -30; iv <= 30; iv++) {
@@ -221,7 +245,7 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
   for (let i = 0; i < 9; i++) {
     const a = hash(i, 3.3) * Math.PI * 2, r = 380 + hash(i, 8.1) * 520, x = Math.sin(a) * r, z = -Math.cos(a) * r, ty = terrainY(x, z);
     if (inNear(x, z) || Math.abs(x - riverX(z)) < 300) continue;
-    place('old', 0xdad3c3, 99, x, z, 9, 9, ALPHA, 8, 'open', null, ty);
+    if (!place('old', 0xdad3c3, 99, x, z, 9, 9, ALPHA, 8, 'open', null, ty)) continue;
     const rr = rectRing(x, z, 9, 9, ALPHA); pitchedRoof(tiles, rr, ty + 8 * STOREY_H, new THREE.Color(i % 2 ? 0x5e8f7c : 0xa84c36), 13);
     place('old', 0xdad3c3, 99, x + 13 * Math.cos(ALPHA), z + 13 * Math.sin(ALPHA), 12, 26, ALPHA, 4, 'hip', pick(ROOF_COLORS, i / 9), ty);
   }

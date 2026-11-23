@@ -5,11 +5,13 @@
 import * as THREE from 'three';
 import { mergeColored } from './world.js';
 import { Builder, LAYER, ribbon, stripe, mesh, layerMat, material } from './near-ring.js';
-import { joinWays, makeRoute, pointAt, snapStops, makeSchedule } from './core/tram-route.js';
+import { BED_W } from './core/placement.js';
+import { pointAt, snapStops, makeSchedule } from './core/tram-route.js';
 import type { Route, Schedule } from './core/tram-route.js';
 import type { OsmExtract } from './types.js';
+import type { Plan } from './core/placement.js';
 
-const GAUGE = 1.435, BED_W = 3.2, RAIL_Y0 = LAYER.bed, RAIL_Y1 = LAYER.bed + 0.09, WIRE_Y = 5.6;
+const GAUGE = 1.435, RAIL_Y0 = LAYER.bed, RAIL_Y1 = LAYER.bed + 0.09, WIRE_Y = 5.6;
 const STEEL = new THREE.Color(0x8a8d92), WIRE = new THREE.Color(0x2b2b2e), PLATFORM = new THREE.Color(0xb9b4a8), EDGE = new THREE.Color(0xe8c547), SHELTER = new THREE.Color(0x6e8a99), POST = new THREE.Color(0x4a4d52);
 const SECTION = 9, BELLOWS = 0.9, PITCH = SECTION + BELLOWS, AXLE = 3.2;     // metres
 
@@ -52,42 +54,21 @@ const tramMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 
 let geoCab: THREE.BufferGeometry | null = null, geoMid: THREE.BufferGeometry | null = null;
 const geometries = (): THREE.BufferGeometry[] => { geoCab ??= sectionGeometry(true, false); geoMid ??= sectionGeometry(false, true); return [geoCab, geoMid, geoCab]; };
 
-// What the near ring hands to the tram line: the group to add to and the two tests that keep poles and platforms off buildings and the plaza.
-export interface TramHost { group: THREE.Group; inBuilding: (x: number, z: number) => boolean; clearPlaza: (x: number, z: number) => boolean }
+// What the near ring hands to the tram line: the group to add to and the plan (js/core/placement.ts) with the lines, beds, poles and platforms that fit.
+export interface TramHost { group: THREE.Group; plan: Plan }
 interface TramRun { g: THREE.Group; sections: THREE.Mesh[]; run: { r: Route; sch: Schedule }; phase: number; at?: { s: number; moving: boolean } }
 // A running tram line: what the checks and People read, and what main.js drives.
 export interface TramLine {
   platforms: { x: number; z: number }[]; lines: number; trams: number; stops: number;
   where(): { x: number; z: number; moving: boolean }[]; setCount(n: number): void; update(dt: number): void;
 }
-export function buildTramLine(osm: OsmExtract, { group, inBuilding, clearPlaza }: TramHost): TramLine | null {
-  const lines = joinWays((osm.rails || []).map((r) => r.p)).map(makeRoute).filter((r) => r.len > 12);
+export function buildTramLine(osm: OsmExtract, { group, plan }: TramHost): TramLine | null {
+  const lines = plan.tramLines;
   if (!lines.length) return null;
-  const roads = osm.roads.filter((r) => r.k === 'main' || r.k === 'street' || r.k === 'lane');
-  const nearRoad = (x: number, z: number): boolean => {
-    for (const r of roads) {
-      const m = r.w / 2 + 2.5;
-      for (let i = 0; i + 3 < r.p.length; i += 2) {
-        const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l2 = dx * dx + dz * dz || 1;
-        if (Math.abs(x - x0) > m + Math.abs(dx) || Math.abs(z - z0) > m + Math.abs(dz)) continue;
-        const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / l2));
-        if (Math.hypot(x - x0 - dx * t, z - z0 - dz * t) < m) return true;
-      }
-    }
-    return false;
-  };
-  // track bed in runs of the same kind; rails and wire along the whole line
+  // track bed in runs of the same kind (paved beside a road, grass elsewhere); rails and wire along the whole line
   const paved = new Builder(), grass = new Builder(), steel = new Builder(), wire = new Builder(), furniture = new Builder();
+  for (const bed of plan.tramBeds) ribbon(bed.paved ? paved : grass, bed.p, BED_W, LAYER.bed, 3);
   for (const r of lines) {
-    let run: number[] = [], kind: boolean | null = null;
-    const flush = () => { if (run.length >= 4) ribbon(kind ? paved : grass, run, BED_W, LAYER.bed, 3); run = []; };
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const k = nearRoad((r.p[i] + r.p[i + 2]) / 2, (r.p[i + 1] + r.p[i + 3]) / 2);
-      if (kind !== null && k !== kind) flush();
-      if (!run.length) run.push(r.p[i], r.p[i + 1]);
-      run.push(r.p[i + 2], r.p[i + 3]); kind = k;
-    }
-    flush();
     for (const side of [-1, 1]) {
       const q = offsetLine(r.p, side * GAUGE / 2);
       for (let i = 0; i + 3 < q.length; i += 2) stripe(steel, q[i], q[i + 1], q[i + 2], q[i + 3], 0.11, RAIL_Y0, RAIL_Y1, STEEL);
@@ -99,13 +80,8 @@ export function buildTramLine(osm: OsmExtract, { group, inBuilding, clearPlaza }
   mesh(steel, material(null, { vertexColors: true, roughness: 0.45, metalness: 0.5 }), group);
   mesh(wire, material(null, { vertexColors: true, roughness: 0.6 }), group);
 
-  // poles on alternate sides every 36 m (one instanced mesh)
-  const poles: [number, number, number][] = [];
-  for (const r of lines) for (let s = 12, k = 0; s < r.len - 6; s += 36, k++) {
-    const [x, z, dx, dz] = pointAt(r, s), side = k % 2 ? 1 : -1, px = x - dz * 2.4 * side, pz = z + dx * 2.4 * side;
-    if (inBuilding(px, pz) || clearPlaza(px, pz)) continue;
-    poles.push([px, pz, Math.atan2(dz * side, -dx * side)]);     // the arm points back to the track
-  }
+  // poles on alternate sides every 36 m (the plan keeps those whose spot is free; one instanced mesh)
+  const poles = plan.poles;
   if (poles.length) {
     const geo = mergeColored([[new THREE.CylinderGeometry(0.07, 0.1, 6.3, 6).translate(0, 3.15, 0), 0x5b5e63], [box(2.4, 0.09, 0.09, 1.2, 6.0, 0), 0x5b5e63]]);
     const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 }), poles.length), m = new THREE.Matrix4();
@@ -113,13 +89,13 @@ export function buildTramLine(osm: OsmExtract, { group, inBuilding, clearPlaza }
     im.castShadow = true; group.add(im);
   }
 
-  // stops: a platform on one side of the line with a yellow edge and a small shelter
+  // stops: a platform on one side of the line with a yellow edge and a small shelter (the plan keeps those that fit)
   const platforms: { x: number; z: number }[] = [];
   const stopsOf = (r: Route) => snapStops(r, osm.stops || [], 16, 60);
-  for (const r of lines) for (const s of stopsOf(r)) {
+  for (const pl of plan.platforms) {
+    const r = lines[pl.line], s = pl.s;
     const side = hashSide(r, s), [x, z, dx, dz] = pointAt(r, s), nx = -dz * side, nz = dx * side;
     const a = pointAt(r, s - 7), b = pointAt(r, s + 7), o = 2.7;
-    if (inBuilding(x + nx * o, z + nz * o)) continue;
     platforms.push({ x: x + nx * o, z: z + nz * o });
     stripe(furniture, a[0] + nx * o, a[1] + nz * o, b[0] + nx * o, b[1] + nz * o, 2.2, 0, 0.28, PLATFORM);
     stripe(furniture, a[0] + nx * (o - 1.0), a[1] + nz * (o - 1.0), b[0] + nx * (o - 1.0), b[1] + nz * (o - 1.0), 0.25, 0, 0.3, EDGE);

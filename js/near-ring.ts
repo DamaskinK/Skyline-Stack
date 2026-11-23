@@ -9,16 +9,16 @@ import { buildStreetLife } from './street-life.js';
 import { surface } from './surfaces.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { settings } from './settings.js';
-import { cutPolyline } from './core/tram-route.js';
+import { planNearRing, PLAZA_HALF, PAD_HALF, BASIN_MAX, hash, insideRing, polyArea } from './core/placement.js';
+import type { Circle } from './core/placement.js';
 import { buildTramLine } from './trams.js';
-import type { LevelAssets, OsmExtract, OsmPoly } from './types.js';
+import type { LevelAssets, OsmExtract } from './types.js';
+
+export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
 export const ROOF_COLORS = [0xb4573c, 0xa84c36, 0x9a5a44, 0x8a4a3a, 0xc0623f, 0x7d5a4c, 0xb0523a].map((c) => new THREE.Color(c));
-export const PLAZA_HALF = 14;      // paved square around the tower
-export const PAD_HALF = PLAZA_HALF + 2;   // nothing of the street network (roads, footways, rails, bike lanes, basins) enters this square: the foundation stands on bare plaza
-const CLEAR = 24;                  // no buildings closer than this to the origin
 
 // ground heights: every layer a real step above the one below, plus a depth bias for the far distance
 export const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, lot: 0.034, bed: 0.038, path: 0.045, bike: 0.055, mark: 0.065, plaza: GROUND_Y.walk };   // bike lanes and their paint sit above roads and footways, never in the same plane
@@ -29,7 +29,6 @@ const parkGrass = (() => {
   for (let i = 0; i < 700; i++) { x.fillStyle = hash(i, 3) > 0.5 ? 'rgba(40,90,30,.16)' : 'rgba(190,225,140,.16)'; x.fillRect(hash(i, 1) * 128, hash(i, 2) * 128, 2, 3); }
   return toTex(c, true);
 })();
-const BASIN_MAX = 1500;            // m2: water polygons smaller than this are fountains / pools (basin with a rim), larger ones are river
 const CURB_COLOR = new THREE.Color(0xb9b4a8), RIM_COLOR = new THREE.Color(0xa8a498);
 
 // ── tiny geometry builder (non-indexed, world-space uv) ──
@@ -56,7 +55,6 @@ export class Builder {
 }
 const UP: Vec = [0, 1, 0];
 
-export function polyArea(p: number[]): number { let a = 0; for (let i = 0, n = p.length / 2; i < n; i++) { const j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; } return a / 2; }
 export function fillPoly(b: Builder, p: number[], y: number, scale: number, n: Vec = UP, grow = 0): void {
   const pts: THREE.Vector2[] = []; for (let i = 0; i < p.length; i += 2) pts.push(new THREE.Vector2(p[i], p[i + 1]));
   if (pts.length < 3) return;
@@ -103,8 +101,6 @@ export function stripe(b: Builder, x0: number, z0: number, x1: number, z1: numbe
   quad(P(a, -1, y0), P(a, 1, y0), P(a, 1, y1), P(a, -1, y1), [-ux, 0, -uz]);
   quad(P(c, -1, y0), P(c, -1, y1), P(c, 1, y1), P(c, 1, y0), [ux, 0, uz]);
 }
-export function hash(x: number, z: number): number { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); }
-export const insideRing = (p: number[], x: number, z: number): boolean => { let c = false; for (let i = 0, n = p.length / 2, j = n - 1; i < n; j = i++) { const xi = p[2 * i], zi = p[2 * i + 1], xj = p[2 * j], zj = p[2 * j + 1]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) c = !c; } return c; };
 
 export function material(map: THREE.Texture | null, o: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial { const m = new THREE.MeshStandardMaterial({ map, roughness: 1, ...o }); return m; }
 export function layerMat(map: THREE.Texture | null, key: keyof typeof BIAS, o: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
@@ -221,23 +217,12 @@ const WIN = {
   plain: { w: 2.05, sillY: 0.8, sillH: 0.11, sillOut: 0.15, lintelY: 2.49, lintelH: 0.12, lintelOut: 0.1, jamb: 0.09, jambY0: 0.9, jambY1: 2.48, jambOut: 0.05 },
 };
 
-// The street network without the pad square around the tower (ticket S0002 10: no road, footway, rail or bike lane under the foundation);
-// rails are also cut where the extract ends, so a line never floats over the middle ring.
-function trimNetwork(osm: OsmExtract): OsmExtract {
-  const pad: [number, number, number, number] = [-PAD_HALF, -PAD_HALF, PAD_HALF, PAD_HALF], edge: [number, number, number, number] = [-osm.half, -osm.half, osm.half, osm.half];
-  const outPad = (x: number, z: number): boolean => !(Math.abs(x) < PAD_HALF && Math.abs(z) < PAD_HALF);
-  const roads: OsmExtract['roads'] = [];
-  for (const r of osm.roads) for (const p of cutPolyline(r.p, [pad], outPad)) roads.push(p.length === r.p.length ? r : { ...r, p });
-  const rails: OsmPoly[] = [];
-  for (const r of osm.rails || []) for (const p of cutPolyline(r.p, [pad, edge], (x, z) => outPad(x, z) && Math.abs(x) < osm.half && Math.abs(z) < osm.half)) rails.push({ p });
-  const small = (g: OsmPoly) => Math.abs(polyArea(g.p)) < BASIN_MAX, touchesPad = (g: OsmPoly) => { for (let i = 0; i < g.p.length; i += 2) if (Math.abs(g.p[i]) < PAD_HALF + 2 && Math.abs(g.p[i + 1]) < PAD_HALF + 2) return true; return insideRing(g.p, 0, 0); };
-  return { ...osm, roads, rails, water: osm.water.filter((g) => !(small(g) && touchesPad(g))) };
-}
-
-export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set<string> | null = null): THREE.Group {
-  const osm = trimNetwork(osm0);
-  const group = new THREE.Group(); group.name = 'near-ring';
-  const bbIn = (x: number, z: number, m = 0): boolean => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
+// `towers`: circles round the sites of the finished towers of the other plots inside this extract (towerCircles in js/core/placement.ts).
+// Every placement rule (what may stand where) lives in js/core/placement.ts; this file only draws the plan. The plan is on `group.userData.plan`
+// so the browser audit can compare it with the objects of the scene.
+export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set<string> | null = null, towers: Circle[] = []): THREE.Group {
+  const plan = planNearRing(osm0, { towers }), osm = plan.osm;
+  const group = new THREE.Group(); group.name = 'near-ring'; group.userData.plan = plan;
 
   // ── ground ──
   const urban = new Builder(), park = new Builder(), water = new Builder(), road = new Builder(), path = new Builder();
@@ -291,18 +276,16 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // ── buildings: walls grouped by facade kind and colour, pitched tile roofs and flat roofs in two meshes ──
   // Historic centre (small footprints, no tall height tag): 2-4 storey baroque / classicist houses, pastel plaster, red hip roofs.
   // Everything larger or taller: plain calm facade, flat roof.
-  const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder(), kept: number[][] = [];
+  const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder();
   const frameR = settings.quality === 'low' ? 75 : 110;     // window frames only where the camera can see them; cornices and plinths everywhere
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   const wallB = (kind: string, v: number): Builder => { const k = kind + v; let e = walls.get(k); if (!e) { e = { kind, v, b: new Builder() }; walls.set(k, e); } return e.b; };
-  for (const bd of osm.buildings) {
-    const p = bd.p, n = p.length / 2;
-    if (n < 3) continue;
-    let cx = 0, cz = 0, near = Infinity;
-    for (let i = 0; i < p.length; i += 2) { cx += p[i]; cz += p[i + 1]; near = Math.min(near, Math.hypot(p[i], p[i + 1])); }
+  for (const site of plan.site.buildings) {                  // the footprints that stand: none near the tower, none on top of another (js/core/placement.ts)
+    const bd = osm.buildings[site.i], p = bd.p, n = p.length / 2;
+    let cx = 0, cz = 0;
+    for (let i = 0; i < p.length; i += 2) { cx += p[i]; cz += p[i + 1]; }
     cx /= n; cz /= n;
-    if (near < CLEAR || insideRing(p, 0, 0)) continue;
-    if (hide && hide.has(bd.n as string)) { kept.push(p); continue; }       // replaced by a hand-built landmark model
+    if (hide && hide.has(bd.n as string)) continue;          // replaced by a hand-built landmark model
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
     const bh = bd.h ?? 0, panel = (bd.lv ?? 0) >= 5 || (bd.a && bh >= 12);                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
     const old = bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel;
@@ -311,7 +294,6 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     else if (old) storeys = bh >= 3 ? Math.min(6, Math.max(2, Math.round(bh / STOREY_H))) : 2 + Math.floor(hv * 3);
     else storeys = Math.min(20, Math.max(2, Math.round((bh >= 3 ? bh : 9 + hv * 8) / STOREY_H)));
     const h = storeys * STOREY_H;
-    kept.push(p);
     const v = Math.floor(hv * 1000) % OLD_PALETTE.length;
     const W = old ? wallB('old', bd.k === 'church' ? 99 : v) : wallB('plain', Math.floor(hv * 977) % PLAIN_PALETTE.length);
     const pitched = old && area < 1500 && convexish(p, area), wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
@@ -362,118 +344,34 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   mesh(relief, material(null, { vertexColors: true, roughness: 0.9 }), group, false);   // no shadow casting: the details are too small to show in the shadow map
   mesh(flats, material(tile(roofTex), { color: 0xb8b8b8 }), group);
 
-  // ── trees in parks, bushes on park corners, street lights, parked cars ──
-  const trees: [number, number, number, number][] = [], bushes: [number, number][] = [], lamps: number[][] = [], cars: number[][] = [], hedges: [number, number, number, number][] = [], beds: [number, number, number, number, number][] = [];
-  const inBuilding = (x: number, z: number): boolean => { for (const p of kept) if (insideRing(p, x, z)) return true; return false; };
-  const clearPlaza = (x: number, z: number): boolean => Math.abs(x) < PLAZA_HALF + 2 && Math.abs(z) < PLAZA_HALF + 2;
-  for (const g of osm.parks) {
-    if (g.k === 'pitch') continue;
-    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
-    for (let i = 0; i < g.p.length; i += 2) { x0 = Math.min(x0, g.p[i]); x1 = Math.max(x1, g.p[i]); z0 = Math.min(z0, g.p[i + 1]); z1 = Math.max(z1, g.p[i + 1]); }
-    const step = g.k === 'wood' ? 5 : 9;
-    for (let x = x0; x < x1; x += step) for (let z = z0; z < z1; z += step) {
-      const jx = x + (hash(x, z) - 0.5) * step * 0.8, jz = z + (hash(z, x) - 0.5) * step * 0.8;
-      if (!bbIn(jx, jz, 10) || clearPlaza(jx, jz) || !insideRing(g.p, jx, jz) || inBuilding(jx, jz)) continue;
-      trees.push([jx, jz, 0.8 + hash(jx, jz) * 0.7, Math.floor(hash(jz, jx) * 3)]);
-    }
-    for (let i = 0; i < g.p.length; i += 12) if (bushes.length < 70 && bbIn(g.p[i], g.p[i + 1], 10) && !clearPlaza(g.p[i], g.p[i + 1])) bushes.push([g.p[i], g.p[i + 1]]);
-  }
-  // hedge rows: lumps 1.3 m apart, half a metre inside the kerb, on about every second long edge of the bigger parks
-  for (const g of osm.parks) {
-    if (g.k === 'pitch' || Math.abs(polyArea(g.p)) < 200) continue;
-    const sg = polyArea(g.p) >= 0 ? 1 : -1;
-    for (let i = 0, n = g.p.length / 2; i < n; i++) {
-      const j = (i + 1) % n, x0 = g.p[2 * i], z0 = g.p[2 * i + 1], dx = g.p[2 * j] - x0, dz = g.p[2 * j + 1] - z0, l = Math.hypot(dx, dz);
-      if (l < 6 || hash(x0, z0) < 0.5 || hedges.length > 420) continue;
-      const nx = -dz / l * sg, nz = dx / l * sg, gap = 1.25;
-      for (let s = 0.8; s < l - 0.8; s += gap) {
-        const x = x0 + dx / l * s + nx * 0.55, z = z0 + dz / l * s + nz * 0.55;
-        if (bbIn(x, z, 10) && !clearPlaza(x, z) && insideRing(g.p, x, z) && !inBuilding(x, z)) hedges.push([x, z, Math.atan2(dx, dz) + Math.PI / 2, 0.85 + hash(x, z) * 0.3]);
-      }
-    }
-  }
-  for (const g of osm.parks) {   // flower beds: a few per bigger park, away from the trees
-    if (g.k === 'pitch' || g.k === 'wood' || Math.abs(polyArea(g.p)) < 250) continue;
-    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, got = 0;
-    for (let i = 0; i < g.p.length; i += 2) { x0 = Math.min(x0, g.p[i]); x1 = Math.max(x1, g.p[i]); z0 = Math.min(z0, g.p[i + 1]); z1 = Math.max(z1, g.p[i + 1]); }
-    for (let k = 0; k < 60 && got < 2 && beds.length < 36; k++) {
-      const x = x0 + hash(k, x0) * (x1 - x0), z = z0 + hash(z0, k) * (z1 - z0), r = hash(x, z) * Math.PI;
-      if (!bbIn(x, z, 12) || clearPlaza(x, z) || inBuilding(x, z)) continue;
-      const ok = [[2.2, 0], [-2.2, 0], [0, 1.2], [0, -1.2]].every(([u, v]) => insideRing(g.p, x + u * Math.cos(r) + v * Math.sin(r), z - u * Math.sin(r) + v * Math.cos(r)));
-      if (!ok || trees.some((q) => Math.hypot(q[0] - x, q[1] - z) < 3.2) || beds.some((q) => Math.hypot(q[0] - x, q[1] - z) < 8)) continue;
-      beds.push([x, z, r, 3.6, 1.7]); got++;
-    }
-  }
-  let carN = 0;
-  for (const r of osm.roads) {
-    if (r.k !== 'main' && r.k !== 'street') continue;
-    const gap = r.k === 'main' ? 30 : 46;
-    let acc = 6;
-    for (let i = 0; i + 3 < r.p.length; i += 2) {
-      const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz);
-      if (l < 1) continue;
-      const tx = dx / l, tz = dz / l, nx = -tz, nz = tx, rot = Math.atan2(tx, tz);
-      for (let s = acc; s < l; s += gap) {
-        const x = x0 + tx * s, z = z0 + tz * s, side = (Math.floor(x * 7 + z * 3) & 1) ? 1 : -1, off = r.w / 2 + 1.2;
-        const lx = x + nx * off * side, lz = z + nz * off * side;
-        if (lamps.length < 40 && bbIn(lx, lz, 8) && !clearPlaza(lx, lz) && !inBuilding(lx, lz)) lamps.push([lx, 0.03, lz, Math.atan2(-nx * side, -nz * side)]);
-        const t = hash(x, z);
-        if (t < 0.7 && carN < 120 && r.w >= 5.5) {
-          const cx = x + tx * 9 - nx * (r.w / 2 - 1.3) * side, cz = z + tz * 9 - nz * (r.w / 2 - 1.3) * side;
-          if (bbIn(cx, cz, 8) && !clearPlaza(cx, cz) && !inBuilding(cx, cz)) { cars.push([cx, 0.04, cz, rot + (t < 0.27 ? 0 : Math.PI)]); carN++; }
-        }
-      }
-      acc = ((acc - l) % gap + gap) % gap;
-    }
-  }
+  // ── trees in parks, bushes on park corners, street lights, parked cars: all placed by the plan (js/core/placement.ts) ──
+  const { trees, bushes, lamps, hedges, beds } = plan;
   // trees (several canopy lumps, tints, wind sway), hedge rows along park kerbs, flower beds (js/vegetation.js)
   addTrees(group, trees, LAYER.park);
   addHedges(group, hedges, LAYER.park);
   addFlowerBeds(group, beds, LAYER.park);
   instanceKit(kit.bush, bushes.map(([x, z]) => [x, LAYER.park, z, hash(x, z) * 6]), 1.1, group, { shadow: false });
   instanceKit(kit.streetlight, lamps, 6, group);
-  // parked cars in the car parks (OpenStreetMap amenity=parking): bays in rows along the long side of the lot, about two thirds taken
-  for (const g of osm.parking || []) {
-    if (Math.abs(polyArea(g.p)) < 120) continue;
-    const n = g.p.length / 2; let cx = 0, cz = 0, sxx = 0, szz = 0, sxz = 0;
-    for (let i = 0; i < n; i++) { cx += g.p[2 * i]; cz += g.p[2 * i + 1]; } cx /= n; cz /= n;
-    for (let i = 0; i < n; i++) { const dx = g.p[2 * i] - cx, dz = g.p[2 * i + 1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
-    const th = 0.5 * Math.atan2(2 * sxz, sxx - szz), ux = Math.cos(th), uz = Math.sin(th), vx = -uz, vz = ux;   // u: long axis
-    let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
-    for (let i = 0; i < n; i++) { const dx = g.p[2 * i] - cx, dz = g.p[2 * i + 1] - cz, u = dx * ux + dz * uz, v = dx * vx + dz * vz; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
-    // rows run along u (cars nose to the aisle: rotated across u), 2.6 m between cars, 6 m between rows (two rows share an aisle)
-    for (let v = v0 + 2.8; v < v1 - 2.4; v += 5.4) for (let u = u0 + 1.6; u < u1 - 1.6; u += 2.7) {
-      const x = cx + ux * u + vx * v, z = cz + uz * u + vz * v;
-      if (hash(x * 1.3, z * 0.7) > 0.66 || !bbIn(x, z, 8) || clearPlaza(x, z) || inBuilding(x, z) || !insideRing(g.p, x, z)) continue;
-      const ok = [[1.2, 0], [-1.2, 0], [0, 2.4], [0, -2.4]].every(([a, b]) => insideRing(g.p, x + ux * a + vx * b, z + uz * a + vz * b));
-      if (ok) cars.push([x, LAYER.lot + 0.03, z, Math.atan2(vx, vz) + (hash(z, x) < 0.5 ? 0 : Math.PI)]);
-    }
-  }
-  // the nearest first: the preset and the finished plots decide how many are shown (People.applyTraffic)
-  cars.sort((a, b) => Math.hypot(a[0], a[2]) - Math.hypot(b[0], b[2]));
+  // the nearest first (the plan sorted them): the preset and the finished plots decide how many are shown (People.applyTraffic)
+  const cars = plan.cars.map(([x, , z, r], i) => [x, plan.carKinds[i] === 'lot' ? LAYER.lot + 0.03 : 0.04, z, r]);
   const parked: { ims: THREE.InstancedMesh[]; n: number }[] = [];
   const carKit = (src: THREE.Object3D | undefined, list: number[][], len: number) => { const ims = instanceKit(src, list, 0, group, { lengthFit: len }) || []; parked.push({ ims, n: list.length }); };
   carKit(kit.car_sedan, cars.filter((_, i) => i % 2 === 0), 4.4);
   carKit(kit.car_hatchback, cars.filter((_, i) => i % 2 === 1), 4.0);
   group.userData.parked = parked;
   // tram lines (rails in a track bed, overhead wire and poles, stops, trams): js/trams.js
-  group.userData.tram = buildTramLine(osm, { group, inBuilding, clearPlaza });
+  group.userData.tram = buildTramLine(osm, { group, plan });
   // street furniture, bike lanes, seats and standing spots for the people (js/street-life.js)
-  const life = buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn });
+  const life = buildStreetLife(osm, kit, { group, plan });
   group.userData.life = life;
   // moving traffic: the streets nearest to the tower first, so the cars are where the camera looks
-  const routeD = (p: number[]): number => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
-  group.userData.carRoutes = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street' || (r.k === 'lane' && r.w >= 4)) && r.w >= 4 && lineLen(r.p) > 40)
-    .map((r) => ({ p: r.p, d: routeD(r.p) })).filter((r) => r.d < 220).sort((a, b) => a.d - b.d).slice(0, 18).map((r) => r.p);
-  group.userData.walkRoutes = osm.roads.filter((r) => r.k === 'walk' || r.k === 'path').map((r) => {
-    let d = 1e9; for (let i = 0; i < r.p.length; i += 2) d = Math.min(d, Math.hypot(r.p[i], r.p[i + 1]));
-    let len = 0; for (let i = 2; i < r.p.length; i += 2) len += Math.hypot(r.p[i] - r.p[i - 2], r.p[i + 1] - r.p[i - 1]);
-    return { p: r.p, off: 0.5, d, len };
-  }).filter((r) => r.len > 30 && r.d > 18 && r.d < 160).sort((a, b) => a.d - b.d).slice(0, 24);
+  group.userData.carRoutes = plan.routes.car;
+  group.userData.walkRoutes = plan.routes.walk.map((p) => ({ p, off: 0.5, d: routeD(p), len: lineLen(p) }));
   group.userData.walkRoutes.life = life;      // People.setRoutes picks the life data (seats, bike routes, basins) up from here
   return group;
 }
 
+const routeD = (p: number[]): number => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
 const lineLen = (p: number[]): number => { let l = 0; for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return l; };
 export function mergeParts(parts: [THREE.BufferGeometry, number][]): THREE.BufferGeometry {
   const pos: number[] = [], nor: number[] = [], col: number[] = [];
