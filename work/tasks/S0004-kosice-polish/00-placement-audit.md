@@ -6,7 +6,7 @@ and no surfaces fight each other. An automated audit that fails the build when i
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] An audit (core-side geometry, run in Vitest on the plot extracts and in a browser check on the built scene) that
       reports: buildings, props, trees, benches, kiosks, stops, parked cars, district towers and the player's plot pad
