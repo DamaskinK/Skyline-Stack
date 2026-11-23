@@ -6,7 +6,7 @@ city name and a camera pass over its landmarks; smooth transitions between scree
 **Blocked by:** 14, 18
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Interface"; user stories 68, 72, 75.
 
 - [ ] Fly-over uses the level's scene (Kosice for now) with no extra download
