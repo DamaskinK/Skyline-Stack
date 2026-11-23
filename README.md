@@ -10,7 +10,7 @@ Node.js 18+:
 ```bash
 npm install
 npm run serve       # development, from the source: http://localhost:8000
-npm test            # simulation core tests
+npm test            # typecheck (tsc) + simulation core tests (Vitest)
 npm run build       # static site in dist/ (bundled code, page, styles, assets)
 npm run preview     # serve dist/ at http://localhost:8001
 ```
