@@ -4,7 +4,7 @@ import { Run } from '../../js/core/run.js';
 import { CFG, DIFFICULTY } from '../../js/config.js';
 import { BUILDING_TYPES, applyTrait } from '../../js/building-types.js';
 import { windAt, Tower } from '../../js/physics.js';
-import type { BuildingTypeId, Difficulty, RunOptions, RunEvent, WeatherCycle } from '../../js/types.js';
+import type { Block, BuildingTypeId, Difficulty, FlyResult, RunOptions, RunEvent, WeatherCycle } from '../../js/types.js';
 import { levelOf, need } from './helpers.js';
 
 const D = DIFFICULTY.normal;
@@ -63,10 +63,11 @@ describe('traits', () => {
   });
   it('glass slides a block further than the panel block on the same roof', () => {
     const land = (type: BuildingTypeId) => {
-      const t = new Tower(0, 0, applyTrait(D, type)); t.wx = { mu: 0.9 };
-      const b = { m: 1, x: 0, y: CFG.FOUND_H + CFG.H, z: 0, vx: 6, vy: -3, vz: 0 };
-      let ev: { dx?: number } | null = null; for (let i = 0; i < 600 && !ev; i++) ev = t.fly(b, CFG.DT, { x: 0, z: 0 });
-      return need(need(ev).dx) - b.x;
+      const t = new Tower(0, 0, applyTrait(D, type)); t.wx = { mu: 0.9 } as WeatherCycle;   // only the friction matters here
+      const b = { m: 1, x: 0, y: CFG.FOUND_H + CFG.H, z: 0, vx: 6, vy: -3, vz: 0 } as Block;   // fly() reads only the motion
+      let ev: FlyResult | null = null; for (let i = 0; i < 600 && !ev; i++) ev = t.fly(b, CFG.DT, { x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
+      if (ev?.type !== 'land') throw new Error('test setup: the block should land');
+      return ev.dx - b.x;
     };
     expect(land('glass')).toBeGreaterThan(land('panel'));
     expect(land('panel')).toBeGreaterThan(0);

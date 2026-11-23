@@ -10,13 +10,18 @@
 // The director reads the game each frame (stability is game.tower.dyn.r, streak is game.combo) and gets events from game.js.
 import { Sfx } from './audio.js';
 import { settings } from './settings.js';
+import type { Game } from './game.js';
+import type { RunEventType } from './types.js';
+import type { Run } from './core/run.js';
 
 // Tempo (bpm) and tonic (0 = C) per track, estimated from the audio; they set the tension layer.
-export const TRACKS = {
+export interface TrackInfo { bpm: number; root: number }
+export const TRACKS: Record<string, TrackInfo> = {
   menu: { bpm: 73, root: 5 }, kosice: { bpm: 98, root: 2 }, prague: { bpm: 115, root: 9 },
   tokyo: { bpm: 160, root: 1 }, newtown: { bpm: 168, root: 5 },
 };
-export const STATES = {
+export type MusicState = 'menu' | 'calm' | 'streak' | 'danger' | 'dropout' | 'win';
+export const STATES: Record<MusicState, { g: number; lp: number; tension: number }> = {
   menu:    { g: 0.8,  lp: 12000, tension: 0 },
   calm:    { g: 0.5,  lp: 2200,  tension: 0 },
   streak:  { g: 0.9,  lp: 20000, tension: 0 },
@@ -33,11 +38,11 @@ const now = () => performance.now() / 1000;
 const CHORDS = [[0, 3, 7], [-4, 0, 3], [-7, -3, 0], [-2, 2, 5]];
 const LEAD_A = [12, 15, 19, 15, 17, 15, 12, 10, 8, 12, 15, 12, 10, 7, 10, 12];
 const LEAD_B = [19, 17, 15, 12, 15, 17, 19, 22, 20, 19, 15, 12, 14, 15, 17, 19];
-const hz = (s) => 220 * Math.pow(2, s / 12);
+const hz = (s: number): number => 220 * Math.pow(2, s / 12);
 const Chip = {
   next: 0, step: 0,
-  update(out, menu, tension) {
-    const c = Sfx.ctx;
+  update(out: AudioNode, menu: boolean, tension: number): void {
+    const c = Sfx.ctx as AudioContext;
     if (this.next < c.currentTime) this.next = c.currentTime + 0.05;
     const bpm = menu ? 96 : 118 + Math.min(22, tension * 22), sixteenth = 60 / bpm / 4;
     while (this.next < c.currentTime + 0.25) {
@@ -56,22 +61,34 @@ const Chip = {
   },
 };
 
-export const Music = {
-  state: 'menu', trackId: null, usingChip: false, log: [],
-  game: null, raw: {}, buf: {}, cur: null, old: [], danger: false, won: false, dropUntil: 0, runRef: null, tens: { next: 0, step: 0 },
+// One playing track: its buffer, its gain and the passes scheduled so far; or just { id, chip } while the chiptune stands in.
+interface FileTrack {
+  id: string; chip?: false; buf: AudioBuffer; gain: GainNode; next: number; first: boolean; passes: AudioBufferSourceNode[];
+  dyingAt?: number; dead?: boolean; gone?: boolean;
+}
+interface ChipTrack { id: string; chip: true }
+interface MusicLogEntry { t: number; from: MusicState; to: MusicState; stability: number | null; track: string }
 
-  bind(game) { this.game = game; },
+class MusicDirector {
+  state: MusicState = 'menu'; trackId: string | null = null; usingChip = false; log: MusicLogEntry[] = [];
+  game: Game | null = null; raw: Record<string, ArrayBuffer> = {}; buf: Record<string, AudioBuffer> = {};
+  cur: FileTrack | ChipTrack | null = null; old: FileTrack[] = []; danger = false; won = false; dropUntil = 0; runRef: Run | null = null;
+  tens = { next: 0, step: 0 }; want: MusicState = 'menu';
+  // Nodes made by setup(), which runs once the AudioContext exists.
+  pre!: GainNode; lp!: BiquadFilterNode; duck!: GainNode; tensG!: GainNode; meter!: AnalyserNode;
+
+  bind(game: Game): void { this.game = game; }
   // A level track as loaded bytes (ArrayBuffer) from the level manifest. Decoded as soon as the AudioContext exists.
-  provide(id, raw) { if (raw && !this.buf[id]) { this.raw[id] = raw; this.decodePending(); } },
+  provide(id: string, raw: unknown): void { if (raw && !this.buf[id]) { this.raw[id] = raw as ArrayBuffer; this.decodePending(); } }   // level audio arrives as bytes
   async decodePending() {
     if (!Sfx.ctx) return;
     for (const id of Object.keys(this.raw)) {
       const raw = this.raw[id]; delete this.raw[id];
       const b = await Sfx.decode(raw); if (b) this.buf[id] = b;
     }
-  },
-  setup() {
-    const c = Sfx.ctx;
+  }
+  setup(): void {
+    const c = Sfx.ctx as AudioContext;
     this.pre = c.createGain();                         // tracks and the chiptune enter here
     this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 12000;
     this.duck = c.createGain(); this.duck.gain.value = STATES.menu.g;
@@ -80,36 +97,36 @@ export const Music = {
     this.pre.connect(this.lp).connect(this.duck); this.tensG.connect(this.duck);
     this.duck.connect(Sfx.mus); this.duck.connect(this.meter);
     this.apply(); this.decodePending();
-  },
+  }
   // Level of the music alone (before the volume setting), for checks.
   rms() {
     if (!this.meter) return 0;
     const d = new Float32Array(this.meter.fftSize); this.meter.getFloatTimeDomainData(d);
     let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i]; return Math.sqrt(s / d.length);
-  },
+  }
 
   // Events from game.js.
-  event(type) {
+  event(type: RunEventType): void {
     if (type === 'collapse' || type === 'lifeLost') this.dropUntil = now() + DROPOUT_S;
     else if (type === 'target') { this.won = true; this.sting(); }
     this.evaluate();
-  },
+  }
   sting() {
     if (!Sfx.ctx || !this.pre) return;
-    const root = 261.63 * Math.pow(2, (TRACKS[this.trackId]?.root ?? 0) / 12);
+    const root = 261.63 * Math.pow(2, (TRACKS[this.trackId as string]?.root ?? 0) / 12);
     [0, 4, 7, 12, 16, 19, 24].forEach((st, i) => {
       const f = root * Math.pow(2, st / 12);
       Sfx.tone(f, 0.9, 'triangle', 0.14, null, i * 0.09, Sfx.mus);
       Sfx.tone(f * 2, 0.5, 'sine', 0.05, null, i * 0.09, Sfx.mus);
     });
-  },
+  }
 
   // Which state now.
   evaluate() {
     const g = this.game; if (!g) return;
     const run = g.run;
     if (run !== this.runRef) { this.runRef = run; this.danger = false; this.won = false; this.dropUntil = 0; }
-    let want, id;
+    let want: MusicState, id: string;
     if (g.state === 'menu' || !run) { want = 'menu'; id = 'menu'; }
     else {
       id = g.cityId || 'kosice';
@@ -129,16 +146,16 @@ export const Music = {
       this.state = want;
       this.apply();
     }
-  },
+  }
   apply() {
     const c = Sfx.ctx; if (!c || !this.duck) return;
     const s = STATES[this.state], t = c.currentTime, tau = this.state === 'dropout' ? 0.06 : FADE_S;
     this.duck.gain.setTargetAtTime(s.g, t, tau);
     this.lp.frequency.setTargetAtTime(s.lp, t, tau);
     this.tensG.gain.setTargetAtTime(s.tension * 0.9, t, this.state === 'danger' ? 0.4 : 0.25);
-  },
+  }
 
-  playTrack(id) {
+  playTrack(id: string): void {
     this.trackId = id;
     const c = Sfx.ctx; if (!c || !this.pre) return;
     const t = c.currentTime, buf = id === 'menu' ? Sfx.menuTrack : this.buf[id];
@@ -147,9 +164,9 @@ export const Music = {
     this.usingChip = false;
     const gain = c.createGain(); gain.gain.value = 0; gain.gain.setTargetAtTime(1, t, 0.5); gain.connect(this.pre);
     this.cur = { id, buf, gain, next: t + 0.05, first: true, passes: [] };
-  },
-  pass(tr) {
-    const c = Sfx.ctx, dur = tr.buf.duration, xf = Math.min(2, dur * 0.08), t = tr.next;
+  }
+  pass(tr: FileTrack): void {
+    const c = Sfx.ctx as AudioContext, dur = tr.buf.duration, xf = Math.min(2, dur * 0.08), t = tr.next;
     const s = c.createBufferSource(), g = c.createGain();
     s.buffer = tr.buf; g.gain.value = 0; s.connect(g).connect(tr.gain);
     const fin = tr.first ? 0.3 : xf;
@@ -157,11 +174,11 @@ export const Music = {
     g.gain.setValueCurveAtTime(DOWN, t + dur - xf, xf);
     s.start(t); s.onended = () => { try { g.disconnect(); } catch { /* gone */ } };
     tr.passes.push(s); tr.first = false; tr.next = t + dur - xf;
-  },
+  }
 
   // Heartbeat, drone and ticks in the track's tempo and key, only while the danger state is on.
-  tension() {
-    const c = Sfx.ctx, tn = this.tens, info = TRACKS[this.trackId] || TRACKS.kosice, out = this.tensG;
+  tension(): void {
+    const c = Sfx.ctx as AudioContext, tn = this.tens, info = TRACKS[this.trackId as string] || TRACKS.kosice, out = this.tensG;
     if (tn.next < c.currentTime) { tn.next = c.currentTime + 0.05; tn.step = 0; }
     const beat = 60 / info.bpm, eighth = beat / 2, f0 = 65.41 * Math.pow(2, info.root / 12);
     while (tn.next < c.currentTime + 0.4) {
@@ -172,7 +189,7 @@ export const Music = {
       if (k === 0 || k === 4) Sfx.tone(k === 0 ? f0 : f0 * 1.5, beat * 1.8, 'sawtooth', 0.12, null, t, out);   // root and fifth drone
       tn.next += eighth; tn.step++;
     }
-  },
+  }
 
   update() {
     const c = Sfx.ctx; if (!c || !this.pre) return;
@@ -180,16 +197,17 @@ export const Music = {
     const t = c.currentTime;
     if (!this.cur && this.trackId) this.playTrack(this.trackId);
     if (this.cur && this.cur.chip) {
-      const b = this.trackId === 'menu' ? Sfx.menuTrack : this.buf[this.trackId];
-      if (b) this.playTrack(this.trackId);                      // the file arrived late
+      const id = this.cur.id, b = id === 'menu' ? Sfx.menuTrack : this.buf[id];   // a chip track always has its id
+      if (b) this.playTrack(id);                      // the file arrived late
       else if (settings.music > 0 && !settings.muted) Chip.update(this.pre, this.trackId === 'menu', this.state === 'danger' ? 1 : 0.3);
       else Chip.next = t + 0.05;
     } else if (this.cur) while (this.cur.next < t + 0.8) this.pass(this.cur);
-    for (const o of this.old) if (t > o.dyingAt) { for (const s of o.passes) { try { s.stop(); } catch { /* done */ } } try { o.gain.disconnect(); } catch { /* gone */ } o.gone = true; }
+    for (const o of this.old) if (t > (o.dyingAt as number)) { for (const s of o.passes) { try { s.stop(); } catch { /* done */ } } try { o.gain.disconnect(); } catch { /* gone */ } o.gone = true; }
     this.old = this.old.filter((o) => !o.gone);
     if (this.state === 'danger') this.tension();
-  },
-};
+  }
+}
+export const Music = new MusicDirector();
 
 Sfx.onReady.push(() => Music.setup());
 Sfx.onShared.push(() => Music.update());

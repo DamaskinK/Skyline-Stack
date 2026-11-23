@@ -7,13 +7,14 @@ import { loadDistrictProgress } from './settings.js';
 import { cityProgress } from './core/district-progress.js';
 import { isPlotOpen, nextPlot, plotOf, plotBonuses, plotResidents, districtTotals, RESIDENTS_PER_FLOOR, DEFAULT_RESIDENTS_PER_FLOOR,
   VIEW_BONUS, VIEW_MIN_FLOORS, SKYLINE_BONUS, SKYLINE_MIN_DIFF, SKYLINE_RADIUS_M } from './core/district.js';
+import type { District, GridXZ, Level, Plot, PlotStates, PlotState } from './types.js';
 
-const esc = (s) => String(s).replace(/[<>&"]/g, '');
-const STAR = (on) => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-const LANDMARK_NAMES = { 'st-elisabeth': 'St Elisabeth Cathedral', 'state-theatre': 'State Theatre', hlavna: 'Hlavna street', 'clock-tower': 'the Meridian Clock Tower', 'lantern-bridge': 'the Lantern Bridge' };
-const landmarkName = (id) => LANDMARK_NAMES[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
+const esc = (s: unknown): string => String(s).replace(/[<>&"]/g, '');
+const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+const LANDMARK_NAMES: Record<string, string> = { 'st-elisabeth': 'St Elisabeth Cathedral', 'state-theatre': 'State Theatre', hlavna: 'Hlavna street', 'clock-tower': 'the Meridian Clock Tower', 'lantern-bridge': 'the Lantern Bridge' };
+const landmarkName = (id: string): string => LANDMARK_NAMES[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
-export function requirementText(plot) {
+export function requirementText(plot: Pick<Plot, 'target' | 'require'>): string {
   const q = plot.require || {};
   const parts = [`reach ${plot.target} floors`];
   if (q.maxLivesLost != null) parts.push(`lose at most ${q.maxLivesLost} ${q.maxLivesLost === 1 ? 'life' : 'lives'}`);
@@ -22,10 +23,10 @@ export function requirementText(plot) {
 }
 
 // Plot coordinates in metres east/north of the first plot, then fitted into a W x H box with padding (aspect kept).
-export function layoutPlots(plots, W = 640, H = 400, pad = 70) {
+export function layoutPlots(plots: Pick<Plot, 'site'>[], W = 640, H = 400, pad = 70): { x: number; y: number }[] {
   const raw = plots.map((p) => {
     const s = p.site;
-    return s.lat != null ? { x: s.lon * Math.cos(s.lat * Math.PI / 180), y: -s.lat } : { x: s.x, y: s.z };
+    return 'lat' in s && s.lat != null ? { x: s.lon * Math.cos(s.lat * Math.PI / 180), y: -s.lat } : { x: (s as GridXZ).x, y: (s as GridXZ).z };
   });
   const xs = raw.map((r) => r.x), ys = raw.map((r) => r.y);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -34,17 +35,20 @@ export function layoutPlots(plots, W = 640, H = 400, pad = 70) {
   return raw.map((r) => ({ x: ox + (r.x - x0) * k, y: oy + (r.y - y0) * k }));
 }
 
-export function createDistrictMap({ onPlay, onBack }) {
-  const root = document.querySelector('#sMap');
-  const $ = (s) => root.querySelector(s);
-  let cityId = 'kosice', selected = null;
+export interface DistrictMapHandlers { onPlay: (cityId: string, plotId: string) => void; onBack?: () => void }
+export interface DistrictMap { render(id?: string, opts?: { focusNext?: boolean }): { next: Plot | null } }
 
-  function stateOf(city, plots, p) {
-    const st = plotOf(plots, p.id), open = isPlotOpen(city.district, plots, p.id);
+export function createDistrictMap({ onPlay, onBack }: DistrictMapHandlers): DistrictMap {
+  const root = document.querySelector('#sMap') as HTMLElement;
+  const $ = (s: string): HTMLElement => root.querySelector(s) as HTMLElement;
+  let cityId = 'kosice', selected: string | null = null;
+
+  function stateOf(city: Level, plots: PlotStates, p: Plot): { st: PlotState; open: boolean; kind: 'built' | 'open' | 'locked' } {
+    const st = plotOf(plots, p.id), open = isPlotOpen(city.district as District, plots, p.id);
     return { st, open, kind: st.counted ? 'built' : open ? 'open' : 'locked' };
   }
 
-  function bonusLines(plot) {
+  function bonusLines(plot: Plot): string {
     const b = plotBonuses(plot);
     const view = b.view
       ? `<li><b class="c-ok">VIEW +${Math.round(VIEW_BONUS * 100)} %</b> sees ${plot.landmarksInView.map(landmarkName).map(esc).join(', ')} from ${VIEW_MIN_FLOORS} floors up</li>`
@@ -53,9 +57,9 @@ export function createDistrictMap({ onPlay, onBack }) {
     return view + sky;
   }
 
-  function render(id = cityId, { focusNext = false } = {}) {
+  function render(id = cityId, { focusNext = false }: { focusNext?: boolean } = {}): { next: Plot | null } {
     cityId = id;
-    const city = cityById(id), d = city.district;
+    const city = cityById(id) as Level, d = city.district as District;
     const progress = cityProgress(loadDistrictProgress(), id), plots = progress.plots;
     const tot = districtTotals(d, plots), next = nextPlot(d, plots);
     if (focusNext && next) selected = next.id;
@@ -103,13 +107,13 @@ export function createDistrictMap({ onPlay, onBack }) {
         + `</div>${why ? `<p class="why">${why}</p>` : ''}</article>`;
     }).join('');
 
-    for (const el of root.querySelectorAll('[data-plot]')) el.addEventListener('click', (e) => {
-      if (e.target.closest('[data-play]')) return;
-      selected = el.dataset.plot; render();
+    for (const el of root.querySelectorAll<HTMLElement>('[data-plot]')) el.addEventListener('click', (e) => {
+      if ((e.target as Element).closest('[data-play]')) return;
+      selected = el.dataset.plot as string; render();
       const card = root.querySelector(`.pcard[data-plot="${selected}"]`);
       if (card) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
-    for (const b of root.querySelectorAll('[data-play]')) b.addEventListener('click', () => onPlay(cityId, b.dataset.play));
+    for (const b of root.querySelectorAll<HTMLElement>('[data-play]')) b.addEventListener('click', () => onPlay(cityId, b.dataset.play as string));
     return { next };
   }
 

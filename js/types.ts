@@ -66,7 +66,7 @@ export interface Level {
 export type BlockState = 'hang' | 'fall';
 export interface Block {
   state: BlockState; type: BlockKind; m: number; bouncy: boolean; golden: boolean;
-  x: number; y: number; z: number; vx: number; vy: number; vz: number; lastVrx: number; lastVrz: number;
+  x: number; y: number; z: number; vx: number; vy: number; vz: number; lastVrx: number; lastVrz: number; bounced?: boolean;
 }
 export interface Vec3 { x: number; y: number; z: number }
 export interface RunOptions { bx?: number; bz?: number; level?: Level | null; endless?: boolean; buildingType?: BuildingTypeId | null; windScale?: number }
@@ -94,7 +94,7 @@ export type RunEvent = { t: number } & (
   | { type: 'miss'; p: Vec3; v: Vec3 }
   | { type: 'land'; kind: 'perfect' | 'good' | 'risky'; offset: number; golden: boolean; combo: number; floor: number; x: number; z: number; roofY: number }
   | { type: 'quakeWarning'; floor: number }
-  | { type: 'collapse'; from: number; count: number; items: unknown[] }
+  | { type: 'collapse'; from: number; count: number; items: CollapseItem[] }
   | { type: 'lifeLost'; reason: string | null; lives: number }
   | { type: 'target'; target: number; stars: number; livesLost: number }
   | { type: 'over'; result: RunResult }
@@ -116,3 +116,14 @@ export interface Settings {
   difficulty: DifficultyId; sfx: number; music: number; quality: QualityId;
   shake: boolean; hints: boolean; muted: boolean; camera: number;
 }
+
+// ---- Physics (js/physics.ts) ----
+export interface Vec2 { x: number; z: number }
+export interface Wind { x: number; z: number; speed: number; angle: number; trend: number }
+export interface Hook { x: number; z: number; vx: number; vz: number }
+export interface StaticPose { x: number; z: number }
+export interface Pose { x: number; z: number; vx: number; vz: number }
+export interface TowerFloor { x: number; z: number; m: number; type: BlockKind }
+export type FlyResult = { type: 'miss'; how: string } | { type: 'bounce' } | { type: 'land'; dx: number; dz: number; vrx: number; vrz: number };
+export interface CollapseItem { index: number; type: BlockKind; p: Vec3; v: Vec3; av: Vec3 }
+export interface CollapseInfo { from: number; count: number; items: CollapseItem[] }

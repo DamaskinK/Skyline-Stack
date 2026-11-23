@@ -1,5 +1,5 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
-import { BUILDING_TYPES } from './building-types.js';
+import { BUILDING_TYPES, buildingTypeById } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById, DISTRICT_CITIES, LEVELS } from './levels.js';
@@ -11,12 +11,17 @@ import { createDistrictMap } from './district-map.js';
 import { Sfx } from './audio.js';
 import { People } from './fx.js';
 import { buildDemo, clearDemo } from './game.js';
+import type { Game, GameUi, GameMode } from './game.js';
+import type { AssetError } from './assets.js';
+import type { Run } from './core/run.js';
+import type { Level, DifficultyId, District, Settings } from './types.js';
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
-const esc = (s) => String(s).replace(/[<>&"]/g, '');
+// The page (index.html) always has the elements the code asks for, so a missing one is a bug and fails loudly later.
+const $ = <T extends HTMLElement = HTMLElement>(s: string): T => document.querySelector(s) as T;
+const $$ = <T extends HTMLElement = HTMLElement>(s: string): T[] => [...document.querySelectorAll<T>(s)];
+const esc = (s: unknown): string => String(s).replace(/[<>&"]/g, '');
 
-export const WX_ICONS = {
+export const WX_ICONS: Record<string, string> = {
   Clear: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="7" fill="#ffd34d" stroke="#000" stroke-width="2"/><g stroke="#ffd34d" stroke-width="3"><path d="M16 2v5M16 25v5M2 16h5M25 16h5M6 6l3 3M23 23l3 3M26 6l-3 3M6 26l3-3"/></g></svg>',
   Rain: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#c8d2e2" stroke="#000" stroke-width="2"/><path d="M10 22l-2 6M16 22l-2 6M22 22l-2 6" stroke="#52d9ff" stroke-width="2.5"/></svg>',
   Snow: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#eef3fa" stroke="#000" stroke-width="2"/><g fill="#fff" stroke="#000"><circle cx="10" cy="25" r="2"/><circle cx="17" cy="27" r="2"/><circle cx="23" cy="24" r="2"/></g></svg>',
@@ -26,15 +31,15 @@ export const WX_ICONS = {
   Typhoon: '<svg viewBox="0 0 32 32"><path d="M8 17a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#3a4258" stroke="#000" stroke-width="2"/><path d="M10 21l-3 8M16 21l-3 8M22 21l-3 8" stroke="#52d9ff" stroke-width="3"/></svg>',
   Fog: '<svg viewBox="0 0 32 32"><g stroke="#f2c0a0" stroke-width="3" stroke-linecap="round"><path d="M4 10h20M8 16h20M4 22h18M10 28h14"/></g></svg>',
 };
-const HEART = (on) => `<svg viewBox="0 0 24 22" class="${on ? '' : 'off'}"><path d="M12 21 L3 12 A5 5 0 0 1 12 5 A5 5 0 0 1 21 12 Z" fill="#ff4d5e" stroke="#000" stroke-width="2"/></svg>`;
-const STAR = (on) => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+const HEART = (on: boolean): string => `<svg viewBox="0 0 24 22" class="${on ? '' : 'off'}"><path d="M12 21 L3 12 A5 5 0 0 1 12 5 A5 5 0 0 1 21 12 Z" fill="#ff4d5e" stroke="#000" stroke-width="2"/></svg>`;
+const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+const hex = (c: number): string => '#' + c.toString(16).padStart(6, '0');
 
-export function createUI(game) {
+export function createUI(game: Game): GameUi {
   // ── screen stack ──
-  let stack = [];
+  let stack: string[] = [];
   const screens = $$('.screen');
-  function show(id, push = true) {
+  function show(id: string, push = true): void {
     for (const s of screens) s.hidden = s.id !== id;
     if (push) stack.push(id);
     const s = $('#' + id);
@@ -43,7 +48,7 @@ export function createUI(game) {
     if (id === 'sTitle') renderTitleBest();
     if (id === 'sNew') renderModes();
     if (id === 'sSettings') syncSettings();
-    setTimeout(() => (s.querySelector('[aria-pressed="true"].card-opt, .mi, .btn, button') || s).focus({ preventScroll: true }), 30);
+    setTimeout(() => ((s.querySelector('[aria-pressed="true"].card-opt, .mi, .btn, button') as HTMLElement | null) || s).focus({ preventScroll: true }), 30);
   }
   function hideScreens() { for (const s of screens) s.hidden = true; }
   function back() {
@@ -64,19 +69,20 @@ export function createUI(game) {
 
   // ── navigation ──
   document.addEventListener('click', (e) => {
-    const go = e.target.closest('[data-go]'); if (go) { Sfx.init(); Sfx.uiOk(); show(go.dataset.go); return; }
-    if (e.target.closest('[data-back]')) back();
+    const target = e.target as Element;
+    const go = target.closest<HTMLElement>('[data-go]'); if (go) { Sfx.init(); Sfx.uiOk(); show(go.dataset.go as string); return; }
+    if (target.closest('[data-back]')) back();
   });
   for (const b of $$('.mi, .card-opt, .seg button, .tabs button')) b.addEventListener('pointerenter', () => { if (document.activeElement !== b) { b.focus({ preventScroll: true }); Sfx.ui(); } });
 
   // ── new game ──
-  let pickDiff = settings.difficulty, pickMode = 'endless', pickCity = 'kosice';
+  let pickDiff = settings.difficulty, pickMode: GameMode = 'endless', pickCity = 'kosice';
   const dc = $('#diffCards');
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
-    const m = d.meters, bar = (v) => `<span class="meter"><i style="width:${v * 100}%"></i></span>`;
+    const m = d.meters, bar = (v: number): string => `<span class="meter"><i style="width:${v * 100}%"></i></span>`;
     b.innerHTML = `<b>${d.label}</b><span>${d.desc}</span><span class="meters"><span>Crane</span>${bar(m.crane)}<span>Wind</span>${bar(m.wind)}<span>Precision</span>${bar(m.precision)}<span>Lives</span><span>${'♥'.repeat(d.lives)}</span></span>`;
-    b.onclick = () => { pickDiff = k; Sfx.ui(); syncNew(); };
+    b.onclick = () => { pickDiff = k as DifficultyId; Sfx.ui(); syncNew(); };
     dc.appendChild(b);
   }
   function syncNew() {
@@ -91,10 +97,10 @@ export function createUI(game) {
     $('#modeCards').innerHTML =
       `<button type="button" class="card-opt" data-mode="endless" data-endless="kosice"><b>ENDLESS · KOSICE</b><span class="sub">No target, as high as you can</span></button>`
       + `<button type="button" class="card-opt" data-mode="endless" data-endless="newtown"><b>ENDLESS · NEWTOWN</b><span class="sub">The made-up city, open from the start</span></button>`;
-    for (const b of $$('[data-endless]')) b.onclick = () => { pickMode = 'endless'; pickCity = b.dataset.endless; Sfx.ui(); syncNew(); };
+    for (const b of $$('[data-endless]')) b.onclick = () => { pickMode = 'endless'; pickCity = b.dataset.endless as string; Sfx.ui(); syncNew(); };
     syncNew();
     $('#districtCards').innerHTML = DISTRICT_CITIES.filter((c) => c.built).map((c) =>
-      `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${c.district.goal} residents</span></button>`).join('');
+      `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${(c.district as District).goal} residents</span></button>`).join('');
     // a city that the goal of the one before opened, but that is not built yet (shown, not playable)
     const opened = loadDistrictProgress().cities;
     $('#districtCards').innerHTML += LEVELS.filter((c) => !c.built && opened[c.id]?.opened).map((c) =>
@@ -107,14 +113,14 @@ export function createUI(game) {
     onBack: back,
   });
   // Back to the district map after a plot: the finished towers stand on their sites, the next open plot is selected.
-  function toMap(cityId) {
+  function toMap(cityId: string) {
     const plotId = game.plotId;
     game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
     const info = districtMap.render(cityId, { focusNext: true });
     const plots = cityProgress(loadDistrictProgress(), cityId).plots;
     const shown = plotId ? showDistrictTowers(cityId, plotId, plots, { withCurrent: true }) : null;
-    if (!shown || !plots[plotId] || !plots[plotId].counted) buildDemo();
+    if (!shown || !plots[plotId as string] || !plots[plotId as string].counted) buildDemo();
     People.setWalkers(9);
     stack = ['sTitle', 'sNew']; show('sMap');
     return info;
@@ -122,7 +128,7 @@ export function createUI(game) {
   $('#btnStart').onclick = () => startGame(pickMode, pickDiff, pickCity);
   let starting = false;
   // plot mode: a district plot of `level` (a city id). Endless and the other modes run on the city centre plot (Kosice: the cathedral).
-  async function startGame(mode, diff, level = 'kosice', plotId = null) {
+  async function startGame(mode: GameMode, diff: DifficultyId, level = 'kosice', plotId: string | null = null): Promise<void> {
     if (starting) return; starting = true;
     Sfx.init(); Sfx.uiOk(); stack = [];
     const plots = (DISTRICT_CITIES.find((c) => c.id === level) || {}).district?.plots;
@@ -132,45 +138,46 @@ export function createUI(game) {
     // the plot being played stands on its own site: the district towers around it are rebuilt without it (the map showed it too)
     if (pid) showDistrictTowers(level, pid, cityProgress(loadDistrictProgress(), level).plots); else clearDistrictTowers();
     clearDemo(); hideScreens();
-    if (mode === 'plot') game.startPlot(level, pid, diff); else game.start(mode, diff, level);
+    if (mode === 'plot') game.startPlot(level, pid as string, diff); else game.start(mode, diff, level);
     starting = false;
   }
-  const restart = () => (game.mode === 'plot' ? startGame('plot', game.diffKey, game.cityId, game.plotId) : startGame(game.mode, game.diffKey, game.cityId));
+  const restart = () => (game.mode === 'plot' ? startGame('plot', game.diffKey, game.cityId ?? undefined, game.plotId) : startGame(game.mode, game.diffKey, game.cityId ?? undefined));
   // Loading screen with progress. A failed asset is named on screen and the game goes on with what it has.
-  const loadLevel = (level) => loadWith((setP) => game.loadLevel(level, setP));
-  const loadPlot = (level, pid) => loadWith((setP) => game.loadPlot(level, pid, setP));
-  async function loadWith(load) {
-    const bar = $('#loadBar'), fill = bar.querySelector('i'), text = $('#loadText');
-    const setP = (p) => { fill.style.width = `${(p * 100).toFixed(0)}%`; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); };
+  const loadLevel = (level: string) => loadWith((setP) => game.loadLevel(level, setP));
+  const loadPlot = (level: string, pid: string) => loadWith((setP) => game.loadPlot(level, pid, setP));
+  async function loadWith(load: (setP: (p: number) => void) => Promise<AssetError[]>): Promise<void> {
+    const bar = $('#loadBar'), fill = bar.querySelector('i') as HTMLElement, text = $('#loadText');
+    const setP = (p: number): void => { fill.style.width = `${(p * 100).toFixed(0)}%`; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); };
     setP(0); text.classList.remove('err'); text.textContent = 'Fetching the city...';
     show('sLoading', false);
     try {
       const errors = await load(setP);
       if (errors.length) {
         text.classList.add('err');
-        text.textContent = `Some files did not load (${errors.map((e) => e.url.split('/').pop()).join(', ')}). Playing without them.`;
+        text.textContent = `Some files did not load (${errors.map((e: AssetError) => e.url.split('/').pop()).join(', ')}). Playing without them.`;
         await new Promise((r) => setTimeout(r, 1800));
       }
     } catch (e) {
       text.classList.add('err');
-      text.textContent = `Could not load the city: ${e.message}. Playing the basic scene.`;
+      text.textContent = `Could not load the city: ${e instanceof Error ? e.message : String(e)}. Playing the basic scene.`;
       await new Promise((r) => setTimeout(r, 2200));
     }
   }
 
   // ── settings ──
   for (const seg of $$('.seg')) {
-    const key = seg.dataset.set;
+    const key = seg.dataset.set as keyof Settings;
     for (const b of seg.querySelectorAll('button')) b.onclick = () => {
-      let v = b.dataset.v; if (v === 'true') v = true; else if (v === 'false') v = false; else if (/^\d+$/.test(v)) v = +v;
-      setSetting(key, v); Sfx.ui(); syncSettings();
-      if (key === 'difficulty') { pickDiff = v; syncNew(); }
-      if (key === 'camera') game.camMode = v;
+      let v: string | number | boolean = b.dataset.v as string; if (v === 'true') v = true; else if (v === 'false') v = false; else if (/^\d+$/.test(v)) v = +v;
+      setSetting(key, v as never); Sfx.ui();   // the buttons of a segment carry valid values for its own setting
+      syncSettings();
+      if (key === 'difficulty') { pickDiff = v as DifficultyId; syncNew(); }
+      if (key === 'camera') game.camMode = v as number;
     };
   }
-  const bindVol = (id, key) => {
-    const el = $(id), out = $(id + 'V');
-    el.oninput = () => { setSetting(key, el.value / 100); out.textContent = el.value; };
+  const bindVol = (id: string, key: 'music' | 'sfx'): void => {
+    const el = $<HTMLInputElement>(id), out = $(id + 'V');
+    el.oninput = () => { setSetting(key, Number(el.value) / 100); out.textContent = el.value; };
     el.onchange = () => { Sfx.init(); if (key === 'sfx') Sfx.uiOk(); };
   };
   bindVol('#volMusic', 'music'); bindVol('#volSfx', 'sfx');
@@ -181,18 +188,19 @@ export function createUI(game) {
     setTimeout(() => { $('#btnReset').textContent = 'RESET'; }, 3000);
   };
   function syncSettings() {
-    for (const seg of $$('.seg')) for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(String(settings[seg.dataset.set]) === b.dataset.v));
-    $('#volMusic').value = Math.round(settings.music * 100); $('#volMusicV').textContent = $('#volMusic').value;
-    $('#volSfx').value = Math.round(settings.sfx * 100); $('#volSfxV').textContent = $('#volSfx').value;
+    for (const seg of $$('.seg')) for (const b of seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(String(settings[seg.dataset.set as keyof Settings]) === b.dataset.v));
+    const volMusic = $<HTMLInputElement>('#volMusic'), volSfx = $<HTMLInputElement>('#volSfx');
+    volMusic.value = String(Math.round(settings.music * 100)); $('#volMusicV').textContent = volMusic.value;
+    volSfx.value = String(Math.round(settings.sfx * 100)); $('#volSfxV').textContent = volSfx.value;
     syncMute();
   }
   game.camMode = settings.camera;
 
   // ── scores ──
-  function renderScores(el, cityId) {
+  function renderScores(el: HTMLElement, cityId: string): void {
     const list = loadScores(cityId).slice(0, 10);
     el.innerHTML = list.length
-      ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc((s.diff || 'normal').toUpperCase())}</span></td><td>${s.floors} fl</td><td class="sc">${s.score}</td></tr>`).join('')
+      ? list.map((s, i) => `<tr><td class="rk">${i + 1}</td><td>${esc(s.name)}<span class="d ${esc(s.diff || 'normal')}">${esc(String(s.diff || 'normal').toUpperCase())}</span></td><td>${s.floors} fl</td><td class="sc">${s.score}</td></tr>`).join('')
       : '<tr><td class="empty">No scores yet. Your first tower goes here.</td></tr>';
   }
 
@@ -203,7 +211,8 @@ export function createUI(game) {
 
   // ── keyboard ──
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' && e.target.type === 'text') { if (e.key === 'Escape') e.target.blur(); return; }
+    const tgt = e.target as HTMLInputElement;
+    if (tgt.tagName === 'INPUT' && tgt.type === 'text') { if (e.key === 'Escape') tgt.blur(); return; }
     Sfx.init();
     const scr = current();
     if (scr) {
@@ -211,14 +220,14 @@ export function createUI(game) {
         if (scr.id === 'sPause') { togglePause(); e.preventDefault(); return; }
         back(); e.preventDefault(); return;
       }
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && e.target.type !== 'range') {
-        const items = [...scr.querySelectorAll('button:not([disabled]), input')].filter((x) => x.offsetParent);
-        const i = items.indexOf(document.activeElement);
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && tgt.type !== 'range') {
+        const items = [...scr.querySelectorAll<HTMLElement>('button:not([disabled]), input')].filter((x) => x.offsetParent);
+        const i = items.indexOf(document.activeElement as HTMLElement);
         const d = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1;
         const nx = items[(i + d + items.length) % items.length]; if (nx) { nx.focus(); Sfx.ui(); }
         e.preventDefault(); return;
       }
-      if (e.key === 'Enter' && scr.id === 'sTitle' && !scr.contains(document.activeElement)) { scr.querySelector('.mi').click(); return; }
+      if (e.key === 'Enter' && scr.id === 'sTitle' && !scr.contains(document.activeElement)) { (scr.querySelector('.mi') as HTMLElement).click(); return; }
       return;
     }
     if (game.state !== 'play') return;
@@ -260,27 +269,27 @@ export function createUI(game) {
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnAgain').onclick = restart;
   $('#btnPlotRetry').onclick = restart;
-  $('#btnPlotMap').onclick = () => { Sfx.uiOk(); toMap(game.cityId); };
+  $('#btnPlotMap').onclick = () => { Sfx.uiOk(); toMap(game.cityId as string); };
 
   // ── game over ──
   $('#saveForm').addEventListener('submit', (e) => {
     e.preventDefault();
     if (game.saved || !game.lastResult || game.levelDef) return;
     const r = game.lastResult;
-    addScore(game.cityId, { name: ($('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
-    try { localStorage.setItem('tb3d_name', $('#name').value); } catch { /* storage blocked */ }
-    game.saved = true; $('#btnSave').disabled = true; $('#btnSave').textContent = 'SAVED'; Sfx.uiOk();
-    renderScores($('#overHs'), game.cityId);
+    addScore(game.cityId as string, { name: ($<HTMLInputElement>('#name').value || 'PLAYER').toUpperCase().slice(0, 12), score: r.score, floors: r.floors, diff: r.diff, date: Date.now() });
+    try { localStorage.setItem('tb3d_name', $<HTMLInputElement>('#name').value); } catch { /* storage blocked */ }
+    game.saved = true; $<HTMLButtonElement>('#btnSave').disabled = true; $('#btnSave').textContent = 'SAVED'; Sfx.uiOk();
+    renderScores($('#overHs'), game.cityId as string);
   });
 
   // ── HUD ──
-  const hudCache = {};
-  const setText = (id, v) => { if (hudCache[id] !== v) { hudCache[id] = v; document.getElementById(id).textContent = v; } };
-  const setHTML = (id, v) => { if (hudCache['h' + id] !== v) { hudCache['h' + id] = v; document.getElementById(id).innerHTML = v; } };
+  const hudCache: Record<string, string> = {};
+  const setText = (id: string, v: string): void => { if (hudCache[id] !== v) { hudCache[id] = v; (document.getElementById(id) as HTMLElement).textContent = v; } };
+  const setHTML = (id: string, v: string): void => { if (hudCache['h' + id] !== v) { hudCache['h' + id] = v; (document.getElementById(id) as HTMLElement).innerHTML = v; } };
   const stabFill = $('#stabBar i'), focusFill = $('#focusBar i');
   let wxTimer = 0, bannerText = '', bannerT = 0;
 
-  const ui = {
+  const ui: GameUi = {
     show, toMenu,
     showHud() { hideScreens(); $('#hud').hidden = false; const d = DIFFICULTY[game.diffKey]; $('#hDiff').textContent = d.label; $('#hDiff').className = 'tag ' + game.diffKey; },
     popup(text, color, small) {
@@ -321,16 +330,16 @@ export function createUI(game) {
     gameOver(r, record) {
       $('#hud').hidden = true;
       const lv = !!game.levelDef;   // a failed level run: result screen, no high-score form
-      $('#overTitle').textContent = lv ? `${game.levelDef.city.toUpperCase()} FAILED` : 'GAME OVER';
+      $('#overTitle').textContent = lv ? `${(game.levelDef as Level).city.toUpperCase()} FAILED` : 'GAME OVER';
       $('#newRecord').hidden = lv || !record;
       $('#saveForm').hidden = lv; $('#overHs').hidden = lv;
       $('#btnAgain').textContent = lv ? 'RETRY' : 'PLAY AGAIN';
       $('#overStats').innerHTML = lv
         ? `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">STARS</span><b>0 / 3</b></div>`
         : `<div><span class="lbl">SCORE</span><b>${r.score}</b></div><div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
-      $('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
-      try { $('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
-      if (!lv) renderScores($('#overHs'), game.cityId);
+      $<HTMLButtonElement>('#btnSave').disabled = false; $('#btnSave').textContent = 'SAVE';
+      try { $<HTMLInputElement>('#name').value = localStorage.getItem('tb3d_name') || 'PLAYER'; } catch { /* storage blocked */ }
+      if (!lv) renderScores($('#overHs'), game.cityId as string);
       stack = []; show('sOver');
       if (record) Sfx.fanfare();
     },
@@ -340,7 +349,7 @@ export function createUI(game) {
       if ($('#hud').hidden) return;
       const T = game.tower, n = T ? T.n : 0, ph = game.weather, w = game.wind;
       setText('hTarget', game.levelDef ? `TARGET ${n} / ${game.levelDef.target}` : '');
-      const pd = game.plotDef, rr = game.run;
+      const pd = game.plotDef, rr = game.run as Run;   // a plot run always has its run
       setText('hReq', !pd ? '' : [pd.require.maxLivesLost != null ? `LOSE AT MOST ${pd.require.maxLivesLost}: LOST ${rr.diff.lives - rr.lives}` : '',
         pd.require.minPerfectShare != null ? `${Math.round(pd.require.minPerfectShare * 100)} % PERFECT: ${rr.landings ? Math.round(100 * rr.perfects / rr.landings) : 0} %` : ''].filter(Boolean).join(' · ') || 'NO EXTRA REQUIREMENT');
       $('#hReq').classList.toggle('bad', !!pd && ((pd.require.maxLivesLost != null && rr.diff.lives - rr.lives > pd.require.maxLivesLost) || (pd.require.minPerfectShare != null && rr.landings >= 4 && rr.perfects / rr.landings < pd.require.minPerfectShare)));
@@ -367,11 +376,11 @@ export function createUI(game) {
       focusFill.style.width = `${(game.focus * 100).toFixed(0)}%`;
       $('#focusBar').classList.toggle('active', game.focusActive());
       setText('hAnchor', T && T.anchor > 0 ? `${T.anchor.toFixed(1)}s` : String(game.anchors));
-      $('#anchorBtn').disabled = !(game.anchors > 0) || !!(T && T.anchor > 0);
+      $<HTMLButtonElement>('#anchorBtn').disabled = !(game.anchors > 0) || !!(T && T.anchor > 0);
       const nt = BTYPES[game.goldenNext ? 'golden' : specialFor(n + (game.block ? 2 : 1))];
       setHTML('hNext', `<span class="swatch" style="background:${hex(nt.color)}"></span><span class="mid">${nt.label}</span>`);
       const cb = game.block ? BTYPES[game.block.type] : null;
-      const bty = game.run && BUILDING_TYPES[game.run.buildingType];
+      const bty = game.run && buildingTypeById(game.run.buildingType);
       setText('hType', bty ? bty.label.toUpperCase() : '');
       $('#hType').title = bty ? bty.hint : '';
       setText('nextHint', !settings.hints ? '' : cb && cb.hint ? `NOW: ${cb.hint}` : nt.hint ? `NEXT: ${nt.hint}` : bty && game.drops < 6 ? `${bty.label.toUpperCase()}: ${bty.hint}` : '');

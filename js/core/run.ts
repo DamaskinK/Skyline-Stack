@@ -6,14 +6,10 @@ import { weatherAt, nextWeather } from './weather.js';
 import { windAt, hookAt, Tower } from '../physics.js';
 import { starsFor } from './stars.js';
 import { applyTrait } from '../building-types.js';
-import type { Block, BlockKind, BuildingTypeId, Difficulty, Level, RunEvent, RunEventKind, RunEventType, RunOptions, RunResult, WeatherPhase, NextWeather } from '../types.js';
+import type { Block, BlockKind, BuildingTypeId, Difficulty, Level, RunEvent, RunEventKind, RunEventType, RunOptions, RunResult, WeatherPhase, NextWeather, Wind, Hook, FlyResult, CollapseInfo } from '../types.js';
 
 // The payload of one event kind: its fields without type and time stamp.
 type EventData<T extends RunEventType> = Omit<Extract<RunEvent, { type: T }>, 'type' | 't'>;
-type Wind = { x: number; z: number; speed: number; angle: number; trend: number };
-type Hook = { x: number; z: number; vx: number; vz: number };
-type FlyEvent = { type: 'miss'; how: string } | { type: 'bounce' } | { type: 'land'; dx: number; dz: number; vrx: number; vrz: number };
-type CollapseInfo = { from: number; count: number; items: unknown[] };
 
 export const CALM_WIND = Object.freeze({ x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
 
@@ -110,7 +106,7 @@ export class Run {
     if (!b) { this.spawnT -= dt; if (this.spawnT <= 0) this.spawn(); }
     else if (b.state === 'hang') this.hangBlock();
     else if (b.state === 'fall') {
-      let ev = T.fly(b, dt, this.wind) as FlyEvent | null;
+      let ev: FlyResult | null = T.fly(b, dt, this.wind);
       if (!ev && b.y < -3) ev = { type: 'miss', how: 'lost' };
       if (ev) this.onBlockEvent(ev);
     }
@@ -132,7 +128,7 @@ export class Run {
     b.x = this.hook.x; b.y = Math.max(this.craneY, T.topY()) + CFG.dropGap + CFG.H / 2; b.z = this.hook.z;
   }
 
-  onBlockEvent(ev: FlyEvent): void {
+  onBlockEvent(ev: FlyResult): void {
     const b = this.block as Block, T = this.tower;
     if (ev.type === 'bounce') { this.emit('bounce', { x: b.x, y: T.topY(), z: b.z }); return; }
     if (ev.type === 'land') {

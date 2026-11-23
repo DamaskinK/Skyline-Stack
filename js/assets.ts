@@ -6,14 +6,22 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
-const cache = new Map();
+export type AssetType = 'hdri' | 'gltf' | 'texture' | 'audio' | 'json';
+export interface AssetEntry { id: string; type: AssetType; url: string; bytes?: number; required?: boolean }
+export interface AssetError { id: string; url: string; message: string }
+// A loaded file: a texture, a glTF scene, parsed JSON or audio bytes, depending on the entry's type; callers know which.
+export type AssetValue = unknown;
+export interface LoadResult { assets: Record<string, AssetValue>; errors: AssetError[] }
+const errorMessage = (e: unknown): string => (e instanceof Error && e.message) || String(e);
+
+const cache = new Map<string, Promise<AssetValue>>();
 const gltf = new GLTFLoader(), rgbe = new RGBELoader(), tex = new THREE.TextureLoader();
 // Draco-compressed GLB (models built in Blender, scripts/blender/); the decoder is vendored in vendor/draco/ (scripts/vendor-addons.mjs)
 const draco = new DRACOLoader().setDecoderPath('vendor/draco/');          // relative to the page, like every asset URL
 gltf.setDRACOLoader(draco);
 
-function loadOne(a, onBytes) {
-  const progress = (e) => onBytes(e.loaded || 0);
+function loadOne(a: Pick<AssetEntry, 'type' | 'url'>, onBytes: (loaded: number) => void): Promise<AssetValue> {
+  const progress = (e: ProgressEvent) => onBytes(e.loaded || 0);
   switch (a.type) {
     case 'hdri': return rgbe.loadAsync(a.url, progress).then((t) => { t.mapping = THREE.EquirectangularReflectionMapping; return t; });
     case 'gltf': return gltf.loadAsync(a.url, progress).then((g) => g.scene);
@@ -27,42 +35,42 @@ function loadOne(a, onBytes) {
 // Loads every asset of a level. onProgress(fraction 0..1). Resolves to { assets: { id: value }, errors: [{ id, url, message }] }.
 // A failed optional asset is reported in `errors` and left out; a failed required asset (or manifest) rejects.
 // onLate(id, value) receives the audio files when they arrive: the level does not wait for them.
-export function loadLevelAssets(level, onProgress = () => {}, onLate = null) {
+export function loadLevelAssets(level: string, onProgress: (fraction: number) => void = () => {}, onLate: ((id: string, value: AssetValue) => void) | null = null): Promise<LoadResult> {
   return loadManifest(`assets/levels/${level}/manifest.json`, onProgress, `level "${level}"`, onLate);
 }
 
 // Same loader for any manifest file, e.g. the shared audio list (assets/audio/manifest.json).
-export async function loadManifest(url, onProgress = () => {}, label = url, onLate = null) {
+export async function loadManifest(url: string, onProgress: (fraction: number) => void = () => {}, label = url, onLate: ((id: string, value: AssetValue) => void) | null = null): Promise<LoadResult> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`No asset list for ${label} (HTTP ${res.status})`);
-  const manifest = await res.json();
+  const manifest = (await res.json()) as { assets?: AssetEntry[] };
   const all = manifest.assets || [];
   const list = onLate ? all.filter((a) => a.type !== 'audio') : all;   // with onLate, audio is not waited for
   const total = list.reduce((s, a) => s + (a.bytes || 1), 0) || 1;
-  const got = new Map();
+  const got = new Map<string, number>();
   const report = () => onProgress(Math.min(1, [...got.values()].reduce((s, v) => s + v, 0) / total));
-  const assets = {}, errors = [];
+  const assets: Record<string, AssetValue> = {}, errors: AssetError[] = [];
   report();
   if (onLate) for (const a of all) if (a.type === 'audio') {
     if (!cache.has(a.url)) cache.set(a.url, loadOne(a, () => {}));
-    cache.get(a.url).then((v) => onLate(a.id, v), () => cache.delete(a.url));
+    (cache.get(a.url) as Promise<AssetValue>).then((v) => onLate(a.id, v), () => cache.delete(a.url));
   }
   await Promise.all(list.map(async (a) => {
     try {
       if (!cache.has(a.url)) cache.set(a.url, loadOne(a, (b) => { got.set(a.id, Math.min(b, a.bytes || b)); report(); }));
-      assets[a.id] = await cache.get(a.url);
+      assets[a.id] = await (cache.get(a.url) as Promise<AssetValue>);
     } catch (e) {
       cache.delete(a.url);
-      errors.push({ id: a.id, url: a.url, message: e.message || String(e) });
-      if (a.required) throw new Error(`Could not load ${a.url}: ${e.message || e}`);
+      errors.push({ id: a.id, url: a.url, message: errorMessage(e) });
+      if (a.required) throw new Error(`Could not load ${a.url}: ${errorMessage(e)}`);
     } finally { got.set(a.id, a.bytes || 1); report(); }
   }));
   return { assets, errors };
 }
 
 // One compact OpenStreetMap extract per district plot (assets/levels/<city>/plots/<plot>.json, made by scripts/build-osm-level.mjs <city> plots).
-export function loadPlotExtract(city, plotId) {
+export function loadPlotExtract(city: string, plotId: string): Promise<AssetValue> {
   const url = `assets/levels/${city}/plots/${plotId}.json`;
   if (!cache.has(url)) cache.set(url, loadOne({ type: 'json', url }, () => {}));
-  return cache.get(url).catch((e) => { cache.delete(url); throw e; });
+  return (cache.get(url) as Promise<AssetValue>).catch((e) => { cache.delete(url); throw e; });
 }
