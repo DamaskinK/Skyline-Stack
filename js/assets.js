@@ -4,9 +4,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 const cache = new Map();
 const gltf = new GLTFLoader(), rgbe = new RGBELoader(), tex = new THREE.TextureLoader();
+// Draco-compressed GLB (models built in Blender, scripts/blender/); the decoder is vendored in vendor/draco/ (scripts/vendor-addons.mjs)
+const draco = new DRACOLoader().setDecoderPath('vendor/draco/');          // relative to the page, like every asset URL
+gltf.setDRACOLoader(draco);
 
 function loadOne(a, onBytes) {
   const progress = (e) => onBytes(e.loaded || 0);

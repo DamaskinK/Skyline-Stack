@@ -2,6 +2,7 @@
 // the State Theatre and, in front of it, the Immaculata column and the Singing Fountain. They stand at their real spots (OSM footprints,
 // frame of the rings: x east, z south, origin = build site), so the OSM footprints of these buildings are hidden (`hide`).
 import * as THREE from 'three';
+import { glowMats } from '../world.js';
 import { Parts, landmarkMaterials, lathe, box, cyl, extrude, archShape, roundArch, gableRoof, shedRoof, stretchUV } from './style.js';
 
 // OSM names of the footprints the models replace
@@ -132,13 +133,42 @@ function fountain(parts) {                                                      
   ring(6, 2.2, (x, z) => parts.add(cyl(0.12, 0.12, 1.6, 4), 'water', { x, y: 0.6, z }));
 }
 
-export function build() {
+// The cathedral can come from a Blender-built GLB (scripts/blender/cathedral.py, three LODs on one atlas) instead of the procedural parts.
+// Flag: add ?cathedral=procedural to the page URL to keep the procedural one (fallback, also used when the GLB failed to load).
+const CATHEDRAL_LOD_DIST = [0, 150, 380];
+function blenderCathedral(src) {
+  const lod = new THREE.LOD(); lod.name = 'st-elisabeth';
+  const levels = [];
+  src.traverse((o) => { const m = /^cathedral_LOD(\d)$/.exec(o.name); if (m) levels[+m[1]] = o; });     // a node with two materials arrives as a Group of two meshes
+  const tris = (o) => { let t = 0; o.traverse((m) => { if (m.isMesh) t += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return t; };
+  levels.forEach((m, i) => {
+    if (!m) return;
+    m.parent?.remove(m); m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+    m.traverse((mesh) => {
+      if (!mesh.isMesh) return;
+      mesh.castShadow = i < 2; mesh.receiveShadow = true;
+      const mat = mesh.material;
+      if (mat.emissiveMap) { mat.emissive.set(0xffffff); mat.emissiveIntensity = 0; glowMats.push(mat); }          // lit windows and floodlit stone follow the scenery glow
+      else { mat.emissive = new THREE.Color(0x3a2e12); mat.emissiveIntensity = 0; glowMats.push(mat); }          // roof tiles, as the procedural material
+    });
+    lod.addLevel(m, CATHEDRAL_LOD_DIST[i]);
+  });
+  lod.userData.tris = levels[0] ? tris(levels[0]) : 0;
+  return lod;
+}
+
+export function build(assets) {
   const mats = landmarkMaterials(), root = new THREE.Group(); root.name = 'kosice-landmarks';
   const place = (name, a, fn, extra) => {
     const g = new THREE.Group(); g.name = name; g.position.set(a.x, 0, a.z); g.rotation.y = a.rot || 0;
     const p = new Parts(); fn(p); p.build(mats, g); root.add(g); return g;
   };
-  const cat = place('st-elisabeth', AT.cathedral, cathedral);
+  const useGlb = assets?.cathedral && new URLSearchParams(location.search).get('cathedral') !== 'procedural';
+  let cat;
+  if (useGlb) {
+    cat = new THREE.Group(); cat.name = 'st-elisabeth'; cat.position.set(AT.cathedral.x, 0, AT.cathedral.z); cat.rotation.y = AT.cathedral.rot;
+    const lod = blenderCathedral(assets.cathedral); cat.add(lod); cat.userData.tris = lod.userData.tris; root.add(cat);
+  } else cat = place('st-elisabeth', AT.cathedral, cathedral);
   place('st-urban', { x: AT.urban.x, z: AT.urban.z }, urbanTower);
   place('st-michael-chapel', AT.chapel, chapel);
   const th = place('state-theatre', AT.theatre, theatre);

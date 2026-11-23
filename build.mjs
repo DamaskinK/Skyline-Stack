@@ -21,6 +21,7 @@ const res = await build({
 });
 cpSync('css/style.css', 'dist/css/style.css');
 cpSync('assets', 'dist/assets', { recursive: true });
+cpSync('vendor/draco', 'dist/vendor/draco', { recursive: true });   // Draco decoder for GLB models
 cpSync('CREDITS.md', 'dist/CREDITS.md');
 const html = readFileSync('index.html', 'utf8')
   .replace(/<script type="importmap">[\s\S]*?<\/script>\n?/, '')

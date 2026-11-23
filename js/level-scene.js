@@ -43,7 +43,7 @@ export function applyLevelAssets(id, assets) {
   if (assets.osm) {
     const near = buildNearRing(assets.osm, assets, landmarkHide(id));
     group.add(near, buildMiddleFar());
-    const lm = buildLandmarks(id); if (lm) group.add(lm);
+    const lm = buildLandmarks(id, assets); if (lm) group.add(lm);
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
   }
   if (assets.bench) {

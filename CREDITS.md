@@ -59,3 +59,5 @@ http://creativecommons.org/licenses/by/4.0/
 
 The menu track asks for an optional credit: The Cynic Project / cynicmusic.com / pixelsphere.org (CC0, not required).
 UI clicks stay synthesised in code (no Kenney files were downloaded). The collapse sound is built in code from Low Thud plus synthesis.
+| Draco decoder (`draco_decoder.wasm/.js`, wrapper) and `DRACOLoader`, from three@0.160.0 `examples/jsm` | Google, three.js authors | https://github.com/google/draco, vendored by `scripts/vendor-addons.mjs` | Apache-2.0 (decoder), MIT (loader) | decoding Draco-compressed GLB models (`vendor/draco/`) |
+| St. Elisabeth Cathedral model (own work, built by `scripts/blender/cathedral.py`) | project | n/a | project | `assets/levels/kosice/cathedral.glb` |
