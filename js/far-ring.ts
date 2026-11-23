@@ -11,28 +11,30 @@ import { level, plotOffset } from './level-scene.js';
 import { cityById } from './levels.js';
 import { loadDistrictProgress } from './settings.js';
 import { tileRoofTex, roofTex, STOREY_H, STOREY_W } from './textures.js';
+import type { Vec } from './near-ring.js';
+import type { Pt2 } from './types.js';
 
 const EXT = 4800;                      // terrain radius
-const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-function vn(x, z) {
+const sstep = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function vn(x: number, z: number): number {
   const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
   const a = hash(xi, zi), b = hash(xi + 1, zi), c = hash(xi, zi + 1), d = hash(xi + 1, zi + 1);
   return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
 }
-function fbm(x, z, o = 4) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vn(x * f + i * 17.3, z * f - i * 9.1); a *= 0.5; f *= 2; } return s / (1 - 0.5 ** o); }
-const bearing = (x, z) => { let b = Math.atan2(x, -z) * 180 / Math.PI; if (b < 0) b += 360; return b; };   // 0 north, 90 east
-const gauss = (b, c, w) => { let d = Math.abs(b - c); if (d > 180) d = 360 - d; return Math.exp(-((d / w) ** 2)); };
-const riverX = (z) => -1800 + 160 * Math.sin(z / 1100);
+function fbm(x: number, z: number, o = 4): number { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vn(x * f + i * 17.3, z * f - i * 9.1); a *= 0.5; f *= 2; } return s / (1 - 0.5 ** o); }
+const bearing = (x: number, z: number): number => { let b = Math.atan2(x, -z) * 180 / Math.PI; if (b < 0) b += 360; return b; };   // 0 north, 90 east
+const gauss = (b: number, c: number, w: number): number => { let d = Math.abs(b - c); if (d > 180) d = 360 - d; return Math.exp(-((d / w) ** 2)); };
+const riverX = (z: number): number => -1800 + 160 * Math.sin(z / 1100);
 
 // ground height at (x, z): flat city basin, rounded wooded hills rising from ~1.5 km, tallest in the north and north-west
 // Frame of the city: origin = the city's site. A district plot far from it is built with `plot` set: the rings are offset by the plot's position
 // (the group moves, nothing is regenerated) and the terrain is flattened round the plot so it never pokes through the near ring.
-let FLAT = null;
-export function terrainY(x, z) {
+let FLAT: Pt2 | null = null;
+export function terrainY(x: number, z: number): number {
   const h = rawY(x, z);
   return FLAT ? h * sstep(330, 1100, Math.hypot(x - FLAT.x, z - FLAT.z)) : h;
 }
-function rawY(x, z) {
+function rawY(x: number, z: number): number {
   const d = Math.hypot(x, z); if (d < 700) return 0;
   const b = bearing(x, z);
   const amp = 70 + 560 * gauss(b, 335, 55) + 380 * gauss(b, 270, 42) + 200 * gauss(b, 95, 60) + 110 * gauss(b, 195, 50);
@@ -43,13 +45,13 @@ function rawY(x, z) {
   return h;
 }
 // city outline: the edge of the built-up area depends on direction (woods close in on the north-west)
-const cityRadius = (x, z) => { const b = bearing(x, z); return 1500 - 380 * gauss(b, 345, 45) - 300 * gauss(b, 285, 40) + 260 * (fbm(x * 0.002, z * 0.002, 3) - 0.5); };
+const cityRadius = (x: number, z: number): number => { const b = bearing(x, z); return 1500 - 380 * gauss(b, 345, 45) - 300 * gauss(b, 285, 40) + 260 * (fbm(x * 0.002, z * 0.002, 3) - 0.5); };
 
-let groundCache = null;
-function groundTexture() {
+let groundCache: THREE.CanvasTexture | null = null;
+function groundTexture(): THREE.CanvasTexture {
   if (groundCache) return groundCache;
-  const N = 768, [c, g] = canvas2d(N, N), img = g.createImageData(N, N), px = img.data;
-  const col = (hx) => [(hx >> 16) & 255, (hx >> 8) & 255, hx & 255];
+  const N = 768, [c, g] = canvas2d(N, N) as [HTMLCanvasElement, CanvasRenderingContext2D], img = g.createImageData(N, N), px = img.data;
+  const col = (hx: number): number[] => [(hx >> 16) & 255, (hx >> 8) & 255, hx & 255];
   const fields = [0xb2bd66, 0xd2c474, 0x8db057, 0xbf9f5c, 0x9dbb66, 0xc8b86a].map(col);
   const wood = [0x3d6b3a, 0x2f5a35, 0x46733c].map(col), urban = col(0x7b776e), garden = col(0x93a171), riparian = col(0x7fa65c), meadow = col(0x86ad62);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -72,7 +74,7 @@ function groundTexture() {
 }
 
 // fog that never reaches 100 %: the hills stay a faint layered silhouette against the horizon instead of vanishing
-function hazeFog(m) {
+function hazeFog<M extends THREE.Material>(m: M): M {
   m.onBeforeCompile = (sh) => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', `
       #ifdef USE_FOG
@@ -84,8 +86,8 @@ function hazeFog(m) {
   return m;
 }
 
-function terrainMesh() {
-  const K = 56, A = 192, pos = [], uv = [], idx = [];
+function terrainMesh(): THREE.Mesh {
+  const K = 56, A = 192, pos: number[] = [], uv: number[] = [], idx: number[] = [];
   for (let k = 0; k <= K; k++) {
     const r = EXT * (k / K) ** 2.2;
     for (let a = 0; a < A; a++) {
@@ -104,8 +106,8 @@ function terrainMesh() {
   m.frustumCulled = false; m.name = 'terrain'; return m;
 }
 
-function riverMesh() {
-  const pos = [], idx = [], N = 110, z0 = -3400, z1 = 3400;
+function riverMesh(): THREE.Mesh {
+  const pos: number[] = [], idx: number[] = [], N = 110, z0 = -3400, z1 = 3400;
   for (let i = 0; i <= N; i++) {
     const z = z0 + (z1 - z0) * i / N, x = riverX(z), w = 34 + 14 * Math.sin(z / 300), y = terrainY(x, z) + 0.8;
     pos.push(x - w, y, z, x + w, y, z);
@@ -117,16 +119,16 @@ function riverMesh() {
 }
 
 // ── buildings ──
-const rectRing = (cx, cz, w, d, rot) => {
-  const c = Math.cos(rot), s = Math.sin(rot), out = [];
+const rectRing = (cx: number, cz: number, w: number, d: number, rot: number): number[] => {
+  const c = Math.cos(rot), s = Math.sin(rot), out: number[] = [];
   for (const [u, v] of [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]) out.push(cx + u * c - v * s, cz + u * s + v * c);
   return out;
 };
-function addWalls(W, p, y0, h) {
+function addWalls(W: Builder, p: number[], y0: number, h: number): void {
   const n = p.length / 2;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, x0 = p[2 * i], z0 = p[2 * i + 1], x1 = p[2 * j], z1 = p[2 * j + 1], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz), reps = Math.max(1, Math.round(l / STOREY_W));
-    const nn = [dz / l, 0, -dx / l], uf = (q) => [Math.hypot(q[0] - x0, q[2] - z0) / l * reps, (q[1] - y0) / STOREY_H];
+    const nn: Vec = [dz / l, 0, -dx / l], uf = (q: Vec): [number, number] => [Math.hypot(q[0] - x0, q[2] - z0) / l * reps, (q[1] - y0) / STOREY_H];
     const A = [x0, y0, z0], B = [x1, y0, z1], C = [x1, y0 + h, z1], D = [x0, y0 + h, z0];
     W.tri(A, B, C, nn, uf); W.tri(A, C, D, nn, uf);
   }
@@ -135,46 +137,48 @@ function addWalls(W, p, y0, h) {
 // Circles (city frame) round the sites of the finished towers of the city being played: the middle ring keeps its buildings off them
 // so no house stands under a tower (S0002 06). The plot being played is the origin of the near ring and needs none.
 const SITE_CLEAR_M = 48;
-function finishedSiteCircles() {
+function finishedSiteCircles(): { x: number; z: number; r: number }[] {
   try {
-    const city = cityById(level.id), done = loadDistrictProgress().cities[level.id]?.plots || {};
+    const lid = level.id; if (!lid) return [];                                        // no level loaded: nothing finished to clear
+    const city = cityById(lid), done = loadDistrictProgress().cities[lid]?.plots || {};
     return (city?.district?.plots || []).filter((p) => p.id !== level.plotId && done[p.id]?.counted && done[p.id].bestHeight > 0)
-      .map((p) => { const o = plotOffset(level.id, p); return { x: o.x, z: o.z, r: SITE_CLEAR_M }; });
+      .map((p) => { const o = plotOffset(lid, p); return { x: o.x, z: o.z, r: SITE_CLEAR_M }; });
   } catch { return []; }
 }
 
 // opts.plot = { x, z }: where the plot (= the origin of the near ring) lies in the city frame, metres (default: the city's site).
 // opts.inner: half-size of the square round the plot that the near ring already fills. opts.clear: [{ x, z, r }] circles (city frame) with hand-built landmarks.
-export function buildMiddleFar(opts = {}) {
+export interface MiddleFarOptions { plot?: Pt2; inner?: number; clear?: { x: number; z: number; r: number }[] }
+export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
   const plot = opts.plot || { x: 0, z: 0 }, inner = opts.inner || 340, clear = [...(opts.clear || []), ...(opts.plot ? finishedSiteCircles() : [])];
   FLAT = opts.plot ? plot : null;
   const group = new THREE.Group(); group.name = 'middle-far-ring';
   group.position.set(-plot.x, 0, -plot.z);                                           // city frame -> frame of the plot
-  const inNear = (x, z) => Math.max(Math.abs(x - plot.x), Math.abs(z - plot.z)) < inner || clear.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
+  const inNear = (x: number, z: number): boolean => Math.max(Math.abs(x - plot.x), Math.abs(z - plot.z)) < inner || clear.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
   group.add(terrainMesh(), riverMesh());
 
-  const walls = new Map(), tiles = new Builder(), flats = new Builder();
-  const wallB = (kind, hex, v) => { const k = `${kind}${hex}${v}`; if (!walls.has(k)) walls.set(k, { kind, hex, v, b: new Builder() }); return walls.get(k).b; };
+  const walls = new Map<string, { kind: string; hex: number; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder();
+  const wallB = (kind: string, hex: number, v: number): Builder => { const k = `${kind}${hex}${v}`; let e = walls.get(k); if (!e) { e = { kind, hex, v, b: new Builder() }; walls.set(k, e); } return e.b; };
   const ALPHA = 0.14, ca = Math.cos(ALPHA), sa = Math.sin(ALPHA), C = 60;                     // street lattice, turned a little off north
   // the default camera looks north-north-west past the tower: keep tall blocks out of that sector so the tower never melts into one
   const vx = -CAM_OFFSETS[0][0], vz = -CAM_OFFSETS[0][2], vl = Math.hypot(vx, vz);   // from the camera through the tower
-  const blocksView = (x0, z0, h) => { const x = x0 - plot.x, z = z0 - plot.z; return h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60; };
+  const blocksView = (x0: number, z0: number, h: number): boolean => { const x = x0 - plot.x, z = z0 - plot.z; return h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60; };
   const panelHex = [0xe7e3d9, 0xd9ddd8, 0xe8dcc6, 0xdfe4e6];
   let count = 0;
-  const place = (kind, hex, v, cx, cz, w, d, rot, storeys, roof, rcol, ty) => {
+  const place = (kind: string, hex: number, v: number, cx: number, cz: number, w: number, d: number, rot: number, storeys: number, roof: string, rcol: THREE.Color | null, ty: number): void => {
     const h = storeys * STOREY_H;
     if (blocksView(cx, cz, h)) return;
     const p = rectRing(cx, cz, w, d, rot), y0 = ty - 3;
     addWalls(wallB(kind, hex, v), p, y0, h + 3);
-    if (roof === 'hip') pitchedRoof(tiles, p, ty + h, rcol); else if (roof === 'low') pitchedRoof(tiles, p, ty + h, rcol, 1.3);
+    if (roof === 'hip') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color); else if (roof === 'low') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color, 1.3);
     else if (roof !== 'open') {
-      const pts = []; for (let i = 0; i < p.length; i += 2) pts.push(new THREE.Vector2(p[i], p[i + 1]));
+      const pts: THREE.Vector2[] = []; for (let i = 0; i < p.length; i += 2) pts.push(new THREE.Vector2(p[i], p[i + 1]));
       const tris = THREE.ShapeUtils.triangulateShape(pts, []);
       for (const [i, j, k] of tris) flats.tri([pts[i].x, ty + h, pts[i].y], [pts[j].x, ty + h, pts[j].y], [pts[k].x, ty + h, pts[k].y], [0, 1, 0], (q) => [q[0] / 8, q[2] / 8]);
     }
     count++;
   };
-  const pick = (a, r) => a[Math.floor(r * a.length * 0.999)];
+  const pick = <T,>(a: T[], r: number): T => a[Math.floor(r * a.length * 0.999)];
   for (let iu = -30; iu <= 30; iu++) for (let iv = -30; iv <= 30; iv++) {
     const u = iu * C, v = iv * C, x = u * ca - v * sa, z = u * sa + v * ca;
     if (inNear(x, z)) continue;
@@ -222,7 +226,7 @@ export function buildMiddleFar(opts = {}) {
     place('old', 0xdad3c3, 99, x + 13 * Math.cos(ALPHA), z + 13 * Math.sin(ALPHA), 12, 26, ALPHA, 4, 'hip', pick(ROOF_COLORS, i / 9), ty);
   }
   group.userData.count = count;
-  for (const { kind, hex, v, b } of walls.values()) if (!b.empty) mesh(b, calmMat(hex, kind, v), group, false).frustumCulled = false;
+  for (const { kind, hex, v, b } of walls.values()) if (!b.empty) (mesh(b, calmMat(hex, kind, v), group, false) as THREE.Mesh).frustumCulled = false;
   const tm = mesh(tiles, material(tileRoofTex, { vertexColors: true }), group); if (tm) tm.frustumCulled = false;
   const fm = mesh(flats, material(roofTex, { color: 0xa8a8a8 }), group); if (fm) fm.frustumCulled = false;
   return group;

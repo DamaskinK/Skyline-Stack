@@ -17,7 +17,7 @@ import { showDistrictTowers, clearDistrictTowers } from './district-towers.js';
 import { loadLevelAssets, loadPlotExtract } from './assets.js';
 import type { AssetError } from './assets.js';
 import { applyLevelAssets, level } from './level-scene.js';
-import type { Block, District, DifficultyId, Difficulty, Hook, Level, Plot, PlotResult, RunEvent, RunResult, Vec3, Wind, WeatherCycle, DistrictTotals } from './types.js';
+import type { Block, District, DifficultyId, Difficulty, Hook, Level, Plot, PlotResult, RunEvent, RunResult, Vec3, Wind, WeatherCycle, DistrictTotals, LevelAssets, OsmExtract } from './types.js';
 import type { Tower } from './physics.js';
 
 type Mesh = ReturnType<typeof makeBlockMesh>;
@@ -84,7 +84,7 @@ export class Game {
   // Fetch a level's assets and put them in the scene. Resolves to the list of files that failed (may be empty).
   async loadLevel(id: string, onProgress?: (fraction: number) => void): Promise<AssetError[]> {
     const { assets, errors } = await loadLevelAssets(id, onProgress, (aid, v) => { if (aid === 'music') Music.provide(id, v); });
-    applyLevelAssets(id, assets);
+    applyLevelAssets(id, assets as LevelAssets);
     return errors;
   }
 
@@ -96,8 +96,8 @@ export class Game {
     // a real city has one OpenStreetMap extract per plot; fictional Newtown is the procedural city and has none
     const [{ assets, errors }, osm] = await Promise.all([
       loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), 'x' in plot.site ? null : loadPlotExtract(cityId, plotId)]);
-    // level-scene.js is still JavaScript: its `= null` defaults infer as the type null, so the call goes through a typed alias
-    (applyLevelAssets as (id: string, assets: Record<string, unknown>, plot?: Plot | null, osm?: unknown) => void)(cityId, assets, plot, osm);
+    // the loaded files are typed by manifest id in LevelAssets; the extract is the plot's OSM json
+    applyLevelAssets(cityId, assets as LevelAssets, plot, osm as OsmExtract | null);
     showDistrictTowers(cityId, plotId, cityProgress(loadDistrictProgress(), cityId).plots);
     return errors;
   }

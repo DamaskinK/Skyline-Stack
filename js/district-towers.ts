@@ -13,32 +13,35 @@ import { cityById } from './levels.js';
 import { plotOf } from './core/district.js';
 import { People } from './fx.js';
 import { glowMats } from './world.js';
+import type { BuildingTypeId, Plot, PlotStates } from './types.js';
 
 export const REAL_M = 800;                 // the loaded rings: towers closer than this are built floor by floor
 const NEAR_FLAT_M = 300;                   // the near ring is flat; beyond it the ground follows the far-ring terrain
-const FAR_COLOR = { panel: 0xd9d4c4, hotel: 0xc9a27a, office: 0x8fb4c8, glass: 0x7fa6c0, deco: 0xd8c9a0 };
+const FAR_COLOR: Record<string, number> = { panel: 0xd9d4c4, hotel: 0xc9a27a, office: 0x8fb4c8, glass: 0x7fa6c0, deco: 0xd8c9a0 };
 const farGlow = new THREE.MeshStandardMaterial({ color: 0xffe7b0, emissive: 0xffc468, emissiveIntensity: 0.5, roughness: 0.6, fog: false });   // no fog: the haze would swallow a tower at 1-2 km
 glowMats.push(farGlow);                    // lit top: world.js brightens it as night falls (it stays a little warm by day)
 const HAZE = new THREE.Color(0x9fb4c4);
 const group = new THREE.Group(); group.name = 'district-towers'; scene.add(group);
 
-function dispose(g) {
+function dispose(g: THREE.Object3D): void {
   g.traverse((o) => {
-    if (o.isInstancedMesh) { o.geometry.dispose(); o.material.dispose(); o.dispose(); }
-    else if (o.isMesh) o.geometry.dispose();                        // a real tower owns its merged geometry; its materials are shared
+    if ((o as THREE.InstancedMesh).isInstancedMesh) { const im = o as THREE.InstancedMesh; im.geometry.dispose(); (im.material as THREE.Material).dispose(); im.dispose(); }
+    else if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose();                        // a real tower owns its merged geometry; its materials are shared
   });
 }
-export function clearDistrictTowers() { dispose(group); for (const c of [...group.children]) { scene.remove(c); group.remove(c); } }
+export function clearDistrictTowers(): void { dispose(group); for (const c of [...group.children]) { scene.remove(c); group.remove(c); } }
 
 // Merges every mesh below `src` into one mesh per material (the tower is static): a 30-floor tower is a handful of draw calls instead of
 // hundreds. Multi-material meshes (the foundation box) are split by their groups. Positions are baked relative to `src`.
-function mergeByMaterial(src) {
+function mergeByMaterial(src: THREE.Object3D): THREE.Group {
   src.updateMatrixWorld(true);
-  const inv = new THREE.Matrix4().copy(src.matrixWorld).invert(), buckets = new Map(), out = new THREE.Group();
+  const inv = new THREE.Matrix4().copy(src.matrixWorld).invert(), buckets = new Map<string, { mat: THREE.Material; cast: boolean; recv: boolean; geos: THREE.BufferGeometry[] }>(), out = new THREE.Group();
   src.traverse((o) => {
-    if (!o.isMesh || !o.visible) return;
-    const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), geo = o.geometry;
-    const parts = Array.isArray(o.material) ? geo.groups.map((g) => [o.material[g.materialIndex], g]) : [[o.material, { start: 0, count: geo.index ? geo.index.count : Infinity }]];
+    const mh = o as THREE.Mesh;
+    if (!mh.isMesh || !o.visible) return;
+    const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), geo = mh.geometry;
+    type Range = { start: number; count: number };
+    const parts: [THREE.Material, Range][] = Array.isArray(mh.material) ? geo.groups.map((g) => [(mh.material as THREE.Material[])[g.materialIndex as number], g]) : [[mh.material, { start: 0, count: geo.index ? geo.index.count : Infinity }]];
     for (const [mat, g] of parts) {
       const sub = new THREE.BufferGeometry(); for (const k of ['position', 'normal', 'uv', 'color']) if (geo.attributes[k]) sub.setAttribute(k, geo.attributes[k]);
       if (geo.index) sub.setIndex(Array.from(geo.index.array.slice(g.start, g.start + g.count)));
@@ -47,21 +50,21 @@ function mergeByMaterial(src) {
       flat.applyMatrix4(rel);
       const key = mat.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
       if (!buckets.has(key)) buckets.set(key, { mat, cast: o.castShadow, recv: o.receiveShadow, geos: [] });
-      buckets.get(key).geos.push(flat);
+      (buckets.get(key) as { geos: THREE.BufferGeometry[] }).geos.push(flat);
     }
   });
   for (const { mat, cast, recv, geos } of buckets.values()) {
-    const m = new THREE.Mesh(mergeGeometries(geos), mat); m.castShadow = cast; m.receiveShadow = recv; out.add(m);
+    const m = new THREE.Mesh(mergeGeometries(geos) as THREE.BufferGeometry, mat); m.castShadow = cast; m.receiveShadow = recv; out.add(m);
   }
   return out;
 }
 
 // A tower built from the real models; `floors` is the best height of that plot.
-function realTower(plot, floors, x, y, z, cityName) {
+function realTower(plot: Plot, floors: number, x: number, y: number, z: number, cityName: string): THREE.Group {
   const g = new THREE.Group();
   const bt = BUILDING_TYPES[plot.buildingType] || BUILDING_TYPES.panel;
   g.add(makeFoundation(0, 0, plot.buildingType, cityName));
-  let top = null;
+  let top: THREE.Object3D | null = null;
   for (let i = 0; i < floors; i++) {
     const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], false, i % 3, bt.facade);
     m.position.set(0, CFG.FOUND_H + CFG.H * (i + 0.5), 0); g.add(m); top = m;
@@ -73,8 +76,9 @@ function realTower(plot, floors, x, y, z, cityName) {
 
 // Far finished towers (beyond REAL_M): the real height as a readable silhouette. The shaft widens with distance so it still reads
 // at 1-2 km, a lit crown (two floors, glowing at night) and a thin mast with a beacon on top.
-function addFarTowers(far) {
-  const m4 = new THREE.Matrix4(), col = new THREE.Color(), q = new THREE.Quaternion(), V = (x, y, z) => new THREE.Vector3(x, y, z);
+interface FarTower { x: number; y: number; z: number; floors: number; type: BuildingTypeId }
+function addFarTowers(far: FarTower[]): void {
+  const m4 = new THREE.Matrix4(), col = new THREE.Color(), q = new THREE.Quaternion(), V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
   const body = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x58606a, fog: false }), far.length);
   const crown = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), farGlow, far.length);
   const mast = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), farGlow, far.length);
@@ -94,18 +98,18 @@ function addFarTowers(far) {
 // Show the counted towers of `cityId` seen from `plotId` (the origin of the loaded scene). The plot being played is left out
 // unless `withCurrent` (the menu after a result shows it standing on its own site). `plots` = progress map plotId -> { counted, bestHeight }.
 // Returns the number of real and instanced towers { real, far }.
-export function showDistrictTowers(cityId, plotId, plots, { withCurrent = false } = {}) {
+export function showDistrictTowers(cityId: string, plotId: string | null, plots: PlotStates, { withCurrent = false } = {}): { real: number; far: number } {
   clearDistrictTowers();
   const city = cityById(cityId), list = city && city.district ? city.district.plots : [];
   const cur = list.find((p) => p.id === plotId), c0 = cur ? plotOffset(cityId, cur) : { x: 0, z: 0 };
-  const far = [];
+  const far: FarTower[] = [];
   let real = 0;
   for (const p of list) {
     const st = plotOf(plots, p.id);
     if (!st.counted || st.bestHeight <= 0 || (p.id === plotId && !withCurrent)) continue;
     const o = plotOffset(cityId, p), x = o.x - c0.x, z = o.z - c0.z, d = Math.hypot(x, z);
     const y = d < NEAR_FLAT_M ? 0 : terrainY(o.x, o.z);                 // terrainY works in the city frame
-    if (d <= REAL_M) { group.add(realTower(p, st.bestHeight, x, y, z, city.city)); real++; }
+    if (d <= REAL_M) { group.add(realTower(p, st.bestHeight, x, y, z, (city as { city: string }).city)); real++; }
     else far.push({ x, y, z, floors: st.bestHeight, type: p.buildingType });
   }
   if (far.length) addFarTowers(far);

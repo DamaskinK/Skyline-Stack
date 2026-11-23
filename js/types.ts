@@ -127,3 +127,21 @@ export interface TowerFloor { x: number; z: number; m: number; type: BlockKind }
 export type FlyResult = { type: 'miss'; how: string } | { type: 'bounce' } | { type: 'land'; dx: number; dz: number; vrx: number; vrz: number };
 export interface CollapseItem { index: number; type: BlockKind; p: Vec3; v: Vec3; av: Vec3 }
 export interface CollapseInfo { from: number; count: number; items: CollapseItem[] }
+
+// ── Rendering: OpenStreetMap extract of a plot (assets/levels/<city>/plots/<plot>.json, scripts/build-osm-level.mjs) ──
+// Polygons and polylines are flat [x0, z0, x1, z1, ...] in metres (x east, z south, origin = the plot's site).
+export type RoadKind = 'main' | 'street' | 'lane' | 'walk' | 'path' | 'rail';
+export interface OsmRoad { k: RoadKind; w: number; p: number[]; n?: string; bike?: number; br?: number }
+export interface OsmPoly { p: number[] }
+export interface OsmBuilding extends OsmPoly { h?: number; lv?: number; a?: number; k?: 'theatre' | 'church'; n?: string }
+export interface OsmPark extends OsmPoly { k?: 'pitch' | 'park' | 'wood' }
+export interface OsmExtract {
+  id?: string; source?: string; site?: Site; half: number; frame?: string;
+  roads: OsmRoad[]; rails?: OsmPoly[]; stops?: [number, number][]; parking?: OsmPoly[];
+  buildings: OsmBuilding[]; parks: OsmPark[]; water: OsmPoly[];
+  names?: { name: string; at: [number, number] }[]; landmarks?: unknown;
+}
+// What a level's loaded assets hold (by manifest id): the sky HDRI, kit glTF scenes and textures, the OSM extract.
+// Values are typed where the code reads them; glTF kit pieces are Object3D, textures THREE.Texture.
+export type LevelAssets = Record<string, unknown> & { sky?: import('three').Texture; osm?: OsmExtract } & Partial<Record<'bench' | 'bush' | 'streetlight' | 'car_sedan' | 'car_hatchback', import('three').Object3D>>;
+export interface Pt2 { x: number; z: number }

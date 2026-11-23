@@ -10,47 +10,51 @@ import { cityById } from './levels.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
 import { Trams } from './trams.js';
+import type { LevelAssets, OsmExtract, Plot, Pt2, Site } from './types.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
-export const level = { id: null, plotId: null, env: null };
-let pmrem = null, envRT = null;
+export const level: { id: string | null; plotId: string | null; env: THREE.Texture | null } = { id: null, plotId: null, env: null };
+let pmrem: THREE.PMREMGenerator | null = null, envRT: THREE.WebGLRenderTarget | null = null;
 
-function fitWidth(obj, width) {
+function fitWidth(obj: THREE.Object3D, width: number): void {
   const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
   obj.scale.setScalar(width / Math.max(size.x, size.z, 1e-3));
 }
 
 // Frees what the old level group holds on the GPU. Cached props (cloned GLTF kit) are simply re-uploaded if used again.
-function disposeGroup(g) {
+function disposeGroup(g: THREE.Object3D): void {
   g.traverse((o) => {
-    o.geometry?.dispose();
-    if (o.isInstancedMesh) o.dispose();
-    for (const m of [].concat(o.material || [])) {
-      for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
+    const mesh = o as THREE.Mesh;
+    mesh.geometry?.dispose();
+    if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
+    const mats = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+    for (const m of mats) {
+      for (const v of Object.values(m)) if (v && (v as THREE.Texture).isTexture) (v as THREE.Texture).dispose();
       m.dispose();
     }
   });
 }
 
 // Where a plot lies in the frame of its city (origin = the city's site, x east, z south), metres. Newtown sites are already {x, z}.
-export function plotOffset(cityId, plot) {
-  const c = cityById(cityId)?.site; if (!c || !plot?.site) return { x: 0, z: 0 };
-  if (plot.site.x != null) return { x: plot.site.x - (c.x || 0), z: plot.site.z - (c.z || 0) };
+export function plotOffset(cityId: string, plot: Pick<Plot, 'site'>): Pt2 {
+  const c: Site | undefined = cityById(cityId)?.site; if (!c || !plot?.site) return { x: 0, z: 0 };
+  if ('x' in plot.site) { const o = 'x' in c ? c : { x: 0, z: 0 }; return { x: plot.site.x - (o.x || 0), z: plot.site.z - (o.z || 0) }; }
+  if (!('lat' in c)) return { x: 0, z: 0 };
   return { x: (plot.site.lon - c.lon) * 111320 * Math.cos(c.lat * Math.PI / 180), z: -(plot.site.lat - c.lat) * 111320 };
 }
 
 // With `plot` ({ id, site }) and `plotOsm` (its extract) the scene is built around that plot: the near ring from the extract (origin = plot site),
 // the middle/far ring and the landmarks of the city shifted by the plot's offset so they keep their real bearing and distance.
 // Street routes of the procedural grid (roads along x = +-44 and z = +-44) in the frame of a shifted city, so people walk on its pavements.
-function procRoutes(ox, oz) {
-  const L = 300, R = 44, off = 6, out = [];
+function procRoutes(ox: number, oz: number): { p: number[]; off: number }[] {
+  const L = 300, R = 44, off = 6, out: { p: number[]; off: number }[] = [];
   for (const s of [-1, 1]) { out.push({ p: [ox - L, oz + s * R, ox + L, oz + s * R], off }); out.push({ p: [ox + s * R, oz - L, ox + s * R, oz + L], off }); }
   return out;
 }
 
-export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
+export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | null = null, plotOsm: OsmExtract | null = null): void {
   disposeGroup(group); group.clear();
-  level.id = id; level.plotId = plot ? plot.id : null; level.env = assets.sky || null; People.setCity(id);
+  level.id = id; level.plotId = plot ? plot.id : null; level.env = assets.sky ?? null; People.setCity(id);
   envRT?.dispose(); envRT = null;
   if (assets.sky) {
     pmrem ??= new THREE.PMREMGenerator(renderer);
@@ -62,7 +66,7 @@ export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
   setNearProcedural(!osm);
   if (!osm) { Trams.use(null); People.setParked(null); }
   if (osm) {
-    const off = plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
+    const off = plot && plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
     const near = buildNearRing(osm, assets, landmarkHide(id));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
@@ -81,7 +85,7 @@ export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
       const b = assets.bench.clone(true);
       fitWidth(b, 2.2);
       b.position.set(s * (CFG.W * 0.85 + 2.2), GROUND_Y.walk, CFG.D * 0.65 + 2.6);
-      b.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      b.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       group.add(b);
     }
   }

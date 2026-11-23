@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { settings } from './settings.js';
 
 const windTime = { value: 0 };
-export function swayMaterial(mat, amp = 0.02) {
+export function swayMaterial<M extends THREE.Material>(mat: M, amp = 0.02): M {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uWind = windTime;
     sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -17,14 +17,15 @@ export function swayMaterial(mat, amp = 0.02) {
   };
   return mat;
 }
-export const windClock = { frozen: null };   // the flicker check freezes the sway so two renders of one pose differ only by the camera move
+export const windClock: { frozen: number | null } = { frozen: null };   // the flicker check freezes the sway so two renders of one pose differ only by the camera move
 const tick = () => { windTime.value = windClock.frozen ?? performance.now() / 1000; };
 
-function merge(parts) {   // [geometry, colour, tint(top lighter) ]
-  const pos = [], nor = [], col = [];
+type Part = [THREE.BufferGeometry, number, boolean];   // geometry, colour, tint (top lighter)
+function merge(parts: Part[]): THREE.BufferGeometry {
+  const pos: number[] = [], nor: number[] = [], col: number[] = [];
   for (const [g0, c, shade] of parts) {
     const g = g0.index ? g0.toNonIndexed() : g0, base = new THREE.Color(c), p = g.attributes.position;
-    g.computeBoundingBox(); const bb = g.boundingBox, hgt = Math.max(1e-3, bb.max.y - bb.min.y);
+    g.computeBoundingBox(); const bb = g.boundingBox as THREE.Box3, hgt = Math.max(1e-3, bb.max.y - bb.min.y);
     pos.push(...p.array); nor.push(...g.attributes.normal.array);
     for (let i = 0; i < p.count; i++) {
       const k = shade ? 0.78 + 0.4 * (p.getY(i) - bb.min.y) / hgt : 1;
@@ -35,11 +36,11 @@ function merge(parts) {   // [geometry, colour, tint(top lighter) ]
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return out;
 }
-const LUMPS = [[0, 3.3, 0, 1.7], [1.05, 3.85, 0.45, 1.25], [-0.95, 3.7, -0.5, 1.3], [0.15, 4.75, -0.15, 1.1], [-0.35, 3.0, 1.0, 1.15], [0.7, 3.05, -1.0, 1.1]];
+const LUMPS: [number, number, number, number][] = [[0, 3.3, 0, 1.7], [1.05, 3.85, 0.45, 1.25], [-0.95, 3.7, -0.5, 1.3], [0.15, 4.75, -0.15, 1.1], [-0.35, 3.0, 1.0, 1.15], [0.7, 3.05, -1.0, 1.1]];
 const GREENS = [0x3f8f3a, 0x4fa548, 0x2f7a3a], TINTS = [0xffffff, 0xf2ffd8, 0xe4f4c8, 0xffeec8, 0xdfeedf];   // tints multiply: yellower, cooler, autumn hints
-export function treeGeometry(v) {
+export function treeGeometry(v: number): THREE.BufferGeometry {
   const det = settings.quality === 'low' ? 0 : 1, rot = v * 2.1;
-  const parts = [[new THREE.CylinderGeometry(0.22, 0.38, 2.6, 6).translate(0, 1.3, 0), 0x7a5230, false]];
+  const parts: Part[] = [[new THREE.CylinderGeometry(0.22, 0.38, 2.6, 6).translate(0, 1.3, 0), 0x7a5230, false]];
   LUMPS.forEach(([x, y, z, r], i) => {
     const c = Math.cos(rot), s = Math.sin(rot), k = 1 + 0.12 * Math.sin(i * 2.7 + v);
     parts.push([new THREE.IcosahedronGeometry(r * k, det).scale(1, 0.88, 1).translate(x * c - z * s, y + (v - 1) * 0.12, x * s + z * c), GREENS[v], true]);
@@ -47,7 +48,8 @@ export function treeGeometry(v) {
   return merge(parts);
 }
 // Trees are [x, z, scale, variant]; returns the instanced meshes added to `group`.
-export function addTrees(group, trees, baseY) {
+export type TreeSpec = [number, number, number, number];
+export function addTrees(group: THREE.Object3D, trees: TreeSpec[], baseY: number): void {
   const mat = swayMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
   const o = new THREE.Object3D(), c = new THREE.Color();
   for (let t = 0; t < 3; t++) {
@@ -62,7 +64,7 @@ export function addTrees(group, trees, baseY) {
   }
 }
 // Hedge lumps [x, z, rotation, scale]: dark-green rounded blobs in rows.
-export function addHedges(group, list, baseY) {
+export function addHedges(group: THREE.Object3D, list: [number, number, number, number][], baseY: number): void {
   if (!list.length) return;
   const g = merge([[new THREE.IcosahedronGeometry(0.62, 1).scale(1.35, 0.95, 1), 0x2f7a3a, true]]);
   const im = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }), list.length);
@@ -74,12 +76,12 @@ export function addHedges(group, list, baseY) {
   im.castShadow = true; im.receiveShadow = true; group.add(im);
 }
 // Flower beds [x, z, rotation, length, width]: a soil bed with a scatter of coloured blooms, one instanced mesh each for soil and blooms.
-export function addFlowerBeds(group, beds, baseY) {
+export function addFlowerBeds(group: THREE.Object3D, beds: [number, number, number, number, number][], baseY: number): void {
   if (!beds.length) return;
   const soil = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.22, 1).translate(0, 0.11, 0), new THREE.MeshStandardMaterial({ color: 0x5a3f2a, roughness: 1 }), beds.length);
   const PER = 26, bloom = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.1, 0), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true }), beds.length * PER);
   const o = new THREE.Object3D(), c = new THREE.Color(), COLS = [0xe8453c, 0xf2c230, 0xf5f0e6, 0xd85fa8, 0x8f6fd8, 0xf08a30];
-  const rnd = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7 + 7.3) * 43758.5453; return v - Math.floor(v); };
+  const rnd = (a: number, b: number) => { const v = Math.sin(a * 127.1 + b * 311.7 + 7.3) * 43758.5453; return v - Math.floor(v); };
   beds.forEach(([x, z, r, l, w], i) => {
     o.position.set(x, baseY, z); o.rotation.set(0, r, 0); o.scale.set(l, 1, w); o.updateMatrix(); soil.setMatrixAt(i, o.matrix);
     const cs = Math.cos(r), sn = Math.sin(r), main = COLS[i % COLS.length], alt = COLS[(i * 3 + 2) % COLS.length];

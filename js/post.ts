@@ -9,9 +9,11 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { renderer, scene, camera, atm, maxPixelRatio } from './world.js';
 import { settings } from './settings.js';
+import type { Grade, QualityId } from './types.js';
 
 // Grade in display space, after tone mapping: lift / gain tint, contrast, saturation, vignette.
-export const DEFAULT_GRADE = { lift: [0, 0, 0], gain: [1, 1, 1], contrast: 1.06, saturation: 1.08, vignette: 0.22 };
+export type FullGrade = { lift: number[]; gain: number[]; contrast: number; saturation: number; vignette: number };
+export const DEFAULT_GRADE: FullGrade = { lift: [0, 0, 0], gain: [1, 1, 1], contrast: 1.06, saturation: 1.08, vignette: 0.22 };
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null }, lift: { value: new THREE.Vector3() }, gain: { value: new THREE.Vector3(1, 1, 1) },
@@ -32,10 +34,10 @@ const GradeShader = {
     }`,
 };
 
-let composer = null, gtao = null, bloom = null, grade = null, mode = null;
+let composer: EffectComposer | null = null, gtao: GTAOPass | null = null, bloom: UnrealBloomPass | null = null, grade: ShaderPass | null = null, mode: QualityId | null = null;
 const size = new THREE.Vector2();
 
-function build(q) {
+function build(q: QualityId): void {
   composer?.passes.forEach((p) => p.dispose?.()); composer?.dispose(); gtao?.dispose?.();
   composer?.renderTarget1?.dispose?.();
   composer = null; gtao = null; bloom = null; grade = null;
@@ -55,7 +57,7 @@ function build(q) {
     gtao.setSize = (w, h) => gtaoSetSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
     gtao.setSize(size.x * renderer.getPixelRatio(), size.y * renderer.getPixelRatio());
     // GTAO's normal/depth pass draws sprites and depthWrite:false meshes (dust, rings, glass) as solid squares: hide them there
-    const hide = (o) => o.isSprite || (o.material && !Array.isArray(o.material) && o.material.transparent && o.material.depthWrite === false);
+    const hide = (o: THREE.Object3D & { isSprite?: boolean; material?: THREE.Material | THREE.Material[] }) => o.isSprite || (o.material && !Array.isArray(o.material) && o.material.transparent && o.material.depthWrite === false);
     const baseOverride = gtao.overrideVisibility.bind(gtao);
     gtao.overrideVisibility = function () {
       baseOverride();
@@ -71,8 +73,8 @@ function build(q) {
   setGrade(currentGrade);
 }
 
-let currentGrade = DEFAULT_GRADE;
-export function setGrade(g) {
+let currentGrade: FullGrade = DEFAULT_GRADE;
+export function setGrade(g: Grade): void {
   currentGrade = { ...DEFAULT_GRADE, ...g };
   if (!grade) return;
   const u = grade.uniforms;
@@ -85,14 +87,14 @@ export function resizePost() { if (!composer) return; renderer.getSize(size); co
 // renderer.info counts the whole frame (all passes), not only the last full-screen pass
 renderer.info.autoReset = false;
 // Each frame: the level's grade, warmed by the sunset glow, and bloom that takes the lit windows up as night comes.
-let gradeSrc = null;
+let gradeSrc: Grade | null = null;
 function tuneFrame() {
   if (atm.grade !== gradeSrc) { gradeSrc = atm.grade; setGrade(gradeSrc || DEFAULT_GRADE); }
   if (!grade) return;
   const g = currentGrade, d = atm.dusk, u = grade.uniforms;
   u.gain.value.set(g.gain[0] * (1 + 0.06 * d), g.gain[1], g.gain[2] * (1 - 0.05 * d));
   u.saturation.value = g.saturation * (1 + 0.08 * d);
-  bloom.strength = 0.55 + 0.15 * atm.night; bloom.threshold = 0.82 - 0.06 * atm.night;
+  (bloom as UnrealBloomPass).strength = 0.55 + 0.15 * atm.night; (bloom as UnrealBloomPass).threshold = 0.82 - 0.06 * atm.night;
 }
 // Dynamic resolution: if frames keep missing 60 fps, step the render scale down (to 1.0 at the lowest); after a long
 // stretch of comfortable frames step it back up, waiting longer each time it had to come down again.

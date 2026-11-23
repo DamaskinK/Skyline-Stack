@@ -4,15 +4,18 @@
 import * as THREE from 'three';
 import { glowMats } from './world.js';
 import { Builder, LAYER, PLAZA_HALF, polyArea, insideRing, hash, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
+import type { Vec } from './near-ring.js';
+import type { LevelAssets, OsmExtract } from './types.js';
 
 const Y = 0.05;                       // ground height of the footways
 const BIKE_COLOR = 0xa8483c, MARK = 0xf2efe6;
 const BASIN_MAX = 1500;               // same limit as near-ring.js: smaller water is a basin
-const cyl = (r0, r1, h, y, seg = 8) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(0, y, 0);
-const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+type Part = [THREE.BufferGeometry, number];     // geometry, colour
+const cyl = (r0: number, r1: number, h: number, y: number, seg = 8) => new THREE.CylinderGeometry(r0, r1, h, seg).translate(0, y, 0);
+const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 
 // ── furniture shapes: merged and vertex-coloured, one InstancedMesh each ──
-const SHAPES = {
+const SHAPES: Record<string, () => Part[]> = {
   bin: () => [[cyl(0.26, 0.22, 0.75, 0.4), 0x3d5a45], [cyl(0.28, 0.28, 0.06, 0.8), 0x2b2f2c], [box(0.1, 0.04, 0.02, 0, 0.62, 0.27), 0xd8d2c0]],
   bollard: () => [[cyl(0.09, 0.09, 0.8, 0.4, 6), 0x4a4d52], [cyl(0.092, 0.092, 0.08, 0.66, 6), 0xe8e4d8]],
   rack: () => [-0.55, 0, 0.55].map((x) => [new THREE.TorusGeometry(0.3, 0.025, 4, 10, Math.PI).translate(x, 0.02, 0), 0x6b7078]),
@@ -22,14 +25,14 @@ const SHAPES = {
   sign: () => [[box(0.07, 2.6, 0.07, 0, 1.3, 0), 0x4a4d52], [box(0.9, 0.28, 0.05, 0, 2.5, 0.04), 0x2f6fb0], [box(0.8, 0.04, 0.06, 0, 2.5, 0.04), 0xf2efe6]],
 };
 // ── life that grows with the district (S0002 06): shopfronts, market stalls, a street musician ──
-const SHOP_FRAME = () => [[box(0.22, 3.3, 0.3, -1.85, 1.65, 0.1), 0x4a4d52], [box(0.22, 3.3, 0.3, 1.85, 1.65, 0.1), 0x4a4d52], [box(4.0, 0.5, 0.22, 0, 3.05, 0.12), 0x2b2f36], [box(3.5, 0.12, 0.34, -0.6, 0.45, 0.16), 0x8a8478], [box(1.2, 2.3, 0.1, 1.1, 1.15, 0.04), 0x3a3d44]];
-const SHOP_AWNING = () => [[new THREE.BoxGeometry(3.8, 0.08, 1.2).rotateX(0.28).translate(0, 2.6, 0.62), 0xffffff], [box(3.8, 0.3, 0.06, 0, 2.38, 1.17), 0xffffff]];
-const SHOP_GLASS = () => [[box(2.2, 1.6, 0.05, -0.6, 1.4, 0.12), 0xffffff], [box(0.9, 1.95, 0.05, 1.1, 1.08, 0.12), 0xffffff]];
-const STALL_BODY = () => [[box(2.4, 0.08, 1.2, 0, 0.9, 0), 0x8a6a45], [box(2.3, 0.78, 0.06, 0, 0.5, 0.55), 0xa98a5e],
-  ...[[-1.2, -0.55], [1.2, -0.55], [-1.2, 0.55], [1.2, 0.55]].map(([x, z]) => [box(0.07, 2.4, 0.07, x, 1.2, z), 0x6b4f32]),
+const SHOP_FRAME = (): Part[] => [[box(0.22, 3.3, 0.3, -1.85, 1.65, 0.1), 0x4a4d52], [box(0.22, 3.3, 0.3, 1.85, 1.65, 0.1), 0x4a4d52], [box(4.0, 0.5, 0.22, 0, 3.05, 0.12), 0x2b2f36], [box(3.5, 0.12, 0.34, -0.6, 0.45, 0.16), 0x8a8478], [box(1.2, 2.3, 0.1, 1.1, 1.15, 0.04), 0x3a3d44]];
+const SHOP_AWNING = (): Part[] => [[new THREE.BoxGeometry(3.8, 0.08, 1.2).rotateX(0.28).translate(0, 2.6, 0.62), 0xffffff], [box(3.8, 0.3, 0.06, 0, 2.38, 1.17), 0xffffff]];
+const SHOP_GLASS = (): Part[] => [[box(2.2, 1.6, 0.05, -0.6, 1.4, 0.12), 0xffffff], [box(0.9, 1.95, 0.05, 1.1, 1.08, 0.12), 0xffffff]];
+const STALL_BODY = (): Part[] => [[box(2.4, 0.08, 1.2, 0, 0.9, 0), 0x8a6a45], [box(2.3, 0.78, 0.06, 0, 0.5, 0.55), 0xa98a5e],
+  ...[[-1.2, -0.55], [1.2, -0.55], [-1.2, 0.55], [1.2, 0.55]].map(([x, z]): Part => [box(0.07, 2.4, 0.07, x, 1.2, z), 0x6b4f32]),
   [box(0.55, 0.2, 0.4, -0.8, 1.04, 0.1), 0xd84a3a], [box(0.55, 0.2, 0.4, -0.15, 1.04, 0.1), 0x5aa347], [box(0.55, 0.2, 0.4, 0.5, 1.04, 0.1), 0xe8b93a], [box(0.4, 0.3, 0.4, 0.95, 1.1, -0.2), 0xb88a52]];
-const STALL_CANOPY = () => [[new THREE.BoxGeometry(2.9, 0.06, 1.9).rotateX(0.14).translate(0, 2.42, 0), 0xffffff], [box(2.9, 0.22, 0.05, 0, 2.2, 0.93), 0xffffff]];
-const BUSK_CASE = () => [[box(0.9, 0.14, 0.38, 0, 0.07, 0), 0x1b1b1d], [box(0.8, 0.02, 0.28, 0, 0.145, 0), 0x7a2030], [box(0.12, 0.02, 0.1, 0.1, 0.16, 0), 0xe0b84a], [box(0.42, 0.5, 0.28, 1.0, 0.25, -0.1), 0x2a2a2a]];
+const STALL_CANOPY = (): Part[] => [[new THREE.BoxGeometry(2.9, 0.06, 1.9).rotateX(0.14).translate(0, 2.42, 0), 0xffffff], [box(2.9, 0.22, 0.05, 0, 2.2, 0.93), 0xffffff]];
+const BUSK_CASE = (): Part[] => [[box(0.9, 0.14, 0.38, 0, 0.07, 0), 0x1b1b1d], [box(0.8, 0.02, 0.28, 0, 0.145, 0), 0x7a2030], [box(0.12, 0.02, 0.1, 0.1, 0.16, 0), 0xe0b84a], [box(0.42, 0.5, 0.28, 1.0, 0.25, -0.1), 0x2a2a2a]];
 const AWNING_COLORS = [0xc6483c, 0x2f6fb0, 0x3f8f4a, 0xe0a52a, 0x8a4aa8, 0xe8e4d8];
 const glassMat = new THREE.MeshStandardMaterial({ color: 0x6f8ea0, emissive: 0xffc468, emissiveIntensity: 0, roughness: 0.25, metalness: 0.1 });
 glowMats.push(glassMat);               // world.js lights these windows as night falls, like the shop windows of the procedural city
@@ -37,8 +40,8 @@ glowMats.push(glassMat);               // world.js lights these windows as night
 export const LIFE_STEPS = { shops: [0, 3, 6, 10, 13, 16], stalls: [0, 0, 2, 4, 6, 8], musicians: [0, 0, 0, 1, 1, 2] };
 const furnitureMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
 
-function offsetLine(p, off) {         // polyline moved sideways by off metres (left of travel direction for off > 0)
-  const out = [], n = p.length / 2;
+function offsetLine(p: number[], off: number): number[] {         // polyline moved sideways by off metres (left of travel direction for off > 0)
+  const out: number[] = [], n = p.length / 2;
   for (let i = 0; i < n; i++) {
     const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
     let dx = p[2 * b] - p[2 * a], dz = p[2 * b + 1] - p[2 * a + 1]; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
@@ -46,8 +49,8 @@ function offsetLine(p, off) {         // polyline moved sideways by off metres (
   }
   return out;
 }
-function lengthOf(p) { let l = 0; for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return l; }
-function dashes(b, p, y, every = 3, len = 1.3, w = 0.12) {
+function lengthOf(p: number[]): number { let l = 0; for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return l; }
+function dashes(b: Builder, p: number[], y: number, every = 3, len = 1.3, w = 0.12): void {
   let carry = 0;
   for (let i = 0; i + 3 < p.length; i += 2) {
     const x0 = p[i], z0 = p[i + 1], dx = p[i + 2] - x0, dz = p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 0.01) continue;
@@ -60,7 +63,7 @@ function dashes(b, p, y, every = 3, len = 1.3, w = 0.12) {
     carry = ((carry - l) % every + every) % every;
   }
 }
-function strip(b, p, w, y, color) {   // flat ribbon, vertex-coloured, no joints (lanes are gentle)
+function strip(b: Builder, p: number[], w: number, y: number, color: number): void {   // flat ribbon, vertex-coloured, no joints (lanes are gentle)
   const h = w / 2;
   for (let i = 0; i + 3 < p.length; i += 2) {
     const x0 = p[i], z0 = p[i + 1], x1 = p[i + 2], z1 = p[i + 3], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz); if (l < 1e-3) continue;
@@ -70,9 +73,13 @@ function strip(b, p, w, y, color) {   // flat ribbon, vertex-coloured, no joints
   }
 }
 
-export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn }) {
+// What the near ring hands to the street life: where to add, and the placement tests (inside a building, on the plaza, inside the extract minus a margin).
+export interface LifeHost { group: THREE.Group; inBuilding: (x: number, z: number) => boolean; clearPlaza: (x: number, z: number) => boolean; bbIn: (x: number, z: number, m?: number) => boolean }
+export interface Spot { x: number; z: number; rot: number; y?: number; mate?: boolean }
+export interface LifeRoute { p: number[]; len: number; d: number }
+export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, inBuilding, clearPlaza, bbIn }: LifeHost) {
   const basins = osm.water.filter((g) => Math.abs(polyArea(g.p)) < BASIN_MAX).map((g) => g.p);
-  const nearBasin = (x, z, m) => {
+  const nearBasin = (x: number, z: number, m: number): boolean => {
     for (const p of basins) {
       if (insideRing(p, x, z)) return true;
       for (let i = 0, n = p.length / 2; i < n; i++) {   // distance to each edge
@@ -83,19 +90,19 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
     }
     return false;
   };
-  const bikeLines = [];                 // [polyline, half width] of every bike lane: no furniture on them
-  const onBike = (x, z) => {
+  const bikeLines: [number[], number][] = [];                 // [polyline, half width] of every bike lane: no furniture on them
+  const onBike = (x: number, z: number): boolean => {
     for (const [p, h] of bikeLines) for (let i = 0; i + 3 < p.length; i += 2) {
       const x0 = p[i], z0 = p[i + 1], dx = p[i + 2] - x0, dz = p[i + 3] - z0, l2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / l2));
       if (Math.hypot(x - x0 - dx * t, z - z0 - dz * t) < h) return true;
     }
     return false;
   };
-  const free = (x, z) => bbIn(x, z, 10) && !clearPlaza(x, z) && !inBuilding(x, z) && !nearBasin(x, z, 2.5) && !onBike(x, z);
+  const free = (x: number, z: number): boolean => bbIn(x, z, 10) && !clearPlaza(x, z) && !inBuilding(x, z) && !nearBasin(x, z, 2.5) && !onBike(x, z);
 
   // ── bike lanes ──
-  const bikeB = new Builder(), markB = new Builder(), bikeRoutes = [];
-  const dOf = (p) => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
+  const bikeB = new Builder(), markB = new Builder(), bikeRoutes: LifeRoute[] = [];
+  const dOf = (p: number[]): number => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
   for (const r of osm.roads) {
     if (r.bike !== 2 || lengthOf(r.p) < 20) continue;               // own cycle paths: red surface, dashed centre line
     bikeLines.push([r.p, r.w / 2 + 1.2]); strip(bikeB, r.p, r.w, LAYER.bike, BIKE_COLOR); dashes(markB, r.p, LAYER.mark);
@@ -109,17 +116,17 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
   }
   lanes.forEach((r, k) => {
     for (const side of [1, -1]) {
-      const p0 = offsetLine(r.p, side * (r.w / 2 - 0.95)), p = side > 0 ? p0 : (() => { const q = []; for (let i = p0.length - 2; i >= 0; i -= 2) q.push(p0[i], p0[i + 1]); return q; })();   // travel with the traffic on each side
+      const p0 = offsetLine(r.p, side * (r.w / 2 - 0.95)), p = side > 0 ? p0 : (() => { const q: number[] = []; for (let i = p0.length - 2; i >= 0; i -= 2) q.push(p0[i], p0[i + 1]); return q; })();   // travel with the traffic on each side
       bikeLines.push([p, 2]); strip(bikeB, p, 1.5, LAYER.bike, BIKE_COLOR);
       strip(markB, offsetLine(p, 0.8), 0.1, LAYER.mark, MARK);
       if (k < 4) bikeRoutes.push({ p, len: lengthOf(p), d: dOf(p) });
     }
   });
-  if (!bikeB.empty) { const m = mesh(bikeB, layerMat(null, 'bike', { vertexColors: true, roughness: 0.95 }), group); m.name = 'bike-lanes'; }
+  if (!bikeB.empty) { const m = mesh(bikeB, layerMat(null, 'bike', { vertexColors: true, roughness: 0.95 }), group); (m as THREE.Mesh).name = 'bike-lanes'; }
   if (!markB.empty) mesh(markB, layerMat(null, 'mark', { vertexColors: true, roughness: 0.9 }), group);
 
   // ── furniture along the footways ──
-  const items = { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches = [], sit = [], stand = [];
+  const items: Record<string, number[][]> = { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: number[][] = [], sit: Spot[] = [], stand: Spot[] = [];
   const walks = osm.roads.filter((r) => (r.k === 'walk' || r.k === 'path') && !r.bike).map((r) => ({ r, d: dOf(r.p), len: lengthOf(r.p) })).filter((o) => o.len > 25 && o.d < 200).sort((a, b) => a.d - b.d);
   const KINDS = ['bench', 'bin', 'planter', 'bench', 'rack', 'bollard', 'bin', 'bench', 'planter'];
   let idx = 0, kiosks = 0;
@@ -164,8 +171,8 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
   }
   // ── shopfronts on the walls beside the streets, market stalls and street musicians, nearest to the square first ──
   const taken = [...Object.values(items).flat(), ...benches].map((q) => [q[0], q[2]]);
-  const clearOf = (x, z, m) => taken.every(([a, b]) => Math.hypot(a - x, b - z) > m);
-  const shopSpots = [], spotRoads = osm.roads.filter((r) => r.k !== 'main' && r.k !== 'rail' && lengthOf(r.p) > 20).map((r) => ({ r, d: dOf(r.p) })).filter((q) => q.d < 170).sort((a, b) => a.d - b.d);
+  const clearOf = (x: number, z: number, m: number): boolean => taken.every(([a, b]) => Math.hypot(a - x, b - z) > m);
+  const shopSpots: (Spot & { d: number })[] = [], spotRoads = osm.roads.filter((r) => r.k !== 'main' && r.k !== 'rail' && lengthOf(r.p) > 20).map((r) => ({ r, d: dOf(r.p) })).filter((q) => q.d < 170).sort((a, b) => a.d - b.d);
   for (const { r } of spotRoads) {
     for (let i = 0; i + 3 < r.p.length; i += 2) {
       const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 8) continue;
@@ -185,36 +192,36 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
     }
   }
   shopSpots.sort((a, b) => a.d - b.d); shopSpots.length = Math.min(shopSpots.length, 16);
-  const cand = [];
+  const cand: (Spot & { d: number })[] = [];
   for (const { r } of walks) {
     for (let i = 0; i + 3 < r.p.length; i += 2) {
       const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 6) continue;
       const tx = dx / l, tz = dz / l;
       for (let s = 3 + hash(z0, x0) * 5; s < l - 2; s += 13) {
-        const side = ((cand.length + i) & 1) ? 1 : -1, off = r.w / 2 + 2.6, x = x0 + tx * s - tz * side * off, z = z0 + tz * s + tx * side * off;
+        const side: number = ((cand.length + i) & 1) ? 1 : -1, off = r.w / 2 + 2.6, x: number = x0 + tx * s - tz * side * off, z = z0 + tz * s + tx * side * off;
         if (free(x, z) && clearOf(x, z, 3.5) && Math.hypot(x, z) > 13 && cand.every((q) => Math.hypot(q.x - x, q.z - z) > 7)) cand.push({ x, z, rot: Math.atan2(tz * side, -tx * side) + Math.PI, d: Math.hypot(x, z) });
       }
     }
   }
   cand.sort((a, b) => a.d - b.d);
-  const roomy = (q) => { let k = 0; for (let a = 0; a < 8; a++) if (free(q.x + Math.cos(a * 0.785) * 3.6, q.z + Math.sin(a * 0.785) * 3.6)) k++; return k >= 7; };   // room for an audience
+  const roomy = (q: Spot): boolean => { let k = 0; for (let a = 0; a < 8; a++) if (free(q.x + Math.cos(a * 0.785) * 3.6, q.z + Math.sin(a * 0.785) * 3.6)) k++; return k >= 7; };   // room for an audience
   const roomyList = cand.filter((q) => roomy(q)), musicians = [roomyList[1] || roomyList[0], roomyList[4]].filter((q, i, a) => q && a.indexOf(q) === i), stalls = cand.filter((q) => !musicians.includes(q)).slice(0, 8);
-  const batch = (name, parts, list, tint, shadow = false) => {
+  const batch = (name: string, parts: () => Part[], list: Spot[], tint: boolean, shadow = false): THREE.InstancedMesh | null => {
     if (!list.length) return null;
     const im = new THREE.InstancedMesh(mergeParts(parts()), name.includes('glass') ? glassMat : furnitureMat, list.length), c = new THREE.Color();
     list.forEach((q, i) => { o.position.set(q.x, Y, q.z); o.rotation.set(0, q.rot, 0); o.scale.setScalar(1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (tint) im.setColorAt(i, c.setHex(AWNING_COLORS[(i * 5 + 1) % AWNING_COLORS.length])); });
     im.castShadow = shadow; im.receiveShadow = true; im.name = name; im.frustumCulled = false; group.add(im); return im;
   };
   const o = new THREE.Object3D();
-  const shopIm = [batch('shop-frame', SHOP_FRAME, shopSpots, false), batch('shop-awning', SHOP_AWNING, shopSpots, true), batch('shop-glass', SHOP_GLASS, shopSpots, false)].filter(Boolean);
-  const stallIm = [batch('stall-body', STALL_BODY, stalls, false, true), batch('stall-canopy', STALL_CANOPY, stalls, true)].filter(Boolean);
-  const buskIm = [batch('busker-props', BUSK_CASE, musicians, false)].filter(Boolean);
+  const shopIm = [batch('shop-frame', SHOP_FRAME, shopSpots, false), batch('shop-awning', SHOP_AWNING, shopSpots, true), batch('shop-glass', SHOP_GLASS, shopSpots, false)].filter((m): m is THREE.InstancedMesh => !!m);
+  const stallIm = [batch('stall-body', STALL_BODY, stalls, false, true), batch('stall-canopy', STALL_CANOPY, stalls, true)].filter((m): m is THREE.InstancedMesh => !!m);
+  const buskIm = [batch('busker-props', BUSK_CASE, musicians, false)].filter((m): m is THREE.InstancedMesh => !!m);
   const life = {
     shown: { shops: 0, stalls: 0, musicians: 0 }, stalls, musicians,
     // n = finished plots of the district (0-5): what is out in the street
-    setProgress(n) {
+    setProgress(this: { shown: { shops: number; stalls: number; musicians: number } }, n: number) {
       const k = Math.max(0, Math.min(5, Math.round(n)));
-      const set = (ims, want, have) => { const c = Math.min(want, have); for (const im of ims) im.count = c; return c; };
+      const set = (ims: THREE.InstancedMesh[], want: number, have: number): number => { const c = Math.min(want, have); for (const im of ims) im.count = c; return c; };
       this.shown.shops = set(shopIm, LIFE_STEPS.shops[k], shopSpots.length); this.shown.stalls = set(stallIm, LIFE_STEPS.stalls[k], stalls.length); this.shown.musicians = set(buskIm, LIFE_STEPS.musicians[k], musicians.length);
       return this.shown;
     },

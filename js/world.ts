@@ -6,13 +6,14 @@ import { settings } from './settings.js';
 import { NEWTOWN } from './levels.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { surface } from './surfaces.js';
+import type { District, Grade, GridXZ, Landmark, Plot, QualityId, Weather } from './types.js';
 import { facade, roofTex, shopTex, billboardTex, pavingTex, grassTex, sidewalkTex, puffTex, storeyUV, canvas2d, toTex } from './textures.js';
 
 // deterministic pseudo-random for scenery, so the city looks the same on every visit
 let seed = 7;
 export function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
 
-export const canvas = document.getElementById('c');
+export const canvas = document.getElementById('c') as HTMLCanvasElement;
 export const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
@@ -29,15 +30,15 @@ scene.add(sun, sun.target);
 
 // Render scale per quality level (pixels per CSS pixel, capped by the screen's own ratio). On a Retina screen at full
 // ratio the passes run on 4x the pixels, so High tops out at 1.5 and post.js lowers it further if frames run slow.
-export function maxPixelRatio(q = settings.quality) { return Math.min(q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5, window.devicePixelRatio || 1); }
-export function applyQuality() {
+export function maxPixelRatio(q: QualityId = settings.quality): number { return Math.min(q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5, window.devicePixelRatio || 1); }
+export function applyQuality(): void {
   const q = settings.quality;
   renderer.setPixelRatio(maxPixelRatio(q));
   sun.castShadow = q !== 'low';
   const size = q === 'high' ? 2048 : 1024;
   if (sun.shadow.mapSize.x !== size) { sun.shadow.mapSize.set(size, size); sun.shadow.map?.dispose(); sun.shadow.map = null; }
 }
-export function resize() {
+export function resize(): void {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
   camera.updateProjectionMatrix();
@@ -89,8 +90,8 @@ export const backdrop = new THREE.Group(); backdrop.name = 'procedural-backdrop'
 let realRings = false;
 // The procedural city (Newtown) is built once around its plaza. To play another plot the whole city group is moved by minus the
 // plot's site, so the tower (always at the world origin) stands on that plot. Cars follow; people get routes in the same frame (level-scene.js).
-export function setProcOffset(x = 0, z = 0) { nearProc.position.set(x, 0, z); backdrop.position.set(x, 0, z); carMesh.position.set(x, 0, z); carLights.position.set(x, 0, z); }
-export function setNearProcedural(on) { nearProc.visible = on; backdrop.visible = on; realRings = !on; traffic.mode = on ? 'grid' : 'osm'; traffic.setCount(traffic.want); }
+export function setProcOffset(x = 0, z = 0): void { nearProc.position.set(x, 0, z); backdrop.position.set(x, 0, z); carMesh.position.set(x, 0, z); carLights.position.set(x, 0, z); }
+export function setNearProcedural(on: boolean): void { nearProc.visible = on; backdrop.visible = on; realRings = !on; traffic.mode = on ? 'grid' : 'osm'; traffic.setCount(traffic.want); }
 
 // ── ground, plaza, roads, sidewalks ──
 // No two ground surfaces share a plane: every layer has a real height step and strips are cut where they would cross.
@@ -98,7 +99,8 @@ export function setNearProcedural(on) { nearProc.visible = on; backdrop.visible 
 // whole ground is a handful of draw calls.
 const ROAD = 44, ROAD_W = 9, LEN = 640, SW = 3;
 export const GROUND_Y = { road: 0.02, mark: 0.035, walk: 0.06 };
-const ground = (mat, parts) => {
+type GroundPart = [number, number, number, number, number, number, number, boolean?];
+const ground = (mat: THREE.Material, parts: GroundPart[]): THREE.Mesh => {
   // parts: [x0, x1, z0, z1, top, uScale, vScale, swapUV] -> one merged mesh with world-space UVs
   const geos = parts.map(([x0, x1, z0, z1, top, us, vs, swap]) => {
     const g = top > 0.03 ? new THREE.BoxGeometry(x1 - x0, top, z1 - z0).translate((x0 + x1) / 2, top / 2, (z0 + z1) / 2)
@@ -109,26 +111,26 @@ const ground = (mat, parts) => {
   });
   const m = new THREE.Mesh(mergeGeos(geos), mat); m.receiveShadow = true; nearProc.add(m); return m;
 };
-function mergeGeos(geos) {
+function mergeGeos(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
-  for (const [name, size] of [['position', 3], ['normal', 3], ['uv', 2]]) {
+  for (const [name, size] of [['position', 3], ['normal', 3], ['uv', 2]] as [string, number][]) {
     const arr = new Float32Array(n * size); let off = 0;
     for (const g of geos) { arr.set(g.attributes[name].array, off); off += g.attributes[name].array.length; }
     out.setAttribute(name, new THREE.BufferAttribute(arr, size));
   }
   return out;
 }
-const flat = (w, d, mat, x, z, y) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; backdrop.add(m); return m; };
+const flat = (w: number, d: number, mat: THREE.Material, x: number, z: number, y: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; backdrop.add(m); return m; };
 flat(2400, 2400, new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }), 0, 0, 0);
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x3b3e46, roughness: 1, ...surface('asphalt', 4, 0.8) });
-const tile = (t) => { const c = t.clone(); c.repeat.set(1, 1); c.needsUpdate = true; return c; };
+const tile = (t: THREE.Texture): THREE.Texture => { const c = t.clone(); c.repeat.set(1, 1); c.needsUpdate = true; return c; };
 const swMat = new THREE.MeshStandardMaterial({ map: tile(sidewalkTex), roughness: 1 });
 const pavingMat = new THREE.MeshStandardMaterial({ map: tile(pavingTex), roughness: 0.95, ...surface('cobble', 4, 0.7) });
 // pieces of a line along one axis, cut out where the crossing roads are
-const cuts = (pad) => [[-LEN / 2, -ROAD - pad], [-ROAD + pad, ROAD - pad], [ROAD + pad, LEN / 2]];
+const cuts = (pad: number): [number, number][] => [[-LEN / 2, -ROAD - pad], [-ROAD + pad, ROAD - pad], [ROAD + pad, LEN / 2]];
 const IN = ROAD - ROAD_W / 2 - SW;   // inner edge of the inner sidewalks = edge of the plaza
 const { road: yR, walk: yW } = GROUND_Y;
-const roadParts = [], walkParts = [];
+const roadParts: GroundPart[] = [], walkParts: GroundPart[] = [];
 for (const s of [-1, 1]) {
   roadParts.push([-LEN / 2, LEN / 2, s * ROAD - ROAD_W / 2, s * ROAD + ROAD_W / 2, yR, 9, 9]);                  // along x, full
   for (const [a, b] of cuts(ROAD_W / 2)) roadParts.push([s * ROAD - ROAD_W / 2, s * ROAD + ROAD_W / 2, a, b, yR, 9, 9]);   // along z, cut
@@ -141,27 +143,29 @@ for (const s of [-1, 1]) {
 ground(roadMat, roadParts);
 ground(swMat, walkParts);
 // paved pads under the district plots away from the plaza (a plot is a building site, not open grass)
-const PLOT_PADS = NEWTOWN.district.plots.filter((p) => Math.hypot(p.site.x, p.site.z) > 20);
-ground(pavingMat, [[-IN, IN, -IN, IN, yW, 7.6, 7.6], ...PLOT_PADS.map((p) => [p.site.x - 9, p.site.x + 9, p.site.z - 9, p.site.z + 9, yW, 7.6, 7.6])]);
-const dashes = [];
+// Newtown is the one fictional city: its sites are grid metres, its landmarks hand-placed in the same frame
+type GridPlot = Plot & { site: GridXZ };
+const PLOT_PADS = ((NEWTOWN.district as District).plots as GridPlot[]).filter((p) => Math.hypot(p.site.x, p.site.z) > 20);
+ground(pavingMat, [[-IN, IN, -IN, IN, yW, 7.6, 7.6], ...PLOT_PADS.map((p): GroundPart => [p.site.x - 9, p.site.x + 9, p.site.z - 9, p.site.z + 9, yW, 7.6, 7.6])]);
+const dashes: [number, number, number][] = [];
 for (const s of [-1, 1]) for (let k = -LEN / 2; k < LEN / 2; k += 6) { dashes.push([k, s * ROAD, 0]); dashes.push([s * ROAD, k, Math.PI / 2]); }
 // markings sit a real 1.5 cm above the road; the small depth bias only keeps distant ones crisp
-function groundLayer(mat, layer) { const m = mat.clone(); m.polygonOffset = true; m.polygonOffsetFactor = -layer; m.polygonOffsetUnits = -layer; return m; }
+function groundLayer<M extends THREE.Material>(mat: M, layer: number): M { const m = mat.clone(); m.polygonOffset = true; m.polygonOffsetFactor = -layer; m.polygonOffsetUnits = -layer; return m; }
 const o3 = new THREE.Object3D();
-function instanced(geo, mat, list, place, shadow = false, parent = scene) {
+function instanced<T>(geo: THREE.BufferGeometry, mat: THREE.Material, list: T[], place: (item: T, o: THREE.Object3D, i: number) => void, shadow = false, parent: THREE.Object3D = scene): THREE.InstancedMesh {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
   list.forEach((it, i) => { o3.position.set(0, 0, 0); o3.rotation.set(0, 0, 0); o3.scale.set(1, 1, 1); place(it, o3, i); o3.updateMatrix(); im.setMatrixAt(i, o3.matrix); });
   im.castShadow = shadow; im.receiveShadow = true; parent.add(im); return im;
 }
 instanced(new THREE.PlaneGeometry(2.5, 0.3).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 1), dashes, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark, z); o.rotation.y = r; }, false, nearProc);
 // zebra crossings at the four corners of the plaza
-const zebra = [];
+const zebra: [number, number, number][] = [];
 for (const s of [-1, 1]) for (const t of [-1, 1]) for (let k = -3; k <= 3; k++) { zebra.push([t * 20 + k * 1.2, s * ROAD, 0]); zebra.push([s * ROAD, t * 20 + k * 1.2, Math.PI / 2]); }
 instanced(new THREE.PlaneGeometry(0.7, ROAD_W - 1).rotateX(-Math.PI / 2), groundLayer(new THREE.MeshBasicMaterial({ color: 0xf4f0e0 }), 2), zebra, ([x, z, r], o) => { o.position.set(x, GROUND_Y.mark + 0.004, z); o.rotation.y = r; }, false, nearProc);
 
 // ── geometry helper: merge simple parts into one vertex-coloured mesh ──
-export function mergeColored(parts) {
-  let count = 0; const geos = parts.map(([g, c]) => { const n = g.index ? g.toNonIndexed() : g; count += n.attributes.position.count; return [n, new THREE.Color(c)]; });
+export function mergeColored(parts: [THREE.BufferGeometry, number][]): THREE.BufferGeometry {
+  let count = 0; const geos = parts.map(([g, c]): [THREE.BufferGeometry, THREE.Color] => { const n = g.index ? g.toNonIndexed() : g; count += n.attributes.position.count; return [n, new THREE.Color(c)]; });
   const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), col = new Float32Array(count * 3);
   let off = 0;
   for (const [g, c] of geos) {
@@ -173,60 +177,61 @@ export function mergeColored(parts) {
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return out;
 }
-const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
-const cyl = (r, h, x, y, z, s = 8) => new THREE.CylinderGeometry(r, r, h, s).translate(x, y, z);
+const box = (w: number, h: number, d: number, x: number, y: number, z: number) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+const cyl = (r: number, h: number, x: number, y: number, z: number, s = 8) => new THREE.CylinderGeometry(r, r, h, s).translate(x, y, z);
 
 // ── background buildings with shops, rooftop details and billboards ──
-const sceneryMats = [];
+const sceneryMats: THREE.MeshStandardMaterial[] = [];
 const palette = [0xc7b39b, 0x8fa3b8, 0xd88c6a, 0xa7b08b, 0xe2d6bf, 0x7d8aa6, 0xb87d7d, 0xd2c27a, 0x9bb7a5];
 const topMat = new THREE.MeshStandardMaterial({ map: roofTex, roughness: 1 });
 const shopMats = Array.from({ length: 8 }, (_, i) => { const t = shopTex(i); const m = new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 }); sceneryMats.push(m); return m; });
 const roofProps = mergeColored([[box(1.6, 1, 1.2, 0, 0.5, 0), 0x9aa0a8], [cyl(0.7, 1.6, 2.2, 1.2, 1.4), 0x8a5a3a], [cyl(0.05, 3.5, -1.6, 1.75, -1), 0xcccccc]]);
 const roofPropMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
-const roofPropList = [], billboards = [];
-const blockCtx = { parent: nearProc, props: roofPropList, boards: billboards, pending: new Map() };
+type PendingBlocks = Map<THREE.Material, THREE.BufferGeometry[]>;
+const roofPropList: [number, number, number, number][] = [], billboards: [number, number, number, number, number][] = [];
+const blockCtx: { parent: THREE.Object3D; props: [number, number, number, number][]; boards: [number, number, number, number, number][]; pending: PendingBlocks } = { parent: nearProc, props: roofPropList, boards: billboards, pending: new Map() };
 // Blocks are merged per material (review of S0002): every box would otherwise draw one call per face group. `pending` collects the
 // index ranges of each box per material; finishBlocks() turns them into one mesh per material.
-const blockSides = new Map();             // `${hex}-${variant}` -> shared facade material
-function blockSide(hex, variant) {
+const blockSides = new Map<string, THREE.MeshStandardMaterial>();             // `${hex}-${variant}` -> shared facade material
+function blockSide(hex: number, variant: number): THREE.MeshStandardMaterial {
   const key = hex + '-' + variant;
   if (!blockSides.has(key)) {
     const fa = facade(hex, variant);
     const m = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 });
     sceneryMats.push(m); blockSides.set(key, m);
   }
-  return blockSides.get(key);
+  return blockSides.get(key) as THREE.MeshStandardMaterial;
 }
 // Adds the faces of `geo` (a BoxGeometry, groups +x -x +y -y +z -z) to `pending`: sides on `side`, top and bottom on `topMat`.
-function pendBox(pending, geo, side) {
-  const idx = geo.index.array, add = (mat, groups) => {
+function pendBox(pending: PendingBlocks, geo: THREE.BoxGeometry, side: THREE.Material): void {
+  const idx = (geo.index as THREE.BufferAttribute).array, add = (mat: THREE.Material, groups: { start: number; count: number }[]) => {
     const a = pending.get(mat) || []; pending.set(mat, a);
-    const ix = []; for (const g of groups) for (let i = g.start; i < g.start + g.count; i++) ix.push(idx[i]);
+    const ix: number[] = []; for (const g of groups) for (let i = g.start; i < g.start + g.count; i++) ix.push(idx[i]);
     const sub = new THREE.BufferGeometry(); for (const k of ['position', 'normal', 'uv']) sub.setAttribute(k, geo.attributes[k]);
     sub.setIndex(ix); a.push(sub);
   };
   add(side, [geo.groups[0], geo.groups[1], geo.groups[4], geo.groups[5]]); add(topMat, [geo.groups[2], geo.groups[3]]);
 }
-function flushBlocks(pending, parent) {
+function flushBlocks(pending: PendingBlocks, parent: THREE.Object3D): void {
   for (const [mat, geos] of pending) {
-    const m = new THREE.Mesh(mergeGeometries(geos), mat); m.receiveShadow = true; m.name = 'city-blocks'; parent.add(m);
+    const m = new THREE.Mesh(mergeGeometries(geos) as THREE.BufferGeometry, mat); m.receiveShadow = true; m.name = 'city-blocks'; parent.add(m);
     for (const g of geos) g.dispose();
   }
   pending.clear();
 }
-function cityBlock(x, z, w, d, h, hex, variant, idx) {
+function cityBlock(x: number, z: number, w: number, d: number, h: number, hex: number, variant: number, idx: number): void {
   const { props, boards, pending } = blockCtx;
-  pendBox(pending, storeyUV(new THREE.BoxGeometry(w, h, d), w, h, d).translate(x, CFG.H * 1.6 + h / 2, z), blockSide(hex, variant));
+  pendBox(pending, storeyUV(new THREE.BoxGeometry(w, h, d), w, h, d).translate(x, CFG.H * 1.6 + h / 2, z) as THREE.BoxGeometry, blockSide(hex, variant));
   const sm = shopMats[idx % shopMats.length];
-  pendBox(pending, storeyUV(new THREE.BoxGeometry(w + 0.4, CFG.H * 1.6, d + 0.4), (w + 0.4) * 0.62, CFG.H, (d + 0.4) * 0.62).translate(x, CFG.H * 0.8, z), sm);
+  pendBox(pending, storeyUV(new THREE.BoxGeometry(w + 0.4, CFG.H * 1.6, d + 0.4), (w + 0.4) * 0.62, CFG.H, (d + 0.4) * 0.62).translate(x, CFG.H * 0.8, z) as THREE.BoxGeometry, sm);
   const roofY = CFG.H * 1.6 + h;
   props.push([x, roofY, z, rnd() * 6]);
   if (idx % 5 === 0) boards.push([x, roofY, z, w, idx]);
 }
 // Blocks keep away from the district plots (the tower and its camera need room) and from the landmarks.
-const SITES = [...NEWTOWN.district.plots.map((p) => [p.site.x, p.site.z, 36]), ...NEWTOWN.landmarks.map((l) => [l.x, l.z, l.r + 10])];
-const clearOfSites = (x, z, half) => SITES.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r + half);
-const isRoad = (x, z, pad) => Math.abs(Math.abs(x) - ROAD) < pad || Math.abs(Math.abs(z) - ROAD) < pad;
+const SITES: [number, number, number][] = [...(NEWTOWN.district as District).plots.map((p): [number, number, number] => [(p.site as GridXZ).x, (p.site as GridXZ).z, 36]), ...(NEWTOWN.landmarks as Landmark[]).map((l): [number, number, number] => [l.x, l.z, l.r + 10])];
+const clearOfSites = (x: number, z: number, half: number): boolean => SITES.every(([sx, sz, r]) => Math.hypot(x - sx, z - sz) > r + half);
+const isRoad = (x: number, z: number, pad: number): boolean => Math.abs(Math.abs(x) - ROAD) < pad || Math.abs(Math.abs(z) - ROAD) < pad;
 for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   const a = rnd() * Math.PI * 2, r = 64 + rnd() * 190;
   const x = Math.cos(a) * r, z = Math.sin(a) * r, w = 7 + rnd() * 9, d = 7 + rnd() * 9;
@@ -238,7 +243,7 @@ for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   if (!clearOfSites(x, z, Math.max(w, d) / 2)) continue;   // after the random draws above, so the stream stays as it was
   cityBlock(x, z, w, d, tall, palette[made % palette.length], made % 3, made); made++;
 }
-function finishBlocks(props, boards, parent) {
+function finishBlocks(props: typeof roofPropList, boards: typeof billboards, parent: THREE.Object3D): void {
   flushBlocks(blockCtx.pending, parent);
   instanced(roofProps, roofPropMat, props, ([x, y, z, r], o) => { o.position.set(x, y, z); o.rotation.y = r; }, false, parent);
   for (const [x, y, z, w, i] of boards) {
@@ -252,7 +257,7 @@ finishBlocks(roofPropList, billboards, nearProc);
 // Ticket 13 replaces them.
 {
   let st = 91; const fr = () => { st = (st * 16807) % 2147483647; return (st - 1) / 2147483646; };
-  const farProps = [], farBoards = [];
+  const farProps: typeof roofPropList = [], farBoards: typeof billboards = [];
   Object.assign(blockCtx, { parent: backdrop, props: farProps, boards: farBoards });
   for (let i = 0; i < 30; i++) {
     const a = fr() * Math.PI * 2, r = 310 + fr() * 170, x = Math.cos(a) * r, z = Math.sin(a) * r, w = 9 + fr() * 12, d = 9 + fr() * 12;
@@ -264,7 +269,7 @@ finishBlocks(roofPropList, billboards, nearProc);
 }
 
 // ── street furniture ──
-const trees = [], bushes = [], lamps = [], benches = [], flowers = [];
+const trees: [number, number, number, number][] = [], bushes: [number, number][] = [], lamps: [number, number, number][] = [], benches: [number, number, number][] = [], flowers: [number, number, number][] = [];
 for (let i = 0; i < 120; i++) {
   const a = rnd() * Math.PI * 2, r = 30 + rnd() * 34;
   const x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -301,7 +306,7 @@ instanced(box(0.5, 0.25, 0.7, 0, 4.95, 1.25), lampHeadMat, lamps, ([x, z, r], o)
 const poolMat = new THREE.MeshBasicMaterial({ map: puffTex, color: 0xffc66a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
 instanced(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), poolMat, lamps, ([x, z, r], o) => { o.position.set(x + Math.sin(r) * 1.25, GROUND_Y.walk + 0.05, z + Math.cos(r) * 1.25); }, false, nearProc);
 // traffic lights at the corners, cycling for show
-const tlights = [];
+const tlights: { bulbs: THREE.Mesh[]; phase: number }[] = [];
 for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
   const g = new THREE.Group(); g.position.set(sx * (ROAD + ROAD_W / 2 + 0.8), 0, sz * (ROAD + ROAD_W / 2 + 0.8));
   const pole = new THREE.Mesh(cyl(0.1, 4, 0, 2, 0, 6), new THREE.MeshStandardMaterial({ color: 0x2f3540 }));
@@ -312,13 +317,13 @@ for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
 
 // ── hills on the horizon (no fog; tinted toward the sky colour so they read as distance) ──
 const hillMat = new THREE.MeshLambertMaterial({ color: 0x6f9a7a, flatShading: true, fog: false, transparent: true });
-const hills = [];
+const hills: [number, number, number, number][] = [];
 for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2 + rnd() * 0.2; hills.push([Math.cos(a) * (520 + rnd() * 80), Math.sin(a) * (520 + rnd() * 80), 60 + rnd() * 90, 50 + rnd() * 80]); }
 instanced(new THREE.ConeGeometry(1, 1, 7, 1).translate(0, 0.5, 0), hillMat, hills, ([x, z, w, h], o) => { o.position.set(x, -2, z); o.scale.set(w, h, w * 0.8); o.rotation.y = x; }, false, backdrop);
 
 // ── 3D clouds at every height, so a tall tower climbs through them ──
 const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.94 });   // smooth shading: sun side bright, underside shaded, so puffs have volume
-const clouds = [], PUFFS = 6;
+const clouds: { p: THREE.Vector3; puffs: { x: number; y: number; z: number; s: number }[]; sp: number }[] = [], PUFFS = 6;
 for (let i = 0; i < 40; i++) {
   const a = rnd() * Math.PI * 2, r = 40 + rnd() * 170, sc = 1 + rnd() * 1.5;
   const puffs = Array.from({ length: PUFFS }, (_, k) => ({ x: (k - 2.5) * 2.2 * sc, y: rnd() * 1.4 * sc, z: rnd() * 2 * sc, s: (1.6 + rnd() * 1.8) * sc }));
@@ -330,7 +335,7 @@ const cloudMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), c
 const carGeo = mergeColored([
   [box(2, 0.7, 4.2, 0, 0.65, 0), 0xffffff], [box(1.75, 0.65, 2.1, 0, 1.3, -0.2), 0x9aa3b5],
   [box(1.8, 0.08, 2.0, 0, 1.66, -0.2), 0xffffff],
-  ...[[-1, -1.3], [1, -1.3], [-1, 1.3], [1, 1.3]].map(([x, z]) => [new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10).rotateZ(Math.PI / 2).translate(x * 0.95, 0.38, z), 0x1a1a1a]),
+  ...[[-1, -1.3], [1, -1.3], [-1, 1.3], [1, 1.3]].map(([x, z]): [THREE.BufferGeometry, number] => [new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10).rotateZ(Math.PI / 2).translate(x * 0.95, 0.38, z), 0x1a1a1a]),
 ]);
 const carLightGeo = mergeColored([[box(0.4, 0.2, 0.08, -0.6, 0.75, 2.12), 0xfff6d0], [box(0.4, 0.2, 0.08, 0.6, 0.75, 2.12), 0xfff6d0], [box(0.4, 0.18, 0.08, -0.6, 0.8, -2.12), 0xff2a2a], [box(0.4, 0.18, 0.08, 0.6, 0.8, -2.12), 0xff2a2a]]);
 const carCols = [0xe74c3c, 0x3498db, 0xf1c40f, 0xecf0f1, 0x2ecc71, 0x34495e, 0xe67e22, 0x9b59b6];
@@ -338,13 +343,15 @@ const MAX_CARS = 40;
 const carMesh = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 }), MAX_CARS);
 const carLights = new THREE.InstancedMesh(carLightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), MAX_CARS);
 carMesh.castShadow = true; carMesh.frustumCulled = carLights.frustumCulled = false; scene.add(carMesh, carLights);
-const cars = [];
+type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number };
+const cars: Car[] = [];
 for (let i = 0; i < MAX_CARS; i++) {
   const road = i % 4, lane = i % 8 < 4 ? 1 : -1, bus = i % 9 === 0, parked = i % 11 === 5;
   cars.push({ road, lane, pos: -LEN / 2 + rnd() * LEN, sp: parked ? 0 : (9 + rnd() * 7) * (bus ? 0.7 : 1), bus, parked });
   carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
 }
-export const traffic = {
+export interface TrafficRoute { p: number[]; cum: number[]; len: number }
+export const traffic: { count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
   count: 34, want: 34, mode: 'grid', routes: [],
   setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
   // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
@@ -391,9 +398,9 @@ traffic.setCount(34);
 // ── sky life: birds, a plane with a contrail, a hot-air balloon ──
 const birdMat = new THREE.MeshBasicMaterial({ color: 0x2a2a35, side: THREE.DoubleSide });
 const wingGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.25, 0, 0, 0.25, 1.1, 0, 0], 3));
-const flocks = [];
+const flocks: { g: THREE.Group; birds: { l: THREE.Mesh; r: THREE.Mesh; ph: number }[]; r: number; y: number; a: number; sp: number }[] = [];
 for (let f = 0; f < 3; f++) {
-  const g = new THREE.Group(); const birds = [];
+  const g = new THREE.Group(); const birds: { l: THREE.Mesh; r: THREE.Mesh; ph: number }[] = [];
   for (let i = 0; i < 7; i++) {
     const b = new THREE.Group(); const l = new THREE.Mesh(wingGeo, birdMat), r = new THREE.Mesh(wingGeo, birdMat); r.scale.x = -1;
     b.add(l, r); b.position.set(-Math.abs(i - 3) * 1.6, rnd() * 0.6, (i - 3) * 1.4); g.add(b); birds.push({ l, r, ph: rnd() * 6 });
@@ -411,7 +418,7 @@ function newFlight() {
 newFlight(); flight.t = 12;
 const balloon = new THREE.Group();
 {
-  const [c, x] = canvas2d(256, 64); ['#e74c3c', '#f1c40f', '#3498db', '#ffffff'].forEach((col, i) => { for (let k = i; k < 16; k += 4) { x.fillStyle = col; x.fillRect(k * 16, 0, 16, 64); } });
+  const [c, x] = canvas2d(256, 64) as [HTMLCanvasElement, CanvasRenderingContext2D]; ['#e74c3c', '#f1c40f', '#3498db', '#ffffff'].forEach((col, i) => { for (let k = i; k < 16; k += 4) { x.fillStyle = col; x.fillRect(k * 16, 0, 16, 64); } });
   const env = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 12), new THREE.MeshStandardMaterial({ map: toTex(c), roughness: 0.7 })); env.scale.y = 1.2; env.position.y = 7;
   const basket = new THREE.Mesh(box(1.6, 1.2, 1.6, 0, 0.6, 0), new THREE.MeshStandardMaterial({ color: 0x8b5a2b }));
   const ropes = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([-0.8, 1.2, -0.8, -2, 3.6, -2, 0.8, 1.2, -0.8, 2, 3.6, -2, -0.8, 1.2, 0.8, -2, 3.6, 2, 0.8, 1.2, 0.8, 2, 3.6, 2], 3)), new THREE.LineBasicMaterial({ color: 0x333333 }));
@@ -422,28 +429,28 @@ const balloon = new THREE.Group();
 export const atm = {
   top: new THREE.Color(PHASES[0].top), bot: new THREE.Color(PHASES[0].bot), sunCol: new THREE.Color(PHASES[0].sunCol), cloud: new THREE.Color(0xffffff),
   sunDir: new THREE.Vector3(...PHASES[0].sunDir).normalize(), night: 0, sunI: 1.7, hemiI: 1, cover: 0.35, fogNear: 110, fogFar: 320,
-  skySun: new THREE.Vector3(...PHASES[0].sunDir).normalize(), dusk: 0, grade: null,
+  skySun: new THREE.Vector3(...PHASES[0].sunDir).normalize(), dusk: 0, grade: null as Grade | null,
 };
 const tc = new THREE.Color(), tv = new THREE.Vector3();
 let clock = 0;
-export const blockMats = new Map();
+export const blockMats = new Map<string, THREE.MeshStandardMaterial[]>();
 export const glowMats = sceneryMats;
 
 // Image-based light from the level's sky HDRI (set by level-scene.js). Three r160 has no scene-wide env intensity,
 // so the standard materials are collected now and then and dimmed together as night falls.
-const envMats = new Set(); let envScan = 0;
-export function setEnvironment(tex) { scene.environment = tex; envScan = 0; }
-function updateEnvIntensity(v) {
+const envMats = new Set<THREE.MeshStandardMaterial>(); let envScan = 0;
+export function setEnvironment(tex: THREE.Texture | null): void { scene.environment = tex; envScan = 0; }
+function updateEnvIntensity(v: number): void {
   if (!scene.environment) return;
   if (--envScan <= 0) {
     envScan = 60; envMats.clear();
-    scene.traverse((o) => { const m = o.material; if (m) for (const x of Array.isArray(m) ? m : [m]) if (x.isMeshStandardMaterial) envMats.add(x); });
+    scene.traverse((o) => { const m = (o as THREE.Mesh).material; if (m) for (const x of Array.isArray(m) ? m : [m]) if ((x as THREE.MeshStandardMaterial).isMeshStandardMaterial) envMats.add(x as THREE.MeshStandardMaterial); });
   }
   for (const m of envMats) m.envMapIntensity = v;
 }
 
 // Point the sun (and its shadow frustum) at the area around `focus`.
-export function aimSun(focus) {
+export function aimSun(focus: THREE.Vector3): void {
   sun.position.copy(focus).addScaledVector(atm.sunDir, 60); sun.target.position.copy(focus);
   sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
 }
@@ -452,7 +459,8 @@ export function aimSun(focus) {
 // Look of the light by "m", the hours of sun left before it sets (or since it rose): 0 = on the horizon. The hour
 // of day comes from the level's arc (core/dayarc.js); sunrise 6:00, sunset 19:30 everywhere.
 const SUNRISE = 6, SUNSET = 19.5;
-const KEYS = [   // m, sky top, sky horizon, cloud, sun colour, sun, hemi, night (windows), dusk (warm glow)
+type Key = { m: number; top: number; bot: number; cloud: number; sunCol: number; sun: number; hemi: number; night: number; dusk: number };
+const KEYS: Key[] = [   // m, sky top, sky horizon, cloud, sun colour, sun, hemi, night (windows), dusk (warm glow)
   { m: 4.5, top: 0x2f86e0, bot: 0xc4e6ff, cloud: 0xffffff, sunCol: 0xfff3dc, sun: 1.7, hemi: 1.0, night: 0, dusk: 0 },
   { m: 2.2, top: 0x3f7fcc, bot: 0xf6dcb4, cloud: 0xfff0dc, sunCol: 0xffd9a0, sun: 1.55, hemi: 0.92, night: 0, dusk: 0.3 },
   { m: 0.7, top: 0x4b5f9a, bot: 0xf7a35e, cloud: 0xffb98a, sunCol: 0xff9d58, sun: 1.2, hemi: 0.78, night: 0.12, dusk: 0.85 },
@@ -465,14 +473,14 @@ const base = { sun: 0, hemi: 0, night: 0, dusk: 0 };
 const MOON = new THREE.Vector3(-0.4, 0.5, -0.7).normalize();
 const sunTrue = new THREE.Vector3(), sunLight = new THREE.Vector3();
 // The sun's place for an hour: it rises in the east (+x), crosses south, sets in the west; z stays behind the tower from the camera.
-function timeOfDay(hour) {
+function timeOfDay(hour: number): number {
   const m = hour < (SUNRISE + SUNSET) / 2 ? hour - SUNRISE : SUNSET - hour;
   let i = 0; while (i < KEYS.length - 2 && m < KEYS[i + 1].m) i++;
   const a = KEYS[i], b = KEYS[i + 1], f = Math.min(1, Math.max(0, (m - a.m) / (b.m - a.m)));
   const w = f;
   tk.top.setHex(a.top).lerp(tk.a.setHex(b.top), w); tk.bot.setHex(a.bot).lerp(tk.b.setHex(b.bot), w);
   tk.cloud.setHex(a.cloud).lerp(tk.a.setHex(b.cloud), w); tk.sunCol.setHex(a.sunCol).lerp(tk.b.setHex(b.sunCol), w);
-  for (const k of ['sun', 'hemi', 'night', 'dusk']) base[k] = a[k] + (b[k] - a[k]) * w;
+  for (const k of ['sun', 'hemi', 'night', 'dusk'] as const) base[k] = a[k] + (b[k] - a[k]) * w;
   const fr = Math.min(1, Math.max(0, (hour - SUNRISE) / (SUNSET - SUNRISE))), az = Math.PI * (1 - fr);
   const el = Math.sin(Math.PI * fr) * 0.85;
   sunTrue.set(Math.cos(az) * 0.9, el, -0.55).normalize();            // for the sky shader: reaches the horizon at sunset
@@ -484,15 +492,15 @@ function timeOfDay(hour) {
 const WARM_SUN = new THREE.Color(1.0, 0.95, 0.86), WHITE = new THREE.Color(1, 1, 1);
 const wx = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color() };
 const tgt = { top: new THREE.Color(), bot: new THREE.Color(), cloud: new THREE.Color(), sunCol: new THREE.Color(), sunI: 1, hemiI: 1, night: 0, dusk: 0 };
-const DAY_NOW = { hour: 14.5, grade: null };
+const DAY_NOW: { hour: number; grade: Grade | null } = { hour: 14.5, grade: null };
 
-export function updateWorld(dt, ph, wind, focus, flash, day = DAY_NOW) {
+export function updateWorld(dt: number, ph: Weather, wind: { x: number; z: number }, focus: THREE.Vector3, flash: number, day: { hour: number; grade: Grade | null } = DAY_NOW): void {
   clock += dt;
   const k = Math.min(1, dt * 1.2);
   timeOfDay(day.hour);
   const o = Math.min(1, Math.max(0, (ph.cover - 0.35) / 0.55));   // how overcast the weather is
   const bright = 1 - 0.85 * base.night;                           // how much daylight is left to be grey
-  const grey = (c, w, col, lightK) => { c.copy(w).multiplyScalar(lightK); return c.lerp(col, 0.22); };
+  const grey = (c: THREE.Color, w: THREE.Color, col: THREE.Color, lightK: number) => { c.copy(w).multiplyScalar(lightK); return c.lerp(col, 0.22); };
   wx.top.setHex(ph.top); wx.bot.setHex(ph.bot); wx.cloud.setHex(ph.cloud);
   tgt.top.copy(tk.top).lerp(grey(tc, wx.top, tk.top, bright), 0.85 * o);
   tgt.bot.copy(tk.bot).lerp(grey(tc, wx.bot, tk.bot, 0.35 + 0.65 * bright), 0.85 * o);
@@ -511,10 +519,11 @@ export function updateWorld(dt, ph, wind, focus, flash, day = DAY_NOW) {
   u.top.value.copy(atm.top); u.bot.value.copy(atm.bot); u.cloudCol.value.copy(atm.cloud); u.sunCol.value.copy(atm.sunCol); u.sunDir.value.copy(atm.skySun);
   u.time.value = clock; u.cover.value = atm.cover; u.wind.value.set(wind.x, wind.z); u.night.value = atm.night;
   sky.position.copy(camera.position);
-  scene.fog.color.copy(atm.bot);
+  const fog = scene.fog as THREE.Fog;   // set at the top of this file
+  fog.color.copy(atm.bot);
   // with the real middle and far ring the clear-weather fog is pushed out to ~1.8 km; thick fog and rain keep their short range
   const fogK = realRings ? Math.min(1, Math.max(0, (atm.fogFar - 48) / 272)) : 0;
-  scene.fog.near = atm.fogNear * (1 + 1.4 * fogK); scene.fog.far = atm.fogFar * (1 + 4.5 * fogK);
+  fog.near = atm.fogNear * (1 + 1.4 * fogK); fog.far = atm.fogFar * (1 + 4.5 * fogK);
   // warmer, more contrasted sun and a bluer fill: shadows pick up the sky colour instead of just going grey
   sun.color.copy(atm.sunCol).multiply(WARM_SUN); sun.intensity = atm.sunI * 1.15; hemi.intensity = (atm.hemiI + flash * 2.5) * (scene.environment ? 0.5 : 0.9);
   hemi.color.copy(atm.top).lerp(WHITE, 0.65);
