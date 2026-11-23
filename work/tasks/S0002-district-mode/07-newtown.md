@@ -6,7 +6,7 @@ with Endless and its own five-plot district on its grid, using the improved look
 **Blocked by:** 01, 04
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Newtown"; `js/world.js` nearProc.
 
 - [ ] Newtown selectable from the start; Endless and district both work.
