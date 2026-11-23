@@ -1,5 +1,5 @@
 // Browser checks on the running game (Playwright + the system Chrome, real GPU).
-//   node tests/browser/check.mjs [all|shots|perf|flicker] [--app URL] [--quality low|medium|high] [--level kosice]
+//   node tests/browser/check.mjs [all|shots|perf|flicker] [--app URL] [--quality low|medium|high] [--level kosice] [--plot 0-4]
 //                                [--budget 18] [--viewport 2560x1440] [--dpr 2] [--headed] [--out tests/browser/out]
 // Needs the game served (npm run serve, or npm run preview with --app http://localhost:8001).
 // Prints a short report, writes it and the screenshots to the out folder, and exits 1 if a check fails.
@@ -23,7 +23,8 @@ const POSES = {
 mkdirSync(out, { recursive: true });
 const lines = [], fails = [];
 const log = (s) => { lines.push(s); console.log(s); };
-const tag = `${level}-${quality}${opt('dpr', 1) != 1 ? '-dpr' + opt('dpr', 1) : ''}`;
+const plot = opt('plot', null);   // Kosice plot index: the scene of that plot is built around the tower before the checks
+const tag = `${level}${plot !== null ? '-p' + plot : ''}-${quality}${opt('dpr', 1) != 1 ? '-dpr' + opt('dpr', 1) : ''}`;
 
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const browser = await chromium.launch({
@@ -43,6 +44,7 @@ await page.addInitScript((q) => {
 await page.goto(app, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });
 await page.waitForTimeout(800);
+if (plot !== null) { const errs = await page.evaluate((n) => window.__debug.loadPlot(Number(n)), plot); log(`plot ${plot} loaded${errs.length ? ' with errors ' + JSON.stringify(errs) : ''}`); await page.waitForTimeout(500); }
 const info = await page.evaluate(() => window.__debug.info());
 log(`app ${app} · level ${level} · quality ${quality} · ${vw}x${vh} dpr ${opt('dpr', 1)} · GPU ${info.gpu}`);
 

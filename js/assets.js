@@ -59,3 +59,10 @@ export async function loadManifest(url, onProgress = () => {}, label = url, onLa
   }));
   return { assets, errors };
 }
+
+// One compact OpenStreetMap extract per district plot (assets/levels/<city>/plots/<plot>.json, made by scripts/build-osm-level.mjs <city> plots).
+export function loadPlotExtract(city, plotId) {
+  const url = `assets/levels/${city}/plots/${plotId}.json`;
+  if (!cache.has(url)) cache.set(url, loadOne({ type: 'json', url }, () => {}));
+  return cache.get(url).catch((e) => { cache.delete(url); throw e; });
+}

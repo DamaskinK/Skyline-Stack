@@ -26,8 +26,8 @@ export const LEVELS = [
           windScale: 0.9, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 8, kind: 'rain' }], landmarksInView: [] },   // car park on the way in, south-west of the old town
         { id: 'kulturpark', name: 'Kulturpark', site: { lat: 48.71373, lon: 21.25634 }, buildingType: 'hotel', target: 18, require: { maxLivesLost: 2 },
           windScale: 1.0, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 9, kind: 'rain' }], landmarksInView: ['st-elisabeth'] },   // edge of the old barracks park, cathedral 600 m north
-        { id: 'hlavna-south', name: 'Hlavna street', site: { lat: 48.71988, lon: 21.25874 }, buildingType: 'office', target: 22, require: { maxLivesLost: 2 },
-          windScale: 1.1, weather: [{ fromFloor: 0, kind: 'rain' }, { fromFloor: 12, kind: 'clear' }], landmarksInView: ['st-elisabeth', 'state-theatre'] },   // south end of the main street
+        { id: 'hlavna-south', name: 'Hlavna street', site: { lat: 48.71952, lon: 21.25860 }, buildingType: 'office', target: 22, require: { maxLivesLost: 2 },
+          windScale: 1.1, weather: [{ fromFloor: 0, kind: 'rain' }, { fromFloor: 12, kind: 'clear' }], landmarksInView: ['st-elisabeth', 'state-theatre'] },   // south end of the main street, 40 m south of the first pick so the camera never sits inside the cathedral model (S0002 03)
         { id: 'cathedral', name: 'Cathedral square', site: { lat: 48.72100, lon: 21.25755 }, buildingType: 'deco', target: 26, require: { minPerfectShare: 0.4 },
           windScale: 1.25, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }, { fromFloor: 18, kind: 'rain' }], landmarksInView: ['st-elisabeth', 'state-theatre', 'hlavna'] },   // today's site
       ],

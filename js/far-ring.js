@@ -22,7 +22,14 @@ const gauss = (b, c, w) => { let d = Math.abs(b - c); if (d > 180) d = 360 - d; 
 const riverX = (z) => -1800 + 160 * Math.sin(z / 1100);
 
 // ground height at (x, z): flat city basin, rounded wooded hills rising from ~1.5 km, tallest in the north and north-west
+// Frame of the city: origin = the city's site. A district plot far from it is built with `plot` set: the rings are offset by the plot's position
+// (the group moves, nothing is regenerated) and the terrain is flattened round the plot so it never pokes through the near ring.
+let FLAT = null;
 export function terrainY(x, z) {
+  const h = rawY(x, z);
+  return FLAT ? h * sstep(330, 1100, Math.hypot(x - FLAT.x, z - FLAT.z)) : h;
+}
+function rawY(x, z) {
   const d = Math.hypot(x, z); if (d < 700) return 0;
   const b = bearing(x, z);
   const amp = 70 + 560 * gauss(b, 335, 55) + 380 * gauss(b, 270, 42) + 200 * gauss(b, 95, 60) + 110 * gauss(b, 195, 50);
@@ -35,13 +42,15 @@ export function terrainY(x, z) {
 // city outline: the edge of the built-up area depends on direction (woods close in on the north-west)
 const cityRadius = (x, z) => { const b = bearing(x, z); return 1500 - 380 * gauss(b, 345, 45) - 300 * gauss(b, 285, 40) + 260 * (fbm(x * 0.002, z * 0.002, 3) - 0.5); };
 
+let groundCache = null;
 function groundTexture() {
+  if (groundCache) return groundCache;
   const N = 768, [c, g] = canvas2d(N, N), img = g.createImageData(N, N), px = img.data;
   const col = (hx) => [(hx >> 16) & 255, (hx >> 8) & 255, hx & 255];
   const fields = [0xb2bd66, 0xd2c474, 0x8db057, 0xbf9f5c, 0x9dbb66, 0xc8b86a].map(col);
   const wood = [0x3d6b3a, 0x2f5a35, 0x46733c].map(col), urban = col(0x7b776e), garden = col(0x93a171), riparian = col(0x7fa65c), meadow = col(0x86ad62);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = -EXT + (i + 0.5) / N * 2 * EXT, z = -EXT + (j + 0.5) / N * 2 * EXT, d = Math.hypot(x, z), h = terrainY(x, z);
+    const x = -EXT + (i + 0.5) / N * 2 * EXT, z = -EXT + (j + 0.5) / N * 2 * EXT, d = Math.hypot(x, z), h = rawY(x, z);
     const wx = x + (fbm(x * 0.0015, z * 0.0015, 2) - 0.5) * 500, wz = z + (fbm(x * 0.0015 + 9, z * 0.0015, 2) - 0.5) * 500;
     const cell = hash(Math.floor(wx / 210), Math.floor(wz / 150));
     let rgb = fields[Math.floor(cell * 97) % fields.length];
@@ -56,7 +65,7 @@ function groundTexture() {
     px[k] = Math.min(255, rgb[0] * n); px[k + 1] = Math.min(255, rgb[1] * n); px[k + 2] = Math.min(255, rgb[2] * n); px[k + 3] = 255;
   }
   g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return (groundCache = t);
 }
 
 // fog that never reaches 100 %: the hills stay a faint layered silhouette against the horizon instead of vanishing
@@ -120,8 +129,14 @@ function addWalls(W, p, y0, h) {
   }
 }
 
-export function buildMiddleFar() {
+// opts.plot = { x, z }: where the plot (= the origin of the near ring) lies in the city frame, metres (default: the city's site).
+// opts.inner: half-size of the square round the plot that the near ring already fills. opts.clear: [{ x, z, r }] circles (city frame) with hand-built landmarks.
+export function buildMiddleFar(opts = {}) {
+  const plot = opts.plot || { x: 0, z: 0 }, inner = opts.inner || 340, clear = opts.clear || [];
+  FLAT = opts.plot ? plot : null;
   const group = new THREE.Group(); group.name = 'middle-far-ring';
+  group.position.set(-plot.x, 0, -plot.z);                                           // city frame -> frame of the plot
+  const inNear = (x, z) => Math.max(Math.abs(x - plot.x), Math.abs(z - plot.z)) < inner || clear.some((c) => Math.hypot(x - c.x, z - c.z) < c.r);
   group.add(terrainMesh(), riverMesh());
 
   const walls = new Map(), tiles = new Builder(), flats = new Builder();
@@ -129,7 +144,7 @@ export function buildMiddleFar() {
   const ALPHA = 0.14, ca = Math.cos(ALPHA), sa = Math.sin(ALPHA), C = 60;                     // street lattice, turned a little off north
   // the default camera looks north-north-west past the tower: keep tall blocks out of that sector so the tower never melts into one
   const vx = -CAM_OFFSETS[0][0], vz = -CAM_OFFSETS[0][2], vl = Math.hypot(vx, vz);   // from the camera through the tower
-  const blocksView = (x, z, h) => h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60;
+  const blocksView = (x0, z0, h) => { const x = x0 - plot.x, z = z0 - plot.z; return h > 22 && (x * vx + z * vz) / vl > 0 && Math.abs(x * vz - z * vx) / vl < 60; };
   const panelHex = [0xe7e3d9, 0xd9ddd8, 0xe8dcc6, 0xdfe4e6];
   let count = 0;
   const place = (kind, hex, v, cx, cz, w, d, rot, storeys, roof, rcol, ty) => {
@@ -148,7 +163,7 @@ export function buildMiddleFar() {
   const pick = (a, r) => a[Math.floor(r * a.length * 0.999)];
   for (let iu = -30; iu <= 30; iu++) for (let iv = -30; iv <= 30; iv++) {
     const u = iu * C, v = iv * C, x = u * ca - v * sa, z = u * sa + v * ca;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 340) continue;
+    if (inNear(x, z)) continue;
     const d = Math.hypot(x, z), R = cityRadius(x, z);
     if (d > R || Math.abs(x - riverX(z)) < 300) continue;
     const b = bearing(x, z), cell = hash(iu * 3.1, iv * 1.7), ty = terrainY(x, z);
@@ -187,7 +202,7 @@ export function buildMiddleFar() {
   // church towers, here and there in the old town
   for (let i = 0; i < 9; i++) {
     const a = hash(i, 3.3) * Math.PI * 2, r = 380 + hash(i, 8.1) * 520, x = Math.sin(a) * r, z = -Math.cos(a) * r, ty = terrainY(x, z);
-    if (Math.max(Math.abs(x), Math.abs(z)) < 340 || Math.abs(x - riverX(z)) < 300) continue;
+    if (inNear(x, z) || Math.abs(x - riverX(z)) < 300) continue;
     place('old', 0xdad3c3, 99, x, z, 9, 9, ALPHA, 8, 'open', null, ty);
     const rr = rectRing(x, z, 9, 9, ALPHA); pitchedRoof(tiles, rr, ty + 8 * STOREY_H, new THREE.Color(i % 2 ? 0x5e8f7c : 0xa84c36), 13);
     place('old', 0xdad3c3, 99, x + 13 * Math.cos(ALPHA), z + 13 * Math.sin(ALPHA), 12, 26, ALPHA, 4, 'hip', pick(ROOF_COLORS, i / 9), ty);

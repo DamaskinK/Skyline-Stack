@@ -11,6 +11,7 @@ import { settings, onSettings } from './settings.js';
 import { Game, buildDemo } from './game.js';
 import { createUI } from './ui.js';
 import { installDebug } from './debug.js';
+import { DISTRICT_CITIES } from './levels.js';
 import { applyPostQuality, resizePost, renderFrame, post } from './post.js';
 
 const game = new Game();
@@ -20,7 +21,7 @@ Music.bind(game);
 window.__music = Music;   // director state, log and levels for the browser checks
 window.__sfx = Sfx;
 window.__game = game; window.__CFG = CFG; window.__scene = scene;   // handles for automated tests
-installDebug({ renderer, scene, camera });
+installDebug({ renderer, scene, camera, loadPlot: (n) => game.loadPlot('kosice', DISTRICT_CITIES.find((c) => c.id === 'kosice').district.plots[n].id) });
 
 applyQuality(); resize(); applyPostQuality();
 window.addEventListener('resize', () => { resize(); resizePost(); });

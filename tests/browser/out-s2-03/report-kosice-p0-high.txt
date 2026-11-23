@@ -1,0 +1,6 @@
+plot 0 loaded
+app http://localhost:8000 · level kosice · quality high · 1280x720 dpr 1 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
+shot tests/browser/out-s2-03/kosice-p0-high-start.png
+shot tests/browser/out-s2-03/kosice-p0-high-mid.png (floor 8)
+console errors: none
+RESULT PASS

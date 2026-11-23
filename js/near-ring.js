@@ -278,7 +278,8 @@ export function buildNearRing(osm, kit = {}, hide = null) {
     if (near < CLEAR || insideRing(p, 0, 0)) continue;
     if (hide && hide.has(bd.n)) { kept.push(p); continue; }       // replaced by a hand-built landmark model
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
-    const old = bd.k !== 'theatre' && area < 2200 && !(bd.h > 20);
+    const panel = bd.lv >= 5 || (bd.a && bd.h >= 12);                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
+    const old = bd.k !== 'theatre' && area < 2200 && !(bd.h > 20) && !panel;
     let storeys;
     if (bd.k === 'church') storeys = 6;
     else if (old) storeys = bd.h >= 3 ? Math.min(6, Math.max(2, Math.round(bd.h / STOREY_H))) : 2 + Math.floor(hv * 3);

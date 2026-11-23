@@ -1,5 +1,6 @@
 // Builds the near-ring map of a level from OpenStreetMap (Overpass API) into compact JSON.
-//   node scripts/build-osm-level.mjs [kosice]
+//   node scripts/build-osm-level.mjs [kosice]           one big extract around the city site (assets/levels/<id>/osm.json)
+//   node scripts/build-osm-level.mjs <id> plots         one compact extract per district plot (assets/levels/<id>/plots/<plotId>.json)
 // Fixed parameters live in LEVELS below. The script is the source of truth; the JSON in assets/levels/<id>/ is generated.
 // Data (c) OpenStreetMap contributors, ODbL. Output frame: metres, x = east, z = south (north is -z), origin = build site.
 import fs from 'node:fs';
@@ -17,20 +18,26 @@ const LEVELS = {
     ],
   },
 };
+const PLOT_HALF = 260, PLOT_KEEP = 250;       // plot extract: a 500 m square around the plot site (the middle ring takes over beyond it)
 const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
 
 const id = process.argv[2] || 'kosice';
+const plotsMode = process.argv[3] === 'plots';
 const L = LEVELS[id]; if (!L) throw new Error(`unknown level ${id}`);
-const mLat = 111320, mLon = 111320 * Math.cos(L.site.lat * Math.PI / 180);
-const dLat = L.half / mLat, dLon = L.half / mLon;
-const bb = [L.site.lat - dLat, L.site.lon - dLon, L.site.lat + dLat, L.site.lon + dLon].map((v) => v.toFixed(5)).join(',');
-const query = `[out:json][timeout:90];
-(way["highway"](${bb});
+const { LEVELS: GAME_LEVELS } = await import('../js/levels.js');
+const plotList = plotsMode ? GAME_LEVELS.find((l) => l.id === id).district.plots : [];
+const bboxOf = (site, half) => {
+  const dLat = half / 111320, dLon = half / (111320 * Math.cos(site.lat * Math.PI / 180));
+  return [site.lat - dLat, site.lon - dLon, site.lat + dLat, site.lon + dLon].map((v) => v.toFixed(5)).join(',');
+};
+const boxes = plotsMode ? plotList.map((pl) => bboxOf(pl.site, PLOT_HALF + 10)) : [bboxOf(L.site, L.half)];
+const query = `[out:json][timeout:120];
+(${boxes.map((bb) => `way["highway"](${bb});
  way["building"](${bb});
  way["leisure"~"^(park|garden|pitch|playground)$"](${bb});
  way["landuse"~"^(grass|recreation_ground|village_green)$"](${bb});
  way["natural"~"^(water|wood)$"](${bb});
- way["railway"="tram"](${bb});
+ way["railway"="tram"](${bb});`).join('\n ')}
 );
 out geom tags;`;
 
@@ -53,11 +60,10 @@ const raw = cache && fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, 'u
 if (cache && !fs.existsSync(cache)) fs.writeFileSync(cache, JSON.stringify(raw));
 
 const r1 = (v) => Math.round(v * 10) / 10;
-const toXZ = (g) => [(g.lon - L.site.lon) * mLon, -(g.lat - L.site.lat) * mLat];
-const flat = (geom) => geom.flatMap((g) => { const [x, z] = toXZ(g); return [r1(x), r1(z)]; });
-const near = (p) => { for (let i = 0; i < p.length; i += 2) if (Math.abs(p[i]) < L.keep && Math.abs(p[i + 1]) < L.keep) return true; return false; };
+const mLat = 111320;
 const closed = (geom) => geom.length > 3 && geom[0].lat === geom.at(-1).lat && geom[0].lon === geom.at(-1).lon;
 const area = (p) => { let a = 0; for (let i = 0, n = p.length / 2; i < n; i++) { const j = (i + 1) % n; a += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; } return a / 2; };
+
 
 // road type -> [class, width in metres]
 const ROAD = {
@@ -65,37 +71,62 @@ const ROAD = {
   unclassified: ['street', 7], residential: ['street', 7], living_street: ['street', 6], service: ['lane', 4.5],
   pedestrian: ['walk', 6], footway: ['path', 2.5], path: ['path', 2], cycleway: ['path', 2.5], steps: ['path', 2], track: ['path', 3],
 };
-const out = { id, source: 'OpenStreetMap contributors, ODbL', site: L.site, half: L.keep, frame: 'metres, x east, z south, origin = site', roads: [], rails: [], buildings: [], parks: [], water: [], names: [] };
+function extract(site, keep, outId) {
+  const mLon = 111320 * Math.cos(site.lat * Math.PI / 180);
+  const toXZ = (g) => [(g.lon - site.lon) * mLon, -(g.lat - site.lat) * mLat];
+  const flat = (geom) => geom.flatMap((g) => { const [x, z] = toXZ(g); return [r1(x), r1(z)]; });
+  const near = (p) => { for (let i = 0; i < p.length; i += 2) if (Math.abs(p[i]) < keep && Math.abs(p[i + 1]) < keep) return true; return false; };
+  const seen = new Set();
+  const out = { id: outId, source: 'OpenStreetMap contributors, ODbL', site, half: keep, frame: 'metres, x east, z south, origin = site', roads: [], rails: [], buildings: [], parks: [], water: [], names: [] };
 
-for (const w of raw.elements) {
-  if (w.type !== 'way' || !w.geometry) continue;
-  const t = w.tags || {}, p = flat(w.geometry);
-  if (!near(p)) continue;
-  if (t.name && (t.highway === 'pedestrian' || /Hlavn|Elisab|Divadl|Theatre|Dom/i.test(t.name))) out.names.push({ name: t.name, at: [p[0], p[1]] });
-  if (t.building && closed(w.geometry)) {
-    if (area(p) > 0) { const q = []; for (let i = p.length - 2; i >= 0; i -= 2) q.push(p[i], p[i + 1]); p.splice(0, p.length, ...q); }   // one winding: clockwise seen from above
-    p.length -= 2;                                                  // drop the repeated closing point
-    let h = parseFloat(t.height); if (!(h > 0)) { const lv = parseFloat(t['building:levels']); h = lv > 0 ? lv * 3.1 + 1.5 : 0; }
-    const b = { p, h: h ? r1(h) : 0 };
-    if (t.amenity === 'place_of_worship' || t.building === 'cathedral' || t.building === 'church') b.k = 'church';
-    else if (t.amenity === 'theatre') b.k = 'theatre';
-    if (t.name && b.k) b.n = t.name;
-    out.buildings.push(b);
-  } else if (t.highway && ROAD[t.highway]) {
-    const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);
-    const wd = parseFloat(t.width) || (lanes > 0 && k !== 'path' ? Math.max(w0, lanes * 3.2) : w0);
-    const r = { k, w: r1(wd), p }; if (t.bridge) r.br = 1; if (t.tunnel) continue; if (t.name) r.n = t.name;
-    const cyc = Object.keys(t).filter((x) => x.startsWith('cycleway')).map((x) => t[x]).concat(t.bicycle === 'designated' ? ['lane'] : []);
-    if (t.highway === 'cycleway') r.bike = 2; else if (cyc.some((v) => v && v !== 'no' && v !== 'none')) r.bike = 1;   // 2: own cycle path, 1: lane on the street
-    out.roads.push(r);
-  } else if (t.railway === 'tram') out.rails.push({ p });
-  else if (closed(w.geometry) && (t.natural === 'water')) { p.length -= 2; out.water.push({ p }); }
-  else if (closed(w.geometry) && (t.leisure || t.landuse || t.natural === 'wood')) { p.length -= 2; out.parks.push({ p, k: t.leisure === 'pitch' ? 'pitch' : t.natural === 'wood' ? 'wood' : 'park' }); }
+  for (const w of raw.elements) {
+    if (w.type !== 'way' || !w.geometry || seen.has(w.id)) continue;
+    seen.add(w.id);
+    const t = w.tags || {}, p = flat(w.geometry);
+    if (!near(p)) continue;
+    if (t.name && (t.highway === 'pedestrian' || /Hlavn|Elisab|Divadl|Theatre|Dom/i.test(t.name))) out.names.push({ name: t.name, at: [p[0], p[1]] });
+    if (t.building && closed(w.geometry)) {
+      if (area(p) > 0) { const q = []; for (let i = p.length - 2; i >= 0; i -= 2) q.push(p[i], p[i + 1]); p.splice(0, p.length, ...q); }   // one winding: clockwise seen from above
+      p.length -= 2;                                                  // drop the repeated closing point
+      let h = parseFloat(t.height); if (!(h > 0)) { const lv = parseFloat(t['building:levels']); h = lv > 0 ? lv * 3.1 + 1.5 : 0; }
+      const b = { p, h: h ? r1(h) : 0 };
+      const lv = parseFloat(t['building:levels']);
+      if (lv > 0) b.lv = lv;
+      if (t.building === 'apartments' || t.building === 'residential' || t.building === 'dormitory') b.a = 1;     // flats: prefab blocks on the estates
+      if (t.amenity === 'place_of_worship' || t.building === 'cathedral' || t.building === 'church') b.k = 'church';
+      else if (t.amenity === 'theatre') b.k = 'theatre';
+      if (t.name && b.k) b.n = t.name;
+      out.buildings.push(b);
+    } else if (t.highway && ROAD[t.highway]) {
+      const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);
+      const wd = parseFloat(t.width) || (lanes > 0 && k !== 'path' ? Math.max(w0, lanes * 3.2) : w0);
+      const r = { k, w: r1(wd), p }; if (t.bridge) r.br = 1; if (t.tunnel) continue; if (t.name) r.n = t.name;
+      const cyc = Object.keys(t).filter((x) => x.startsWith('cycleway')).map((x) => t[x]).concat(t.bicycle === 'designated' ? ['lane'] : []);
+      if (t.highway === 'cycleway') r.bike = 2; else if (cyc.some((v) => v && v !== 'no' && v !== 'none')) r.bike = 1;   // 2: own cycle path, 1: lane on the street
+      out.roads.push(r);
+    } else if (t.railway === 'tram') out.rails.push({ p });
+    else if (closed(w.geometry) && (t.natural === 'water')) { p.length -= 2; out.water.push({ p }); }
+    else if (closed(w.geometry) && (t.leisure || t.landuse || t.natural === 'wood')) { p.length -= 2; out.parks.push({ p, k: t.leisure === 'pitch' ? 'pitch' : t.natural === 'wood' ? 'wood' : 'park' }); }
+  }
+  out.landmarks = L.landmarks.map((lm) => { const [x, z] = toXZ(lm); return { id: lm.id, at: [r1(x), r1(z)], dist: Math.round(Math.hypot(x, z)), bearing: Math.round((Math.atan2(x, -z) * 180 / Math.PI + 360) % 360) }; });
+
+  return { out, toXZ };
 }
-out.landmarks = L.landmarks.map((lm) => { const [x, z] = toXZ(lm); return { id: lm.id, at: [r1(x), r1(z)], dist: Math.round(Math.hypot(x, z)), bearing: Math.round((Math.atan2(x, -z) * 180 / Math.PI + 360) % 360) }; });
-const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'levels', id);
-fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(path.join(dir, 'osm.json'), JSON.stringify(out));
-for (const lm of L.landmarks) { const [x, z] = toXZ(lm); console.log(`${lm.id}: x ${x.toFixed(0)} z ${z.toFixed(0)} dist ${Math.hypot(x, z).toFixed(0)} m, bearing ${((Math.atan2(x, -z) * 180 / Math.PI + 360) % 360).toFixed(0)} deg from north`); }
-console.log(`roads ${out.roads.length}, buildings ${out.buildings.length} (with height ${out.buildings.filter((b) => b.h).length}), parks ${out.parks.length}, water ${out.water.length}, rails ${out.rails.length}`);
-console.log('names', JSON.stringify(out.names.slice(0, 12)));
+const here = path.dirname(fileURLToPath(import.meta.url));
+const levelDir = path.join(here, '..', 'assets', 'levels', id);
+if (plotsMode) {
+  const dir = path.join(levelDir, 'plots'); fs.mkdirSync(dir, { recursive: true });
+  let total = 0;
+  for (const pl of plotList) {
+    const { out } = extract(pl.site, PLOT_KEEP, `${id}/${pl.id}`);
+    const s = JSON.stringify(out); fs.writeFileSync(path.join(dir, `${pl.id}.json`), s); total += s.length;
+    console.log(`${pl.id}: ${(s.length / 1024).toFixed(0)} KB, roads ${out.roads.length}, buildings ${out.buildings.length} (apartments ${out.buildings.filter((b) => b.a).length}, height ${out.buildings.filter((b) => b.h).length}), parks ${out.parks.length}, water ${out.water.length}; landmarks ${out.landmarks.map((l) => `${l.id} ${l.dist} m @${l.bearing}`).join(', ')}`);
+  }
+  console.log(`total ${(total / 1024).toFixed(0)} KB`);
+} else {
+  const { out, toXZ } = extract(L.site, L.keep, id);
+  fs.mkdirSync(levelDir, { recursive: true });
+  fs.writeFileSync(path.join(levelDir, 'osm.json'), JSON.stringify(out));
+  for (const lm of L.landmarks) { const [x, z] = toXZ(lm); console.log(`${lm.id}: x ${x.toFixed(0)} z ${z.toFixed(0)} dist ${Math.hypot(x, z).toFixed(0)} m, bearing ${((Math.atan2(x, -z) * 180 / Math.PI + 360) % 360).toFixed(0)} deg from north`); }
+  console.log(`roads ${out.roads.length}, buildings ${out.buildings.length} (with height ${out.buildings.filter((b) => b.h).length}), parks ${out.parks.length}, water ${out.water.length}, rails ${out.rails.length}`);
+}

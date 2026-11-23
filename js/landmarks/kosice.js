@@ -15,6 +15,11 @@ const AT = {
   urban: { x: 9.3, z: 88.5 },
 };
 
+// Circles (city frame, metres) the procedural middle ring keeps clear when these landmarks lie beyond the near ring (r = footprint radius + a block's reach)
+export const clearance = [
+  { x: AT.cathedral.x, z: AT.cathedral.z, r: 85 }, { x: AT.urban.x, z: AT.urban.z, r: 50 }, { x: AT.chapel.x, z: AT.chapel.z, r: 50 }, { x: AT.theatre.x, z: AT.theatre.z, r: 75 },
+];
+
 // ring of columns / half cylinders helper
 const ring = (n, r, f) => { for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; f(Math.cos(a) * r, Math.sin(a) * r, a); } };
 

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { aimSun } from './world.js';
 
-export function installDebug({ renderer, scene, camera }) {
+export function installDebug({ renderer, scene, camera, loadPlot = null }) {
   const targets = new Map();
   const cam = new THREE.PerspectiveCamera();
   const target = (w, h) => {
@@ -60,5 +60,5 @@ export function installDebug({ renderer, scene, camera }) {
     };
   }
 
-  window.__debug = { snap, flicker, info };
+  window.__debug = { snap, flicker, info, loadPlot };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }

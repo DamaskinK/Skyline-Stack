@@ -10,8 +10,8 @@ import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
 import { settings, loadScores, saveLevelResult } from './settings.js';
-import { levelById } from './levels.js';
-import { loadLevelAssets } from './assets.js';
+import { levelById, cityById } from './levels.js';
+import { loadLevelAssets, loadPlotExtract } from './assets.js';
 import { applyLevelAssets, level } from './level-scene.js';
 
 export class Game {
@@ -46,6 +46,17 @@ export class Game {
   async loadLevel(id, onProgress) {
     const { assets, errors } = await loadLevelAssets(id, onProgress, (aid, v) => { if (aid === 'music') Music.provide(id, v); });
     applyLevelAssets(id, assets);
+    return errors;
+  }
+
+  // Build the scene of one district plot of a city (near ring from the plot's own extract, rings and landmarks offset to it).
+  // Resolves to the list of files that failed. Ticket 04 calls this before game.start().
+  async loadPlot(cityId, plotId, onProgress) {
+    const plot = (cityById(cityId)?.district?.plots || []).find((p) => p.id === plotId);
+    if (!plot) throw new Error(`No plot "${plotId}" in ${cityId}`);
+    const [{ assets, errors }, osm] = await Promise.all([
+      loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), loadPlotExtract(cityId, plotId)]);
+    applyLevelAssets(cityId, assets, plot, osm);
     return errors;
   }
 

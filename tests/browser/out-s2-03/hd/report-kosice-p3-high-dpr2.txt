@@ -1,0 +1,13 @@
+plot 3 loaded
+app http://localhost:8000 · level kosice · quality high · 2560x1440 dpr 2 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
+flicker depth  menu  max 0.39% mean 0.26% (limit 1.0%) PASS
+flicker depth  game  max 0.57% mean 0.36% (limit 1.0%) PASS
+flicker depth  low   max 0.65% mean 0.39% (limit 1.0%) PASS
+flicker shadow menu  max 0.01% mean 0.00% (limit 0.2%) PASS
+flicker shadow game  max 0.01% mean 0.00% (limit 0.2%) PASS
+flicker shadow low   max 0.03% mean 0.01% (limit 0.2%) PASS
+shot tests/browser/out-s2-03/hd/kosice-p3-high-dpr2-start.png
+perf p50 16.7 ms · p90 16.7 ms (budget 18) · 60 fps · 678 draw calls · 2053597 triangles PASS
+shot tests/browser/out-s2-03/hd/kosice-p3-high-dpr2-mid.png (floor 8)
+console errors: none
+RESULT PASS
