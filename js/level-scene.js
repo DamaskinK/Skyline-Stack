@@ -23,6 +23,7 @@ function fitWidth(obj, width) {
 function disposeGroup(g) {
   g.traverse((o) => {
     o.geometry?.dispose();
+    if (o.isInstancedMesh) o.dispose();
     for (const m of [].concat(o.material || [])) {
       for (const v of Object.values(m)) if (v && v.isTexture) v.dispose();
       m.dispose();

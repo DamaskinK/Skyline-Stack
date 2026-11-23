@@ -2,6 +2,7 @@
 // city frame. Seen from the plot being played: inside REAL_M metres the tower is rebuilt from the real floor model
 // (foundation, facade blocks, crown); further away it is one instanced box on the far ring.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG, ENDLESS_COLORS } from './config.js';
 import { scene } from './world.js';
 import { BUILDING_TYPES } from './building-types.js';
@@ -22,13 +23,42 @@ const HAZE = new THREE.Color(0x9fb4c4);
 const group = new THREE.Group(); group.name = 'district-towers'; scene.add(group);
 
 function dispose(g) {
-  g.traverse((o) => { if (o.isInstancedMesh) { o.geometry.dispose(); o.material.dispose(); o.dispose(); } });
+  g.traverse((o) => {
+    if (o.isInstancedMesh) { o.geometry.dispose(); o.material.dispose(); o.dispose(); }
+    else if (o.isMesh) o.geometry.dispose();                        // a real tower owns its merged geometry; its materials are shared
+  });
 }
 export function clearDistrictTowers() { dispose(group); for (const c of [...group.children]) { scene.remove(c); group.remove(c); } }
 
+// Merges every mesh below `src` into one mesh per material (the tower is static): a 30-floor tower is a handful of draw calls instead of
+// hundreds. Multi-material meshes (the foundation box) are split by their groups. Positions are baked relative to `src`.
+function mergeByMaterial(src) {
+  src.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(src.matrixWorld).invert(), buckets = new Map(), out = new THREE.Group();
+  src.traverse((o) => {
+    if (!o.isMesh || !o.visible) return;
+    const rel = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld), geo = o.geometry;
+    const parts = Array.isArray(o.material) ? geo.groups.map((g) => [o.material[g.materialIndex], g]) : [[o.material, { start: 0, count: geo.index ? geo.index.count : Infinity }]];
+    for (const [mat, g] of parts) {
+      const sub = new THREE.BufferGeometry(); for (const k of ['position', 'normal', 'uv', 'color']) if (geo.attributes[k]) sub.setAttribute(k, geo.attributes[k]);
+      if (geo.index) sub.setIndex(Array.from(geo.index.array.slice(g.start, g.start + g.count)));
+      if (!sub.attributes.uv) sub.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(sub.attributes.position.count * 2), 2));
+      const flat = sub.index ? sub.toNonIndexed() : sub;                         // one layout for all (boxes are indexed, icospheres are not)
+      flat.applyMatrix4(rel);
+      const key = mat.uuid + (o.castShadow ? 'c' : '') + (o.receiveShadow ? 'r' : '');
+      if (!buckets.has(key)) buckets.set(key, { mat, cast: o.castShadow, recv: o.receiveShadow, geos: [] });
+      buckets.get(key).geos.push(flat);
+    }
+  });
+  for (const { mat, cast, recv, geos } of buckets.values()) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat); m.castShadow = cast; m.receiveShadow = recv; out.add(m);
+  }
+  return out;
+}
+
 // A tower built from the real models; `floors` is the best height of that plot.
 function realTower(plot, floors, x, y, z, cityName) {
-  const g = new THREE.Group(); g.position.set(x, y, z);
+  const g = new THREE.Group();
   const bt = BUILDING_TYPES[plot.buildingType] || BUILDING_TYPES.panel;
   g.add(makeFoundation(0, 0, plot.buildingType, cityName));
   let top = null;
@@ -37,7 +67,8 @@ function realTower(plot, floors, x, y, z, cityName) {
     m.position.set(0, CFG.FOUND_H + CFG.H * (i + 0.5), 0); g.add(m); top = m;
   }
   if (top) { const crown = makeCrown(plot.buildingType); crown.position.y = CFG.H / 2; top.add(crown); }
-  return g;
+  const merged = mergeByMaterial(g); merged.position.set(x, y, z);
+  return merged;
 }
 
 // Far finished towers (beyond REAL_M): the real height as a readable silhouette. The shaft widens with distance so it still reads

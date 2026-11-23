@@ -1,5 +1,6 @@
 // The city around the tower: renderer, sky, ground, roads, traffic, props, background and moving sky life.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CFG, PHASES } from './config.js';
 import { settings } from './settings.js';
 import { NEWTOWN } from './levels.js';
@@ -184,17 +185,41 @@ const shopMats = Array.from({ length: 8 }, (_, i) => { const t = shopTex(i); con
 const roofProps = mergeColored([[box(1.6, 1, 1.2, 0, 0.5, 0), 0x9aa0a8], [cyl(0.7, 1.6, 2.2, 1.2, 1.4), 0x8a5a3a], [cyl(0.05, 3.5, -1.6, 1.75, -1), 0xcccccc]]);
 const roofPropMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
 const roofPropList = [], billboards = [];
-const blockCtx = { parent: nearProc, props: roofPropList, boards: billboards };
+const blockCtx = { parent: nearProc, props: roofPropList, boards: billboards, pending: new Map() };
+// Blocks are merged per material (review of S0002): every box would otherwise draw one call per face group. `pending` collects the
+// index ranges of each box per material; finishBlocks() turns them into one mesh per material.
+const blockSides = new Map();             // `${hex}-${variant}` -> shared facade material
+function blockSide(hex, variant) {
+  const key = hex + '-' + variant;
+  if (!blockSides.has(key)) {
+    const fa = facade(hex, variant);
+    const m = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 });
+    sceneryMats.push(m); blockSides.set(key, m);
+  }
+  return blockSides.get(key);
+}
+// Adds the faces of `geo` (a BoxGeometry, groups +x -x +y -y +z -z) to `pending`: sides on `side`, top and bottom on `topMat`.
+function pendBox(pending, geo, side) {
+  const idx = geo.index.array, add = (mat, groups) => {
+    const a = pending.get(mat) || []; pending.set(mat, a);
+    const ix = []; for (const g of groups) for (let i = g.start; i < g.start + g.count; i++) ix.push(idx[i]);
+    const sub = new THREE.BufferGeometry(); for (const k of ['position', 'normal', 'uv']) sub.setAttribute(k, geo.attributes[k]);
+    sub.setIndex(ix); a.push(sub);
+  };
+  add(side, [geo.groups[0], geo.groups[1], geo.groups[4], geo.groups[5]]); add(topMat, [geo.groups[2], geo.groups[3]]);
+}
+function flushBlocks(pending, parent) {
+  for (const [mat, geos] of pending) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat); m.receiveShadow = true; m.name = 'city-blocks'; parent.add(m);
+    for (const g of geos) g.dispose();
+  }
+  pending.clear();
+}
 function cityBlock(x, z, w, d, h, hex, variant, idx) {
-  const { parent, props, boards } = blockCtx;
-  const fa = facade(hex, variant);
-  const side = new THREE.MeshStandardMaterial({ map: fa.map, emissiveMap: fa.emis, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.8 });
-  sceneryMats.push(side);
-  const m = new THREE.Mesh(storeyUV(new THREE.BoxGeometry(w, h, d), w, h, d), [side, side, topMat, topMat, side, side]);
-  m.position.set(x, CFG.H * 1.6 + h / 2, z); m.receiveShadow = true; parent.add(m);
+  const { props, boards, pending } = blockCtx;
+  pendBox(pending, storeyUV(new THREE.BoxGeometry(w, h, d), w, h, d).translate(x, CFG.H * 1.6 + h / 2, z), blockSide(hex, variant));
   const sm = shopMats[idx % shopMats.length];
-  const shop = new THREE.Mesh(storeyUV(new THREE.BoxGeometry(w + 0.4, CFG.H * 1.6, d + 0.4), (w + 0.4) * 0.62, CFG.H, (d + 0.4) * 0.62), [sm, sm, topMat, topMat, sm, sm]);
-  shop.position.set(x, CFG.H * 0.8, z); shop.receiveShadow = true; parent.add(shop);
+  pendBox(pending, storeyUV(new THREE.BoxGeometry(w + 0.4, CFG.H * 1.6, d + 0.4), (w + 0.4) * 0.62, CFG.H, (d + 0.4) * 0.62).translate(x, CFG.H * 0.8, z), sm);
   const roofY = CFG.H * 1.6 + h;
   props.push([x, roofY, z, rnd() * 6]);
   if (idx % 5 === 0) boards.push([x, roofY, z, w, idx]);
@@ -215,6 +240,7 @@ for (let i = 0, made = 0; i < 160 && made < 84; i++) {
   cityBlock(x, z, w, d, tall, palette[made % palette.length], made % 3, made); made++;
 }
 function finishBlocks(props, boards, parent) {
+  flushBlocks(blockCtx.pending, parent);
   instanced(roofProps, roofPropMat, props, ([x, y, z, r], o) => { o.position.set(x, y, z); o.rotation.y = r; }, false, parent);
   for (const [x, y, z, w, i] of boards) {
     const bb = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.8, w * 0.3), new THREE.MeshStandardMaterial({ map: billboardTex(i), emissive: 0xffffff, emissiveMap: billboardTex(i), emissiveIntensity: 0.1, side: THREE.DoubleSide }));

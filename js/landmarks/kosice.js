@@ -144,6 +144,7 @@ const CATHEDRAL_LOD_DIST = [0, 150, 380];
 function blenderCathedral(src) {
   const lod = new THREE.LOD(); lod.name = 'st-elisabeth';
   const levels = [];
+  src = src.clone(true);                                                                                    // the GLTF scene is cached: never take nodes out of it
   src.traverse((o) => { const m = /^cathedral_LOD(\d)$/.exec(o.name); if (m) levels[+m[1]] = o; });     // a node with two materials arrives as a Group of two meshes
   const tris = (o) => { let t = 0; o.traverse((m) => { if (m.isMesh) t += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3; }); return t; };
   levels.forEach((m, i) => {
@@ -152,7 +153,7 @@ function blenderCathedral(src) {
     m.traverse((mesh) => {
       if (!mesh.isMesh) return;
       mesh.castShadow = i < 2; mesh.receiveShadow = true;
-      const mat = mesh.material;
+      const mat = mesh.material = mesh.material.clone();                                                       // own material: the glow below must not touch the cached one
       if (mat.emissiveMap) { mat.emissive.set(0xffffff); mat.emissiveIntensity = 0; glowMats.push(mat); }          // lit windows and floodlit stone follow the scenery glow
       else { mat.emissive = new THREE.Color(0x3a2e12); mat.emissiveIntensity = 0; glowMats.push(mat); }          // roof tiles, as the procedural material
     });
