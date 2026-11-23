@@ -7,7 +7,7 @@ A credits screen lists every asset from CREDITS.
 **Blocked by:** 08, 18
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Interface"; user stories 36-37, 69-71, 79.
 
 - [ ] Map works with mouse, touch and keyboard; phone layout
