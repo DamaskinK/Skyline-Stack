@@ -7,7 +7,7 @@ better and more optimised models. Blender is installed at /Applications/Blender.
 **Blocked by:** None (can start immediately).
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] `scripts/blender/` with a build script per model run by `blender -b -P <script> -- <out.glb>`; shared helpers
       (materials from the landmark palette, bevel, boolean windows, UV unwrap, AO bake into an atlas, LODs, export).
