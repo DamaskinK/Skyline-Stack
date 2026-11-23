@@ -3,11 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { Run } from '../../js/core/run.js';
 import { starsFor, emptyProgress, recordLevel, recordEndless, isOpen, sanitize } from '../../js/core/stars.js';
 import { LEVELS } from '../../js/levels.js';
+import type { Level, RunEvent } from '../../js/types.js';
+import { findEvent, need } from './helpers.js';
 import { CFG, DIFFICULTY } from '../../js/config.js';
 
-function play(level, delay, maxSeconds = 400) {
+function play(level: Level | null, delay: number, maxSeconds = 400) {
   const run = new Run(DIFFICULTY.easy, { level });
-  const events = [];
+  const events: RunEvent[] = [];
   let hangT = 0;
   for (let i = 0; i < maxSeconds / CFG.DT && !run.over; i++) {
     if (run.block && run.block.state === 'hang') { hangT += CFG.DT; if (hangT >= delay) { run.drop(); hangT = 0; } }
@@ -35,12 +37,12 @@ describe('star rules', () => {
 describe('level run', () => {
   it('ends the run with a target event and stars when the target is reached', () => {
     const { run, events } = play(small, 0.7);
-    const t = events.find((e) => e.type === 'target');
+    const t = need(findEvent(events, 'target'));
     expect(t).toBeTruthy();
     expect(run.over).toBe(true);
     expect(run.tower.n).toBe(3);
     expect(t.stars).toBeGreaterThanOrEqual(1);
-    const over = events.find((e) => e.type === 'over');
+    const over = need(findEvent(events, 'over'));
     expect(over.result).toMatchObject({ completed: true, stars: t.stars, floors: 3 });
     expect(events.indexOf(t)).toBeLessThan(events.indexOf(over));
   });
@@ -53,7 +55,7 @@ describe('level run', () => {
   it('keeps the plain game over when lives run out before the target', () => {
     const run = new Run(DIFFICULTY.hard, { level: LEVELS[0] });
     for (let i = 0; i < 60 / CFG.DT && !run.over; i++) { if (run.block?.state === 'hang') run.drop(); run.step(CFG.DT); }
-    const over = run.drain().find((e) => e.type === 'over');
+    const over = need(findEvent(run.drain(), 'over'));
     expect(over.result.completed).toBe(false);
     expect(over.result.stars).toBe(0);
   });

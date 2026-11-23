@@ -4,13 +4,14 @@ import { Run } from '../../js/core/run.js';
 import { weatherAt, nextWeather } from '../../js/core/weather.js';
 import { LEVELS } from '../../js/levels.js';
 import { CFG, DIFFICULTY, WEATHER } from '../../js/config.js';
+import type { Level, RunEvent, WeatherKind, WeatherSegment } from '../../js/types.js';
 
 const kosice = LEVELS[0];
-const mk = (over) => ({ ...kosice, target: 999, ...over });
+const mk = (over: Partial<Level>): Level => ({ ...kosice, target: 999, ...over });
 
-function play(level, { endless = false, seconds = 120, delay = 0.7 } = {}) {
+function play(level: Level | null, { endless = false, seconds = 120, delay = 0.7 } = {}) {
   const run = new Run(DIFFICULTY.easy, { level, endless });
-  const events = [];
+  const events: RunEvent[] = [];
   let hangT = 0;
   for (let i = 0; i < seconds / CFG.DT && !run.over; i++) {
     if (run.block && run.block.state === 'hang') { hangT += CFG.DT; if (hangT >= delay) { run.drop(); hangT = 0; } }
@@ -19,7 +20,7 @@ function play(level, { endless = false, seconds = 120, delay = 0.7 } = {}) {
   }
   return { run, events };
 }
-const types = (events) => events.map((e) => e.type);
+const types = (events: RunEvent[]): string[] => events.map((e) => e.type);
 
 describe('weather segments', () => {
   it('gives Kosice clear first, then rain from floor 10', () => {
@@ -47,7 +48,7 @@ describe('weather segments', () => {
     expect(nextWeather(null, 3)).toMatchObject({ left: 12 });
   });
   it('has friction, wind and visibility for the new kinds', () => {
-    for (const k of ['heatHaze', 'sandstorm', 'typhoon']) {
+    for (const k of ['heatHaze', 'sandstorm', 'typhoon'] as WeatherKind[]) {
       const w = WEATHER[k];
       expect(w.mu).toBeGreaterThan(0); expect(w.base).toBeGreaterThan(0); expect(w.fog[1]).toBeGreaterThan(w.fog[0]);
     }
@@ -62,7 +63,7 @@ describe('weather segments', () => {
 });
 
 describe('events per level', () => {
-  const storm = [{ fromFloor: 0, kind: 'storm' }];
+  const storm: WeatherSegment[] = [{ fromFloor: 0, kind: 'storm' }];
   const quakeEvery = CFG.quakeEvery;
   afterEach(() => { CFG.quakeEvery = quakeEvery; });
 
@@ -90,7 +91,7 @@ describe('events per level', () => {
     expect(ev.slice(0, first).some((e) => e.type === 'quakeWarning')).toBe(true);
   });
   it('emits sandstorm gusts only in a sandstorm and only when listed', () => {
-    const sand = [{ fromFloor: 0, kind: 'sandstorm' }];
+    const sand: WeatherSegment[] = [{ fromFloor: 0, kind: 'sandstorm' }];
     expect(types(play(mk({ weather: sand, events: [] }), { seconds: 40 }).events).some((x) => x.startsWith('gust'))).toBe(false);
     expect(types(play(mk({ weather: [{ fromFloor: 0, kind: 'clear' }], events: ['sandstormGust'] }), { seconds: 40 }).events).some((x) => x.startsWith('gust'))).toBe(false);
     const ev = play(mk({ weather: sand, events: ['sandstormGust'] }), { seconds: 40 }).events.filter((e) => e.type.startsWith('gust'));

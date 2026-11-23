@@ -6,15 +6,31 @@ import { weatherAt, nextWeather } from './weather.js';
 import { windAt, hookAt, Tower } from '../physics.js';
 import { starsFor } from './stars.js';
 import { applyTrait } from '../building-types.js';
+import type { Block, BlockKind, BuildingTypeId, Difficulty, Level, RunEvent, RunEventKind, RunEventType, RunOptions, RunResult, WeatherPhase, NextWeather } from '../types.js';
+
+// The payload of one event kind: its fields without type and time stamp.
+type EventData<T extends RunEventType> = Omit<Extract<RunEvent, { type: T }>, 'type' | 't'>;
+type Wind = { x: number; z: number; speed: number; angle: number; trend: number };
+type Hook = { x: number; z: number; vx: number; vz: number };
+type FlyEvent = { type: 'miss'; how: string } | { type: 'bounce' } | { type: 'land'; dx: number; dz: number; vrx: number; vrz: number };
+type CollapseInfo = { from: number; count: number; items: unknown[] };
 
 export const CALM_WIND = Object.freeze({ x: 0, z: 0, speed: 0, angle: 0, trend: 0 });
 
 export class Run {
+  buildingType: BuildingTypeId | null; diff: Difficulty; level: Level | null; windScale: number; endless: boolean; landings: number;
+  allowedEvents: RunEventKind[]; wx: WeatherPhase; tower: Tower;
+  t: number; events: RunEvent[]; over: boolean; result: RunResult | null;
+  wind: Wind; hook: Hook | null; block: Block | null;
+  lives: number; combo: number; goldenNext: boolean; anchors: number;
+  score: number; pop: number; perfects: number; bestHeight: number; drops: number;
+  focus: number; focusIdle: number; spawnT: number; ltT: number; ltWarned: boolean; craneY: number;
+
   // `level` is a definition from js/levels.js: reaching level.target ends the run with stars, unless `endless` is set
   // (Endless on a city: no target, the city's weather segments loop with growing strength). No level at all = plain
   // Endless with the old global weather cycle and its quake every CFG.quakeEvery floors.
   // The level's `events` list decides which events can happen; core emits no other.
-  constructor(diff, { bx = 0, bz = 0, level = null, endless = false, buildingType = null, windScale = 1 } = {}) {
+  constructor(diff: Difficulty, { bx = 0, bz = 0, level = null, endless = false, buildingType = null, windScale = 1 }: RunOptions = {}) {
     // buildingType (Endless picks one) overrides the level's own; the trait multipliers are folded into the difficulty
     this.buildingType = buildingType || (level && level.buildingType) || null;
     this.diff = applyTrait(diff, this.buildingType); this.level = level; this.windScale = windScale; this.endless = !!(level && endless); this.landings = 0;
@@ -31,38 +47,38 @@ export class Run {
     this.craneY = CFG.FOUND_H;
   }
 
-  hasEvent(kind) { return this.allowedEvents.includes(kind); }
+  hasEvent(kind: RunEventKind): boolean { return this.allowedEvents.includes(kind); }
   // The next weather change from the current floor ({ at, left, wx }) or null.
-  nextWeather() { return nextWeather(this.level, this.tower.n, this.endless); }
+  nextWeather(): NextWeather | null { return nextWeather(this.level, this.tower.n, this.endless); }
 
-  emit(type, data = {}) { this.events.push({ type, t: this.t, ...data }); }
-  drain() { const e = this.events; this.events = []; return e; }
+  emit<T extends RunEventType>(type: T, ...data: {} extends EventData<T> ? [data?: EventData<T>] : [data: EventData<T>]): void { this.events.push({ type, t: this.t, ...data[0] } as RunEvent); }
+  drain(): RunEvent[] { const e = this.events; this.events = []; return e; }
 
   // Advance the slow-mo meter by real time and return how much game time passes.
-  timeScale(rdt, held) {
+  timeScale(rdt: number, held: boolean): number {
     const on = CFG.features.focus && held && this.focus > 0 && !this.over;
     if (on) { this.focus = Math.max(0, this.focus - CFG.focusDrain * rdt); this.focusIdle = 0; }
     else { this.focusIdle += rdt; if (this.focusIdle > CFG.focusRegenDelay) this.focus = Math.min(1, this.focus + CFG.focusRegen * rdt); }
     return on ? CFG.focusScale : 1;
   }
 
-  drop() {
+  drop(): boolean {
     const b = this.block;
     if (this.over || !b || b.state !== 'hang') return false;
-    b.state = 'fall'; b.vx = this.hook.vx; b.vz = this.hook.vz; b.vy = 0;
+    b.state = 'fall'; b.vx = (this.hook as Hook).vx; b.vz = (this.hook as Hook).vz;   // a hanging block always has a hook b.vy = 0;
     this.tower.release(b); this.drops++;
     this.emit('drop');
     return true;
   }
 
-  useAnchor() {
+  useAnchor(): boolean {
     if (this.over || this.anchors <= 0 || this.tower.anchor > 0) return false;
     this.anchors--; this.tower.anchor = CFG.anchorTime;
     this.emit('anchor');
     return true;
   }
 
-  step(dt) {
+  step(dt: number): void {
     const T = this.tower;
     this.t += dt;
     const n = T.n, ph = weatherAt(this.level, n, this.endless);
@@ -94,13 +110,13 @@ export class Run {
     if (!b) { this.spawnT -= dt; if (this.spawnT <= 0) this.spawn(); }
     else if (b.state === 'hang') this.hangBlock();
     else if (b.state === 'fall') {
-      let ev = T.fly(b, dt, this.wind);
+      let ev = T.fly(b, dt, this.wind) as FlyEvent | null;
       if (!ev && b.y < -3) ev = { type: 'miss', how: 'lost' };
       if (ev) this.onBlockEvent(ev);
     }
   }
 
-  spawn() {
+  spawn(): void {
     const n = this.tower.n;
     let type = specialFor(n + 1);
     if (this.goldenNext && CFG.features.golden) { type = 'golden'; this.goldenNext = false; }
@@ -110,14 +126,14 @@ export class Run {
     this.emit('spawn', { block: type, floor: n });
   }
 
-  hangBlock() {
-    const b = this.block, T = this.tower;
+  hangBlock(): void {
+    const b = this.block as Block, T = this.tower;
     this.hook = hookAt(this.t, T.n, this.wind, b.m, T.bx, T.bz, this.diff);
     b.x = this.hook.x; b.y = Math.max(this.craneY, T.topY()) + CFG.dropGap + CFG.H / 2; b.z = this.hook.z;
   }
 
-  onBlockEvent(ev) {
-    const b = this.block, T = this.tower;
+  onBlockEvent(ev: FlyEvent): void {
+    const b = this.block as Block, T = this.tower;
     if (ev.type === 'bounce') { this.emit('bounce', { x: b.x, y: T.topY(), z: b.z }); return; }
     if (ev.type === 'land') {
       const offset = Math.max(Math.abs(ev.dx), Math.abs(ev.dz)) / CFG.W;
@@ -146,7 +162,7 @@ export class Run {
     }
   }
 
-  scoreLanding(perfect, good, b, offset) {
+  scoreLanding(perfect: boolean, good: boolean, b: Block, offset: number): void {
     const T = this.tower, golden = b.golden;
     if (perfect) { this.combo++; this.perfects++; if (CFG.features.focus) this.focus = Math.min(1, this.focus + CFG.focusGain); }
     else this.combo = 0;
@@ -170,7 +186,7 @@ export class Run {
     }
   }
 
-  onCollapse(col) {
+  onCollapse(col: CollapseInfo): void {
     this.combo = 0;
     this.emit('collapse', { from: col.from, count: col.count, items: col.items });
     if (this.over) return;
@@ -178,20 +194,20 @@ export class Run {
     this.loseLife(null);
   }
 
-  loseLife(reason) {
+  loseLife(reason: string | null): void {
     this.lives--;
     this.emit('lifeLost', { reason, lives: this.lives });
     if (this.lives <= 0) this.end();
   }
 
-  completeLevel() {
+  completeLevel(): void {
     const livesLost = this.diff.lives - this.lives;
     const stars = starsFor({ reached: true, livesLost, perfects: this.perfects, landings: this.landings });
-    this.emit('target', { target: this.level.target, stars, livesLost });
+    this.emit('target', { target: (this.level as Level).target, stars, livesLost });
     this.end({ completed: true, stars });
   }
 
-  end(extra = {}) {
+  end(extra: Partial<RunResult> = {}): void {
     if (this.over) return;
     this.over = true;
     this.result = {

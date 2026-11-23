@@ -2,11 +2,13 @@
 import { describe, it, expect } from 'vitest';
 import { Run } from '../../js/core/run.js';
 import { CFG, DIFFICULTY } from '../../js/config.js';
+import type { DifficultyId, Level, RunEvent } from '../../js/types.js';
+import { findEvent, need } from './helpers.js';
 
 // Play one run: drop each block `delay` seconds after it starts hanging. Returns every event and the run.
-function play(diffKey, delay, maxSeconds = 90) {
+function play(diffKey: DifficultyId, delay: number, maxSeconds = 90) {
   const run = new Run(DIFFICULTY[diffKey]);
-  const events = [];
+  const events: RunEvent[] = [];
   let hangT = 0;
   for (let i = 0; i < maxSeconds / CFG.DT && !run.over; i++) {
     if (run.block && run.block.state === 'hang') { hangT += CFG.DT; if (hangT >= delay) { run.drop(); hangT = 0; } }
@@ -17,7 +19,7 @@ function play(diffKey, delay, maxSeconds = 90) {
 }
 
 const DELAYS = Array.from({ length: 48 }, (_, i) => 0.05 + i * 0.05);
-const sweep = (diffKey) => DELAYS.flatMap((d) => play(diffKey, d).events);
+const sweep = (diffKey: DifficultyId) => DELAYS.flatMap((d) => play(diffKey, d).events);
 
 describe('determinism', () => {
   it('gives the same events for the same difficulty and drop timing', () => {
@@ -30,7 +32,7 @@ describe('determinism', () => {
 });
 
 describe('landing', () => {
-  for (const key of ['easy', 'normal', 'hard']) {
+  for (const key of (['easy', 'normal', 'hard'] as const)) {
     it(`classifies every landing by its offset against the ${key} windows`, () => {
       const diff = DIFFICULTY[key];
       const events = sweep(key);
@@ -42,7 +44,7 @@ describe('landing', () => {
       }
       for (const e of events.filter((x) => x.type === 'slip')) expect(e.offset).toBeGreaterThan(CFG.risky);
       const seen = new Set(events.map((e) => (e.type === 'land' ? e.kind : e.type)));
-      for (const k of ['perfect', 'good', 'risky', 'slip']) expect(seen.has(k)).toBe(true);
+      for (const k of ['perfect', 'good', 'risky', 'slip']) expect((seen as Set<string>).has(k)).toBe(true);
     });
   }
 
@@ -51,7 +53,7 @@ describe('landing', () => {
     let lives = DIFFICULTY.normal.lives;
     events.forEach((e, i) => {
       if (e.type === 'slip' || e.type === 'miss') {
-        const next = events.slice(i + 1).find((x) => x.type === 'lifeLost');
+        const next = need(findEvent(events.slice(i + 1), 'lifeLost'));
         expect(next.lives).toBe(lives - 1);
       }
       if (e.type === 'lifeLost') lives = e.lives;
@@ -156,7 +158,7 @@ describe('tall floors', () => {
 });
 
 describe('plot runs (district mode)', () => {
-  const level = { id: 'kosice', target: 3, weather: [{ fromFloor: 0, kind: 'rain' }], buildingType: 'panel', events: [] };
+  const level: Level = { id: 'kosice', city: 'Kosice', country: 'Slovakia', built: true, target: 3, weather: [{ fromFloor: 0, kind: 'rain' }], buildingType: 'panel', events: [] };
   it('scales the wind by windScale', () => {
     const a = new Run(DIFFICULTY.normal, { level }), b = new Run(DIFFICULTY.normal, { level, windScale: 0.5 });
     for (let i = 0; i < 400; i++) { a.step(CFG.DT); b.step(CFG.DT); }
@@ -165,6 +167,6 @@ describe('plot runs (district mode)', () => {
   it('reports lives lost in the result', () => {
     const run = new Run(DIFFICULTY.normal, { level });
     run.lives = DIFFICULTY.normal.lives - 1; run.end();
-    expect(run.result.livesLost).toBe(1);
+    expect(need(run.result).livesLost).toBe(1);
   });
 });

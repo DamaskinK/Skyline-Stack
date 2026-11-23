@@ -6,7 +6,9 @@
 // `facade` names the facade style of the floor mesh, `crown` the top built on a finished tower, `sign` the ground-floor
 // shop sign (null: the city name).
 
-export const BUILDING_TYPES = {
+import type { BuildingType, BuildingTypeId, Difficulty, Trait } from './types.js';
+
+export const BUILDING_TYPES: Record<BuildingTypeId, BuildingType> = {
   panel: {
     label: 'Panel block', facade: 'panel', variant: 0,
     crown: 'panel', sign: 'POTRAVINY',
@@ -51,12 +53,13 @@ export const BUILDING_TYPES = {
   },
 };
 
-export const PLAIN_TRAIT = Object.freeze({ perfect: 1, mass: 1, slide: 1, wind: 1 });
-export const buildingTypeById = (id) => BUILDING_TYPES[id] || null;
-export const traitOf = (id) => (BUILDING_TYPES[id] ? BUILDING_TYPES[id].trait : PLAIN_TRAIT);
+export const PLAIN_TRAIT: Readonly<Trait> = Object.freeze({ perfect: 1, mass: 1, slide: 1, wind: 1 });
+export const isBuildingTypeId = (id: string | null | undefined): id is BuildingTypeId => !!id && Object.hasOwn(BUILDING_TYPES, id);
+export const buildingTypeById = (id: string | null | undefined): BuildingType | null => (isBuildingTypeId(id) ? BUILDING_TYPES[id] : null);
+export const traitOf = (id: string | null | undefined): Readonly<Trait> => buildingTypeById(id)?.trait ?? PLAIN_TRAIT;
 
 // The difficulty with a building type's trait applied: what the core really uses for one run.
-export function applyTrait(diff, id) {
+export function applyTrait(diff: Difficulty, id: string | null | undefined): Difficulty {
   const t = traitOf(id);
   return { ...diff, perfect: diff.perfect * t.perfect, wind: diff.wind * t.wind, slide: diff.slide * t.slide, sway: diff.sway, mass: t.mass };
 }

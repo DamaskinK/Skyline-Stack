@@ -1,12 +1,14 @@
 // Weather by floor. A level lists segments [{ fromFloor, kind }]; Endless on a level loops them with growing strength.
 // With no level (plain Endless) the old global cycle of five phases is used. Pure functions, no Three.js.
+import type { Level, WeatherPhase, WeatherSegment, NextWeather } from '../types.js';
 import { WEATHER, phaseAt, PHASE_LEN, SEGMENT_LEN } from '../config.js';
 
-const segsOf = (level) => (level && level.weather && level.weather.length ? level.weather : null);
-const periodOf = (segs) => segs[segs.length - 1].fromFloor + SEGMENT_LEN;
+type WeatherLevel = Pick<Level, 'weather'> | null | undefined;
+const segsOf = (level: WeatherLevel): WeatherSegment[] | null => (level && level.weather && level.weather.length ? level.weather : null);
+const periodOf = (segs: WeatherSegment[]): number => segs[segs.length - 1].fromFloor + SEGMENT_LEN;
 
 // The weather at floor n: a weather table row plus idx, mult (strength) and seg (unique number per segment run).
-export function weatherAt(level, n, loop = false) {
+export function weatherAt(level: WeatherLevel, n: number, loop = false): WeatherPhase {
   const segs = segsOf(level);
   if (!segs) { const ph = phaseAt(n); return { ...ph, seg: Math.floor(n / PHASE_LEN) }; }
   const period = periodOf(segs), cyc = loop ? Math.floor(n / period) : 0, m = loop ? n % period : n;
@@ -16,7 +18,7 @@ export function weatherAt(level, n, loop = false) {
 }
 
 // The next change after floor n: { at, left, wx } or null when the weather stays as it is.
-export function nextWeather(level, n, loop = false) {
+export function nextWeather(level: WeatherLevel, n: number, loop = false): NextWeather | null {
   const segs = segsOf(level);
   if (!segs) { const left = PHASE_LEN - (n % PHASE_LEN); return { at: n + left, left, wx: phaseAt(n + left) }; }
   const period = periodOf(segs), cyc = loop ? Math.floor(n / period) : 0, m = loop ? n % period : n;

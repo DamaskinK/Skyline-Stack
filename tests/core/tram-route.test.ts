@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { need } from './helpers.js';
 import { joinWays, makeRoute, project, snapStops, makeSchedule, cutPolyline, pointAt } from '../../js/core/tram-route.js';
 
 describe('joinWays', () => {
@@ -6,7 +7,7 @@ describe('joinWays', () => {
     const lines = joinWays([[0, 0, 10, 0], [20, 0, 10, 0], [20, 0, 30, 5], [100, 100, 110, 100]]);
     expect(lines.length).toBe(2);
     const long = lines.find((l) => l.length > 6);
-    expect(long.length / 2).toBe(4);
+    expect(need(long).length / 2).toBe(4);
   });
 });
 describe('route', () => {

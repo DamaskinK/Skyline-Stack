@@ -2,7 +2,9 @@
 // Only Kosice is built so far. The others carry id, name, country, order and target and are marked built: false.
 // Fields marked "placeholder" hold a stand-in until the ticket that owns them lands.
 
-export const LEVELS = [
+import type { Level } from './types.js';
+
+export const LEVELS: Level[] = [
   {
     id: 'kosice', city: 'Kosice', country: 'Slovakia', order: 1, target: 20, built: true,
     buildingType: 'panel',
@@ -39,15 +41,15 @@ export const LEVELS = [
     grade: { gain: [1.0, 0.98, 1.05], lift: [0.01, 0, 0.025], contrast: 1.1, saturation: 1.12, vignette: 0.28 } },
 ];
 
-export const levelById = (id) => LEVELS.find((l) => l.id === id) || null;
-export const nextLevel = (id) => { const l = levelById(id); return l ? LEVELS.find((x) => x.order === l.order + 1) || null : null; };
+export const levelById = (id: string): Level | null => LEVELS.find((l) => l.id === id) || null;
+export const nextLevel = (id: string): Level | null => { const l = levelById(id); return l ? l.order == null ? null : LEVELS.find((x) => x.order === l.order! + 1) || null : null; };
 
 // Newtown: the original fictional city of the first version, a seventh city outside the world map, open from the start.
 // Not part of LEVELS (order, nextLevel and the world map stay six real cities). Plot sites are {x, z} metres on its
 // procedural grid (origin = plaza, x east, z south; roads run along x = +-44 and z = +-44). The last plot is the plaza,
 // where Endless also runs. `landmarks` are our own invented designs (js/landmarks/newtown.js); the same sites keep the
 // procedural blocks away from them.
-export const NEWTOWN = {
+export const NEWTOWN: Level = {
   id: 'newtown', city: 'Newtown', country: 'Fiction', fictional: true, openFromStart: true, built: true,
   buildingType: 'panel', target: 20, site: { x: 0, z: 0 },
   weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 10, kind: 'rain' }], events: [],
@@ -70,5 +72,5 @@ export const NEWTOWN = {
 };
 
 // Every city that has a district: the six real ones and Newtown.
-export const DISTRICT_CITIES = [...LEVELS.filter((l) => l.district), NEWTOWN];
-export const cityById = (id) => DISTRICT_CITIES.find((c) => c.id === id) || levelById(id);
+export const DISTRICT_CITIES: Level[] = [...LEVELS.filter((l) => l.district), NEWTOWN];
+export const cityById = (id: string): Level | null => DISTRICT_CITIES.find((c) => c.id === id) || levelById(id);

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, NEWTOWN, DISTRICT_CITIES, levelById, nextLevel } from '../../js/levels.js';
+import type { District, Plot, PlotResult, PlotStates } from '../../js/types.js';
+import { levelOf, need } from './helpers.js';
+import { LEVELS, NEWTOWN, DISTRICT_CITIES, nextLevel } from '../../js/levels.js';
 import { BUILDING_TYPES } from '../../js/building-types.js';
 import { WEATHER } from '../../js/config.js';
 import {
@@ -7,27 +9,27 @@ import {
   plotDistance, VIEW_BONUS, SKYLINE_BONUS,
 } from '../../js/core/district.js';
 
-const D = levelById('kosice').district;
-const good = (h, extra = {}) => ({ height: h, reached: true, livesLost: 0, perfects: 6, landings: 10, ...extra });
-const build = (plots, id, r) => recordPlot(D, plots, id, r);
+const D = need(levelOf('kosice').district);
+const good = (h: number, extra: Partial<PlotResult> = {}): PlotResult => ({ height: h, reached: true, livesLost: 0, perfects: 6, landings: 10, ...extra });
+const build = (plots: PlotStates, id: string, r: PlotResult) => recordPlot(D, plots, id, r);
 const ids = D.plots.map((p) => p.id);
 
 describe('district data', () => {
   it('has five plots in Kosice and Newtown with the planned targets', () => {
     expect(D.plots.map((p) => p.target)).toEqual([12, 15, 18, 22, 26]);
-    expect(NEWTOWN.district.plots).toHaveLength(5);
+    expect(need(NEWTOWN.district).plots).toHaveLength(5);
     expect(NEWTOWN.fictional && NEWTOWN.openFromStart).toBe(true);
   });
   it('keeps S0001 fields and the three-city order (ADR 0004)', () => {
     expect(LEVELS.map((l) => l.id)).toEqual(['kosice', 'prague', 'tokyo']);
     expect(LEVELS.map((l) => l.order)).toEqual([1, 2, 3]);
-    expect(nextLevel('prague').id).toBe('tokyo');
+    expect(need(nextLevel('prague')).id).toBe('tokyo');
     expect(LEVELS[0].site).toEqual({ lat: 48.72100, lon: 21.25755 });
     expect(D.plots[4].site).toEqual(LEVELS[0].site);
     expect(DISTRICT_CITIES.map((c) => c.id)).toEqual(['kosice', 'newtown']);
   });
   it('uses real building types and weather kinds, requirements as planned', () => {
-    for (const c of DISTRICT_CITIES) for (const p of c.district.plots) {
+    for (const c of DISTRICT_CITIES) for (const p of need(c.district).plots) {
       expect(BUILDING_TYPES[p.buildingType]).toBeTruthy();
       for (const w of p.weather) expect(WEATHER[w.kind]).toBeTruthy();
     }
@@ -46,7 +48,7 @@ describe('district data', () => {
 describe('opening order', () => {
   it('opens only the first plot at the start', () => {
     expect(ids.map((id) => isPlotOpen(D, {}, id))).toEqual([true, false, false, false, false]);
-    expect(nextPlot(D, {}).id).toBe(ids[0]);
+    expect(need(nextPlot(D, {})).id).toBe(ids[0]);
   });
   it('opens the next plot when one counted, and a failed plot stays open', () => {
     let p = build({}, ids[0], { height: 7, reached: false, livesLost: 3, perfects: 1, landings: 7 });
@@ -54,7 +56,7 @@ describe('opening order', () => {
     expect(p[ids[0]].bestHeight).toBe(7);
     p = build(p, ids[0], good(12));
     expect(isPlotOpen(D, p, ids[1])).toBe(true);
-    expect(nextPlot(D, p).id).toBe(ids[1]);
+    expect(need(nextPlot(D, p)).id).toBe(ids[1]);
   });
   it('ignores results on a closed plot', () => {
     expect(build({}, ids[3], good(22))[ids[3]]?.counted || false).toBe(false);
@@ -102,9 +104,9 @@ describe('residents and bonuses', () => {
     expect(towerBonuses(D, p, ids[2]).view).toBe(true);            // 18 floors >= 10, cathedral in sight
   });
   it('gives the skyline bonus to near towers that differ by 6 floors or more, and updates the neighbour', () => {
-    const mk = (id, x) => ({ id, site: { x, z: 0 }, buildingType: 'panel', target: 5, require: {}, landmarksInView: [] });
-    const d = { goal: 99999, plots: [mk('a', 0), mk('b', 100), mk('c', 200), mk('far', 5000)] };
-    const rec = (p, id, h) => recordPlot(d, p, id, good(h));
+    const mk = (id: string, x: number): Plot => ({ id, name: id, site: { x, z: 0 }, buildingType: 'panel', target: 5, require: {}, windScale: 1, weather: [], landmarksInView: [] });
+    const d: District = { goal: 99999, plots: [mk('a', 0), mk('b', 100), mk('c', 200), mk('far', 5000)] };
+    const rec = (p: PlotStates, id: string, h: number) => recordPlot(d, p, id, good(h));
     let p = rec({}, 'a', 10); p = rec(p, 'b', 14);             // 4 apart: no bonus
     expect(towerBonuses(d, p, 'a').skyline).toBe(false);
     const lone = p.a.residents;
@@ -117,7 +119,7 @@ describe('residents and bonuses', () => {
     expect(towerBonuses(d, p, 'far').skyline).toBe(false);     // too far from every tower
   });
   it('lets the skyline bonus be earned in Kosice, whose plots lie up to 1.3 km apart', () => {
-    let p = {}; for (let i = 0; i < 5; i++) p = build(p, ids[i], good(D.plots[i].target));
+    let p: PlotStates = {}; for (let i = 0; i < 5; i++) p = build(p, ids[i], good(D.plots[i].target));
     expect(ids.some((id) => towerBonuses(D, p, id).skyline)).toBe(true);
     expect(towerBonuses(D, p, 'juzna').skyline).toBe(true);    // 15 vs 22 floors, 900 m from the Main Street plot
   });
@@ -125,7 +127,7 @@ describe('residents and bonuses', () => {
 
 describe('goal', () => {
   it('sums stars and residents, and opens the next city at the goal without all plots', () => {
-    let p = {};
+    let p: PlotStates = {};
     expect(goalReached(D, p)).toBe(false);
     for (let i = 0; i < 4; i++) p = build(p, ids[i], good(D.plots[i].target));
     const t = districtTotals(D, p);

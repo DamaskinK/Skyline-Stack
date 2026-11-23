@@ -1,8 +1,9 @@
 // Time of day as data: a level's `dayArc: { start, end }` (hours, 24 h clock) is walked from its first to its last floor.
 // Pure maths, no Three.js. The renderer (world.js) turns the hour into sun, sky and glow.
+import type { DayArc, Grade } from '../types.js';
+export type { DayArc };
 export const ENDLESS_LOOP = 60;   // floors one Endless day lasts: start -> end -> back to start, smoothly
-export interface DayArc { start: number; end: number }
-export interface DayLevel { target?: number; dayArc?: DayArc; grade?: unknown }
+export interface DayLevel { target?: number; dayArc?: DayArc; grade?: Grade }
 export const DEFAULT_ARC: DayArc = { start: 14, end: 14 };
 
 // Progress 0..1 along the arc. A level counts floors towards its target; Endless loops a smooth there-and-back wave.

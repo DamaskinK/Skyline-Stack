@@ -1,7 +1,8 @@
 // All balance numbers live here. Difficulty presets scale a few of them at runtime.
+import type { BlockKind, BlockType, Difficulty, DifficultyId, Weather, WeatherKind, WeatherCycle } from './types.js';
 
 // Default camera offsets from the tower top, by camera mode (shared by the camera and the far-ring view clearing)
-export const CAM_OFFSETS = [[-28, 9, -24], [30, 6, 12], [0, 26, 12]];
+export const CAM_OFFSETS: [number, number, number][] = [[-28, 9, -24], [30, 6, 12], [0, 26, 12]];
 
 export const CFG = {
   W: 4, D: 4, H: 2.8, FOUND_H: 2.4, G: 30, DT: 1 / 120,
@@ -22,7 +23,7 @@ export const CFG = {
 };
 
 // Multipliers on top of CFG. "meters" feed the bars on the difficulty screen (0..1).
-export const DIFFICULTY = {
+export const DIFFICULTY: Record<DifficultyId, Difficulty> = {
   easy: {
     label: 'EASY', lives: 5, perfect: 0.12, good: 0.3, swingAmp: 0.75, swingSpeed: 0.8, wind: 0.6, sway: 0.7, slide: 0.6, score: 0.75,
     desc: 'Slow crane, light wind, wide perfect window and 5 lives.',
@@ -41,7 +42,7 @@ export const DIFFICULTY = {
 };
 
 // sky top / horizon, cloud cover in the sky shader, light strength, how lit the windows are (0 day … 1 night)
-export const PHASES = [
+export const PHASES: Weather[] = [
   { kind: 'clear', name: 'Clear', mu: 0.9, base: 1, gust: 1, top: 0x2f86e0, bot: 0xc4e6ff, cover: 0.35, cloud: 0xffffff, sun: 1.7, sunCol: 0xfff3dc, hemi: 1.0, night: 0, fog: [110, 320],
     sunDir: [0.35, 0.45, -0.82], text: 'Calm air. Learn the swing.' },
   { kind: 'rain', name: 'Rain', mu: 0.5, base: 3, gust: 3, top: 0x46566f, bot: 0x95a3b5, cover: 0.85, cloud: 0x8c95a5, sun: 0.6, sunCol: 0xdfe6ff, hemi: 0.8, night: 0.35, fog: [60, 200], rain: true,
@@ -58,7 +59,7 @@ export const PHASE_LEN = 15;   // global cycle only (Endless without a level)
 // Weather kinds that only levels use (the global cycle above keeps the five classic ones). Visuals fall back to the
 // nearest classic look until the city tickets add their own: heat haze looks like clear, sandstorm like a warm fog,
 // typhoon like the storm. `gustEvent`: the level event 'sandstormGust' may fire in it. `lightning`: 'lightning' may.
-const EXTRA_WEATHER = [
+const EXTRA_WEATHER: Weather[] = [
   { kind: 'heatHaze', name: 'Heat haze', mu: 0.9, base: 1.5, gust: 1, top: 0x3d8fe0, bot: 0xf3e2b8, cover: 0.15, cloud: 0xfff4d8, sun: 2.0, sunCol: 0xffe7b0, hemi: 1.0, night: 0, fog: [90, 280],
     sunDir: [0.35, 0.6, -0.8], text: 'Hot, bright air. Light wind, glare off the glass.' },
   { kind: 'sandstorm', name: 'Sandstorm', mu: 0.6, base: 6, gust: 6, top: 0x9a6b3c, bot: 0xd8a468, cover: 0.8, cloud: 0xc99a62, sun: 0.7, sunCol: 0xffc27a, hemi: 0.8, night: 0.2, fog: [12, 70], gustEvent: true,
@@ -67,10 +68,10 @@ const EXTRA_WEATHER = [
     sunDir: [-0.4, 0.5, -0.7], text: 'Heavy rain and violent gusts. Hold on.' },
 ];
 // Every weather kind by id, as a level's weather segments name it.
-export const WEATHER = Object.fromEntries([...PHASES, ...EXTRA_WEATHER].map((w) => [w.kind, w]));
+export const WEATHER = Object.fromEntries([...PHASES, ...EXTRA_WEATHER].map((w) => [w.kind, w])) as Record<WeatherKind, Weather>;
 export const SEGMENT_LEN = 15;   // floors a level's last weather segment lasts when Endless loops the segments
 
-export const BTYPES = {
+export const BTYPES: Record<BlockKind, BlockType> = {
   normal: { m: 1, color: 0x4f7cff, label: 'Normal', hint: '' },
   heavy: { m: 2, color: 0x6c7280, label: 'Heavy', hint: 'Wind barely moves it, but an offset shifts the balance twice as much.' },
   light: { m: 0.5, color: 0xf2f4ff, label: 'Light', hint: 'Wind pushes it around. Aim upwind.' },
@@ -80,12 +81,12 @@ export const BTYPES = {
 
 export const ENDLESS_COLORS = [0x4f7cff, 0x4f7cff, 0xf0eadb, 0x4f7cff, 0x4f7cff, 0xe86f4f];
 
-export function phaseAt(n) {
+export function phaseAt(n: number): WeatherCycle {
   const i = Math.floor(n / PHASE_LEN) % PHASES.length;
   return { ...PHASES[i], idx: i, mult: 1 + 0.2 * Math.floor(n / (PHASE_LEN * PHASES.length)) };
 }
 
-export function specialFor(floorNo) {
+export function specialFor(floorNo: number): BlockKind {
   if (!CFG.features.special) return 'normal';
   if (floorNo >= 20 && floorNo % 10 === 0) return 'heavy';
   if (floorNo >= 25 && floorNo % 13 === 0) return 'bouncy';
