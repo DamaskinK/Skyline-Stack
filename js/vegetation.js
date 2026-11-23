@@ -17,7 +17,8 @@ export function swayMaterial(mat, amp = 0.02) {
   };
   return mat;
 }
-const tick = () => { windTime.value = performance.now() / 1000; };
+export const windClock = { frozen: null };   // the flicker check freezes the sway so two renders of one pose differ only by the camera move
+const tick = () => { windTime.value = windClock.frozen ?? performance.now() / 1000; };
 
 function merge(parts) {   // [geometry, colour, tint(top lighter) ]
   const pos = [], nor = [], col = [];
@@ -57,7 +58,7 @@ export function addTrees(group, trees, baseY) {
       o.position.set(x, baseY, z); o.scale.set(s * (0.9 + h * 0.25), s * (0.85 + ((h * 7) % 1) * 0.4), s * (0.9 + h * 0.25)); o.rotation.y = x; o.updateMatrix(); im.setMatrixAt(i, o.matrix);
       im.setColorAt(i, c.setHex(TINTS[Math.floor(h * 997) % TINTS.length]));
     });
-    im.castShadow = true; im.receiveShadow = true; im.onBeforeRender = tick; group.add(im);
+    im.castShadow = true; im.receiveShadow = true; im.onBeforeRender = tick; im.userData.tree = true; group.add(im);
   }
 }
 // Hedge lumps [x, z, rotation, scale]: dark-green rounded blobs in rows.

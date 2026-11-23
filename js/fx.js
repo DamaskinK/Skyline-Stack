@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { scene, mergeColored, traffic } from './world.js';
+import { Trams } from './trams.js';
 import { puffTex, starTex, canvas2d, toTex } from './textures.js';
 import { settings } from './settings.js';
 import { styleFor, skinFor, dressForCold } from './people/styles.js';
@@ -233,10 +234,10 @@ function along(r, s) {                                    // point and unit dire
 }
 
 // Life density (S0002 06): the quality preset sets the most that can be out, the finished plots of the district (0-5) set how much of it is.
-const MAX_LIFE = {     // walkers, seated, standing spots, cyclists, dog walkers, cars at 5 finished plots
-  low: { walkers: 14, sit: 3, stand: 3, bikes: 3, dogs: 1, cars: 14 },
-  medium: { walkers: 26, sit: 6, stand: 5, bikes: 5, dogs: 2, cars: 28 },
-  high: { walkers: 36, sit: 8, stand: 7, bikes: 7, dogs: 3, cars: 40 },
+const MAX_LIFE = {     // walkers, seated, standing spots, cyclists, dog walkers, cars (moving), parked cars and trams at 5 finished plots
+  low: { walkers: 14, sit: 3, stand: 3, bikes: 3, dogs: 1, cars: 14, parked: 24, trams: 1 },
+  medium: { walkers: 26, sit: 6, stand: 5, bikes: 5, dogs: 2, cars: 28, parked: 46, trams: 2 },
+  high: { walkers: 36, sit: 8, stand: 7, bikes: 7, dogs: 3, cars: 40, parked: 70, trams: 3 },
 };
 const LIFE_SHARE = [0.3, 0.45, 0.62, 0.78, 0.9, 1];     // share of the maximum at 0..5 finished plots
 export function lifeCount(kind, plots, quality = settings.quality) {
@@ -250,7 +251,7 @@ function place2(P, spot) {            // a person standing still at a spot (vend
 }
 const _right = new THREE.Vector3(), _p = new THREE.Vector3();
 export const People = {
-  flyers: [], walkers: [], side: 1, routes: [], life: null, folk: [], cyclists: [], blockers: [], progress: 2, musicians: [], notes: 0,
+  flyers: [], walkers: [], parked: [], side: 1, routes: [], life: null, folk: [], cyclists: [], blockers: [], progress: 2, musicians: [], notes: 0,
   // OpenStreetMap levels: street walkers follow the real streets and footpaths (items { p: flat [x, z, ...], off: metres from the centre line }) instead of the procedural grid.
   setRoutes(list) {
     this.life = list.life || null;          // seats, standing spots, bike routes and basins from the near ring (street-life.js)
@@ -268,7 +269,13 @@ export const People = {
     this.progress = n; this.applyTraffic();
     if (this.walkers.length) this.setWalkers(9); else this.buildLife();
   },
-  applyTraffic() { traffic.setCount(lifeCount('cars', this.progress)); },
+  applyTraffic() {
+    traffic.setCount(lifeCount('cars', this.progress)); Trams.setCount(lifeCount('trams', this.progress));
+    // parked cars of the near ring: the nearest first, as many as the preset and the finished plots allow (shared between the two car kits)
+    const want = lifeCount('parked', this.progress), total = this.parked.reduce((n, k) => n + k.n, 0) || 1;
+    for (const k of this.parked) for (const im of k.ims) im.count = Math.min(k.n, Math.ceil(want * k.n / total));
+  },
+  setParked(list) { this.parked = list || []; this.applyTraffic(); },
   // The city whose clothes people wear (a level id from levels.js); people already walking get new outfits.
   setCity(id) { if (id === city) return; city = id; for (const w of this.walkers) redress(w.p); for (const f of this.folk) redress(f.p); for (const c of this.cyclists) redress(c.rider); },
   // People who sit on benches, stand and chat, and cyclists on the bike lanes; counts follow the quality preset.

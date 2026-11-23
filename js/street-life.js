@@ -3,7 +3,7 @@
 // sit, stand and cyclists ride. Returns data for People (js/fx.js): { sit, stand, bikeRoutes, basins }.
 import * as THREE from 'three';
 import { glowMats } from './world.js';
-import { Builder, PLAZA_HALF, polyArea, insideRing, hash, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
+import { Builder, LAYER, PLAZA_HALF, polyArea, insideRing, hash, layerMat, mergeParts, mesh, instanceKit } from './near-ring.js';
 
 const Y = 0.05;                       // ground height of the footways
 const BIKE_COLOR = 0xa8483c, MARK = 0xf2efe6;
@@ -98,7 +98,7 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
   const dOf = (p) => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
   for (const r of osm.roads) {
     if (r.bike !== 2 || lengthOf(r.p) < 20) continue;               // own cycle paths: red surface, dashed centre line
-    bikeLines.push([r.p, r.w / 2 + 1.2]); strip(bikeB, r.p, r.w, Y + 0.012, BIKE_COLOR); dashes(markB, r.p, Y + 0.02);
+    bikeLines.push([r.p, r.w / 2 + 1.2]); strip(bikeB, r.p, r.w, LAYER.bike, BIKE_COLOR); dashes(markB, r.p, LAYER.mark);
     bikeRoutes.push({ p: r.p, len: lengthOf(r.p), d: dOf(r.p) });
   }
   // lanes on streets: tagged ones, else the main streets close to the square (the data has few cycle tags)
@@ -110,8 +110,8 @@ export function buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn 
   lanes.forEach((r, k) => {
     for (const side of [1, -1]) {
       const p0 = offsetLine(r.p, side * (r.w / 2 - 0.95)), p = side > 0 ? p0 : (() => { const q = []; for (let i = p0.length - 2; i >= 0; i -= 2) q.push(p0[i], p0[i + 1]); return q; })();   // travel with the traffic on each side
-      bikeLines.push([p, 2]); strip(bikeB, p, 1.5, Y + 0.012 - 0.02, BIKE_COLOR);
-      strip(markB, offsetLine(p, 0.8), 0.1, Y - 0.006, MARK);
+      bikeLines.push([p, 2]); strip(bikeB, p, 1.5, LAYER.bike, BIKE_COLOR);
+      strip(markB, offsetLine(p, 0.8), 0.1, LAYER.mark, MARK);
       if (k < 4) bikeRoutes.push({ p, len: lengthOf(p), d: dOf(p) });
     }
   });

@@ -7,6 +7,7 @@ import { updateCrane, updateMarker } from './entities.js';
 import { FX, People, updateWeather, updateBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
+import { Trams } from './trams.js';
 import { settings, onSettings } from './settings.js';
 import { Game, buildDemo } from './game.js';
 import { createUI } from './ui.js';
@@ -101,6 +102,7 @@ function render(rdt) {
 
   FX.update(rdt);
   People.update(game.paused ? 0 : rdt, game.wind, !!ph.rain);
+  Trams.update(game.paused ? 0 : rdt);
   Sfx.ambience(game.wind, ph, game.state === 'play' && !game.paused);
   Music.update();
   renderFrame();

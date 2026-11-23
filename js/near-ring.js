@@ -9,16 +9,19 @@ import { buildStreetLife } from './street-life.js';
 import { surface } from './surfaces.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { settings } from './settings.js';
+import { cutPolyline } from './core/tram-route.js';
+import { buildTramLine } from './trams.js';
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
 export const ROOF_COLORS = [0xb4573c, 0xa84c36, 0x9a5a44, 0x8a4a3a, 0xc0623f, 0x7d5a4c, 0xb0523a].map((c) => new THREE.Color(c));
 export const PLAZA_HALF = 14;      // paved square around the tower
+export const PAD_HALF = PLAZA_HALF + 2;   // nothing of the street network (roads, footways, rails, bike lanes, basins) enters this square: the foundation stands on bare plaza
 const CLEAR = 24;                  // no buildings closer than this to the origin
 
 // ground heights: every layer a real step above the one below, plus a depth bias for the far distance
-const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, path: 0.045, plaza: GROUND_Y.walk };
-const BIAS = { urban: 1, park: 2, water: 3, road: 4, path: 5, plaza: 7, basin: 9, bike: 6, mark: 8 };   // the plaza top always wins over the flat layers around it
+export const LAYER = { urban: 0.005, park: 0.015, water: 0.02, road: 0.03, lot: 0.034, bed: 0.038, path: 0.045, bike: 0.055, mark: 0.065, plaza: GROUND_Y.walk };   // bike lanes and their paint sit above roads and footways, never in the same plane
+const BIAS = { urban: 1, park: 2, water: 3, road: 4, lot: 4.5, bed: 5, path: 5.2, plaza: 7, basin: 9, bike: 6, mark: 8 };   // the plaza top always wins over the flat layers around it
 // park grass: soft green with random specks (the shared grass texture has specks on a lattice that read as dashed lines)
 const parkGrass = (() => {
   const [c, x] = canvas2d(128, 128); x.fillStyle = '#76a35e'; x.fillRect(0, 0, 128, 128);
@@ -64,7 +67,7 @@ export function fillPoly(b, p, y, scale, n = UP, grow = 0) {
   }
 }
 // a polyline with a width, as a flat ribbon with round-ish joints; same height and material everywhere, so overlaps are invisible
-function ribbon(b, p, w, y, scale) {
+export function ribbon(b, p, w, y, scale) {
   const uvf = (q) => [q[0] / scale, q[2] / scale], h = w / 2;
   for (let i = 0; i + 3 < p.length; i += 2) {
     const x0 = p[i], z0 = p[i + 1], x1 = p[i + 2], z1 = p[i + 3], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz);
@@ -85,7 +88,7 @@ function ribbon(b, p, w, y, scale) {
   }
 }
 // a straight upright prism along an edge (width w, from y0 to y1), extended by w/2 at both ends so corners close; vertex-coloured
-function stripe(b, x0, z0, x1, z1, w, y0, y1, color) {
+export function stripe(b, x0, z0, x1, z1, w, y0, y1, color) {
   const dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz); if (l < 1e-3) return;
   const ux = dx / l, uz = dz / l, nx = -uz * w / 2, nz = ux * w / 2, e = w / 2;
   const a = [x0 - ux * e, z0 - uz * e], c = [x1 + ux * e, z1 + uz * e], k = () => [0, 0];
@@ -112,7 +115,8 @@ export function mesh(b, mat, group, shadow = false) {
 
 // ── kit props: one InstancedMesh per sub-mesh of the glTF, so a piece is a draw call or two however often it is placed ──
 export function instanceKit(src, list, targetHeight, group, { shadow = true, lengthFit = 0 } = {}) {
-  if (!src || !list.length) return;
+  const made = [];
+  if (!src || !list.length) return made;
   const root = src.clone(true); root.updateMatrixWorld(true);
   const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
   const k = lengthFit ? lengthFit / Math.max(size.x, size.z, 1e-3) : targetHeight / Math.max(size.y, 1e-3);
@@ -125,8 +129,9 @@ export function instanceKit(src, list, targetHeight, group, { shadow = true, len
       place.compose(new THREE.Vector3(x, y, z), q.setFromAxisAngle(up, r), new THREE.Vector3(k, k, k));
       im.setMatrixAt(i, place.clone().multiply(base));
     });
-    im.castShadow = shadow; im.receiveShadow = true; group.add(im);
+    im.castShadow = shadow; im.receiveShadow = true; group.add(im); made.push(im);
   });
+  return made;
 }
 
 const calmMats = new Map();
@@ -212,7 +217,21 @@ const WIN = {
   plain: { w: 2.05, sillY: 0.8, sillH: 0.11, sillOut: 0.15, lintelY: 2.49, lintelH: 0.12, lintelOut: 0.1, jamb: 0.09, jambY0: 0.9, jambY1: 2.48, jambOut: 0.05 },
 };
 
-export function buildNearRing(osm, kit = {}, hide = null) {
+// The street network without the pad square around the tower (ticket S0002 10: no road, footway, rail or bike lane under the foundation);
+// rails are also cut where the extract ends, so a line never floats over the middle ring.
+function trimNetwork(osm) {
+  const pad = [-PAD_HALF, -PAD_HALF, PAD_HALF, PAD_HALF], edge = [-osm.half, -osm.half, osm.half, osm.half];
+  const outPad = (x, z) => !(Math.abs(x) < PAD_HALF && Math.abs(z) < PAD_HALF);
+  const roads = [];
+  for (const r of osm.roads) for (const p of cutPolyline(r.p, [pad], outPad)) roads.push(p.length === r.p.length ? r : { ...r, p });
+  const rails = [];
+  for (const r of osm.rails || []) for (const p of cutPolyline(r.p, [pad, edge], (x, z) => outPad(x, z) && Math.abs(x) < osm.half && Math.abs(z) < osm.half)) rails.push({ p });
+  const small = (g) => Math.abs(polyArea(g.p)) < BASIN_MAX, touchesPad = (g) => { for (let i = 0; i < g.p.length; i += 2) if (Math.abs(g.p[i]) < PAD_HALF + 2 && Math.abs(g.p[i + 1]) < PAD_HALF + 2) return true; return insideRing(g.p, 0, 0); };
+  return { ...osm, roads, rails, water: osm.water.filter((g) => !(small(g) && touchesPad(g))) };
+}
+
+export function buildNearRing(osm0, kit = {}, hide = null) {
+  const osm = trimNetwork(osm0);
   const group = new THREE.Group(); group.name = 'near-ring';
   const bbIn = (x, z, m = 0) => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
 
@@ -245,11 +264,14 @@ export function buildNearRing(osm, kit = {}, hide = null) {
     if (r.k === 'walk' || r.k === 'path') ribbon(path, r.p, r.w, LAYER.path, 3);
     else ribbon(road, r.p, r.w, LAYER.road, 9);
   }
-  for (const r of osm.rails) ribbon(path, r.p, 1.6, LAYER.path, 3);
+  // car parks: asphalt a few cm above the streets, so a lot that overlaps a street or a park never shares its plane
+  const lot = new Builder();
+  for (const g of osm.parking || []) if (Math.abs(polyArea(g.p)) > 40) fillPoly(lot, g.p, LAYER.lot, 9, UP, 0.04);
   mesh(urban, layerMat(null, 'urban', { color: 0x77736b }), group);
   mesh(park, layerMat(tile(parkGrass), 'park', { color: 0x9bb584 }), group);
   mesh(water, layerMat(null, 'water', { color: 0x3b79a8, roughness: 0.15, metalness: 0.1 }), group);
   mesh(road, layerMat(null, 'road', { color: 0x2b2d31, ...surface('asphalt', 3, 0.9) }), group);
+  mesh(lot, layerMat(null, 'lot', { color: 0x3d3f44, ...surface('asphalt', 3, 0.9) }), group);
   mesh(path, layerMat(tile(sidewalkTex), 'path', { color: 0x9b968c, ...surface('cobble', 1.5, 1.1) }), group);
   mesh(curbs, layerMat(null, 'basin', { vertexColors: true, roughness: 0.95 }), group, true);
   mesh(basinWater, layerMat(null, 'basin', { color: 0x4f8fb5, roughness: 0.12, metalness: 0.1 }), group);
@@ -392,7 +414,7 @@ export function buildNearRing(osm, kit = {}, hide = null) {
         const lx = x + nx * off * side, lz = z + nz * off * side;
         if (lamps.length < 40 && bbIn(lx, lz, 8) && !clearPlaza(lx, lz) && !inBuilding(lx, lz)) lamps.push([lx, 0.03, lz, Math.atan2(-nx * side, -nz * side)]);
         const t = hash(x, z);
-        if (t < 0.55 && carN < 14 && r.w >= 7) {
+        if (t < 0.7 && carN < 120 && r.w >= 5.5) {
           const cx = x + tx * 9 - nx * (r.w / 2 - 1.3) * side, cz = z + tz * 9 - nz * (r.w / 2 - 1.3) * side;
           if (bbIn(cx, cz, 8) && !clearPlaza(cx, cz) && !inBuilding(cx, cz)) { cars.push([cx, 0.04, cz, rot + (t < 0.27 ? 0 : Math.PI)]); carN++; }
         }
@@ -406,12 +428,39 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   addFlowerBeds(group, beds, LAYER.park);
   instanceKit(kit.bush, bushes.map(([x, z]) => [x, LAYER.park, z, hash(x, z) * 6]), 1.1, group, { shadow: false });
   instanceKit(kit.streetlight, lamps, 6, group);
-  instanceKit(kit.car_sedan, cars.filter((_, i) => i % 2 === 0), 0, group, { lengthFit: 4.4 });
-  instanceKit(kit.car_hatchback, cars.filter((_, i) => i % 2 === 1), 0, group, { lengthFit: 4.0 });
+  // parked cars in the car parks (OpenStreetMap amenity=parking): bays in rows along the long side of the lot, about two thirds taken
+  for (const g of osm.parking || []) {
+    if (Math.abs(polyArea(g.p)) < 120) continue;
+    const n = g.p.length / 2; let cx = 0, cz = 0, sxx = 0, szz = 0, sxz = 0;
+    for (let i = 0; i < n; i++) { cx += g.p[2 * i]; cz += g.p[2 * i + 1]; } cx /= n; cz /= n;
+    for (let i = 0; i < n; i++) { const dx = g.p[2 * i] - cx, dz = g.p[2 * i + 1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
+    const th = 0.5 * Math.atan2(2 * sxz, sxx - szz), ux = Math.cos(th), uz = Math.sin(th), vx = -uz, vz = ux;   // u: long axis
+    let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+    for (let i = 0; i < n; i++) { const dx = g.p[2 * i] - cx, dz = g.p[2 * i + 1] - cz, u = dx * ux + dz * uz, v = dx * vx + dz * vz; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    // rows run along u (cars nose to the aisle: rotated across u), 2.6 m between cars, 6 m between rows (two rows share an aisle)
+    for (let v = v0 + 2.8; v < v1 - 2.4; v += 5.4) for (let u = u0 + 1.6; u < u1 - 1.6; u += 2.7) {
+      const x = cx + ux * u + vx * v, z = cz + uz * u + vz * v;
+      if (hash(x * 1.3, z * 0.7) > 0.66 || !bbIn(x, z, 8) || clearPlaza(x, z) || inBuilding(x, z) || !insideRing(g.p, x, z)) continue;
+      const ok = [[1.2, 0], [-1.2, 0], [0, 2.4], [0, -2.4]].every(([a, b]) => insideRing(g.p, x + ux * a + vx * b, z + uz * a + vz * b));
+      if (ok) cars.push([x, LAYER.lot + 0.03, z, Math.atan2(vx, vz) + (hash(z, x) < 0.5 ? 0 : Math.PI)]);
+    }
+  }
+  // the nearest first: the preset and the finished plots decide how many are shown (People.applyTraffic)
+  cars.sort((a, b) => Math.hypot(a[0], a[2]) - Math.hypot(b[0], b[2]));
+  const parked = [];
+  const carKit = (src, list, len) => { const ims = instanceKit(src, list, 0, group, { lengthFit: len }) || []; parked.push({ ims, n: list.length }); };
+  carKit(kit.car_sedan, cars.filter((_, i) => i % 2 === 0), 4.4);
+  carKit(kit.car_hatchback, cars.filter((_, i) => i % 2 === 1), 4.0);
+  group.userData.parked = parked;
+  // tram lines (rails in a track bed, overhead wire and poles, stops, trams): js/trams.js
+  group.userData.tram = buildTramLine(osm, { group, inBuilding, clearPlaza });
   // street furniture, bike lanes, seats and standing spots for the people (js/street-life.js)
   const life = buildStreetLife(osm, kit, { group, inBuilding, clearPlaza, bbIn });
   group.userData.life = life;
-  group.userData.carRoutes = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street') && r.w >= 6).map((r) => r.p);
+  // moving traffic: the streets nearest to the tower first, so the cars are where the camera looks
+  const routeD = (p) => { let d = 1e9; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
+  group.userData.carRoutes = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street' || (r.k === 'lane' && r.w >= 4)) && r.w >= 4 && lineLen(r.p) > 40)
+    .map((r) => ({ p: r.p, d: routeD(r.p) })).filter((r) => r.d < 220).sort((a, b) => a.d - b.d).slice(0, 18).map((r) => r.p);
   group.userData.walkRoutes = osm.roads.filter((r) => r.k === 'walk' || r.k === 'path').map((r) => {
     let d = 1e9; for (let i = 0; i < r.p.length; i += 2) d = Math.min(d, Math.hypot(r.p[i], r.p[i + 1]));
     let len = 0; for (let i = 2; i < r.p.length; i += 2) len += Math.hypot(r.p[i] - r.p[i - 2], r.p[i + 1] - r.p[i - 1]);
@@ -421,6 +470,7 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   return group;
 }
 
+const lineLen = (p) => { let l = 0; for (let i = 2; i < p.length; i += 2) l += Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]); return l; };
 export function mergeParts(parts) {
   const pos = [], nor = [], col = [];
   for (const [g0, c] of parts) {

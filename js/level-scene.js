@@ -9,6 +9,7 @@ import { landmarkHide, buildLandmarks, landmarkClear } from './landmarks/index.j
 import { cityById } from './levels.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
+import { Trams } from './trams.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
 export const level = { id: null, plotId: null, env: null };
@@ -59,12 +60,14 @@ export function applyLevelAssets(id, assets, plot = null, plotOsm = null) {
   // a level with an OpenStreetMap near ring replaces the procedural city around the tower
   const osm = plotOsm || assets.osm;
   setNearProcedural(!osm);
+  if (!osm) { Trams.use(null); People.setParked(null); }
   if (osm) {
     const off = plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
     const near = buildNearRing(osm, assets, landmarkHide(id));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
+    Trams.use(near.userData.tram); People.setParked(near.userData.parked);
   }
   // Newtown: the procedural city is the scene; the whole city moves so the plot's site sits at the world origin
   if (!osm) {

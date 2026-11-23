@@ -5,7 +5,7 @@ import { sanitize, recordLevel, recordEndless } from './core/stars.js';
 import { LEVELS, levelById, cityById, nextLevel } from './levels.js';
 import { sanitizeDistrict, recordCityPlot, migrateFromLevels, cityProgress } from './core/district-progress.js';
 
-const DEFAULTS = { difficulty: 'normal', sfx: 0.7, music: 0.35, quality: 'high', shake: true, hints: true, muted: false, camera: 0 };
+const DEFAULTS = { difficulty: 'normal', sfx: 0.7, music: 0.35, quality: 'medium', shake: true, hints: true, muted: false, camera: 0 };
 
 function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
 function write(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage blocked: settings last for this visit only */ } }

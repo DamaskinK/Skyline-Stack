@@ -37,7 +37,10 @@ const query = `[out:json][timeout:120];
  way["leisure"~"^(park|garden|pitch|playground)$"](${bb});
  way["landuse"~"^(grass|recreation_ground|village_green)$"](${bb});
  way["natural"~"^(water|wood)$"](${bb});
- way["railway"="tram"](${bb});`).join('\n ')}
+ way["railway"="tram"](${bb});
+ node["railway"="tram_stop"](${bb});
+ node["public_transport"="stop_position"]["tram"="yes"](${bb});
+ way["amenity"="parking"](${bb});`).join('\n ')}
 );
 out geom tags;`;
 
@@ -77,9 +80,15 @@ function extract(site, keep, outId) {
   const flat = (geom) => geom.flatMap((g) => { const [x, z] = toXZ(g); return [r1(x), r1(z)]; });
   const near = (p) => { for (let i = 0; i < p.length; i += 2) if (Math.abs(p[i]) < keep && Math.abs(p[i + 1]) < keep) return true; return false; };
   const seen = new Set();
-  const out = { id: outId, source: 'OpenStreetMap contributors, ODbL', site, half: keep, frame: 'metres, x east, z south, origin = site', roads: [], rails: [], buildings: [], parks: [], water: [], names: [] };
+  const out = { id: outId, source: 'OpenStreetMap contributors, ODbL', site, half: keep, frame: 'metres, x east, z south, origin = site', roads: [], rails: [], stops: [], parking: [], buildings: [], parks: [], water: [], names: [] };
 
   for (const w of raw.elements) {
+    if (w.type === 'node' && w.lat != null && !seen.has('n' + w.id)) {   // tram stops: a point on the line
+      seen.add('n' + w.id);
+      const [x, z] = toXZ(w);
+      if (Math.abs(x) < keep && Math.abs(z) < keep && !out.stops.some((q) => Math.hypot(q[0] - x, q[1] - z) < 12)) out.stops.push([r1(x), r1(z)]);
+      continue;
+    }
     if (w.type !== 'way' || !w.geometry || seen.has(w.id)) continue;
     seen.add(w.id);
     const t = w.tags || {}, p = flat(w.geometry);
@@ -105,6 +114,7 @@ function extract(site, keep, outId) {
       if (t.highway === 'cycleway') r.bike = 2; else if (cyc.some((v) => v && v !== 'no' && v !== 'none')) r.bike = 1;   // 2: own cycle path, 1: lane on the street
       out.roads.push(r);
     } else if (t.railway === 'tram') out.rails.push({ p });
+    else if (t.amenity === 'parking' && closed(w.geometry)) { p.length -= 2; out.parking.push({ p }); }
     else if (closed(w.geometry) && (t.natural === 'water')) { p.length -= 2; out.water.push({ p }); }
     else if (closed(w.geometry) && (t.leisure || t.landuse || t.natural === 'wood')) { p.length -= 2; out.parks.push({ p, k: t.leisure === 'pitch' ? 'pitch' : t.natural === 'wood' ? 'wood' : 'park' }); }
   }
@@ -120,7 +130,7 @@ if (plotsMode) {
   for (const pl of plotList) {
     const { out } = extract(pl.site, PLOT_KEEP, `${id}/${pl.id}`);
     const s = JSON.stringify(out); fs.writeFileSync(path.join(dir, `${pl.id}.json`), s); total += s.length;
-    console.log(`${pl.id}: ${(s.length / 1024).toFixed(0)} KB, roads ${out.roads.length}, buildings ${out.buildings.length} (apartments ${out.buildings.filter((b) => b.a).length}, height ${out.buildings.filter((b) => b.h).length}), parks ${out.parks.length}, water ${out.water.length}; landmarks ${out.landmarks.map((l) => `${l.id} ${l.dist} m @${l.bearing}`).join(', ')}`);
+    console.log(`${pl.id}: ${(s.length / 1024).toFixed(0)} KB, roads ${out.roads.length}, buildings ${out.buildings.length} (apartments ${out.buildings.filter((b) => b.a).length}, height ${out.buildings.filter((b) => b.h).length}), parks ${out.parks.length}, water ${out.water.length}, rails ${out.rails.length}, tram stops ${out.stops.length}, car parks ${out.parking.length}; landmarks ${out.landmarks.map((l) => `${l.id} ${l.dist} m @${l.bearing}`).join(', ')}`);
   }
   console.log(`total ${(total / 1024).toFixed(0)} KB`);
 } else {

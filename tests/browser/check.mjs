@@ -1,5 +1,5 @@
 // Browser checks on the running game (Playwright + the system Chrome, real GPU).
-//   node tests/browser/check.mjs [all|shots|perf|flicker] [--app URL] [--quality low|medium|high] [--level kosice] [--plot 0-4]
+//   node tests/browser/check.mjs [all|shots|perf|flicker] [--app URL] [--quality low|medium|high] [--level kosice] [--plot 0-4|all]
 //                                [--budget 18] [--viewport 2560x1440] [--dpr 2] [--headed] [--out tests/browser/out]
 // Needs the game served (npm run serve, or npm run preview with --app http://localhost:8001).
 // Prints a short report, writes it and the screenshots to the out folder, and exits 1 if a check fails.
@@ -18,12 +18,14 @@ const POSES = {
   menu: { radius: 44, height: 24, look: [0, 2, 0] },
   game: { radius: 23, height: 12, look: [0, 8, 0] },
   low: { radius: 20, height: 6, look: [0, 1, 0] },
+  ground: { radius: 34, height: 3.5, look: [0, 0.5, 0] },   // grazing view over the ground layers: bike lanes, roads, paths, car parks, track beds
 };
 
 mkdirSync(out, { recursive: true });
 const lines = [], fails = [];
 const log = (s) => { lines.push(s); console.log(s); };
-const plot = opt('plot', null);   // plot index of --level (kosice or newtown): the scene of that plot is built around the tower before the checks
+const plot = opt('plot', null);   // plot index of --level (kosice or newtown): the scene of that plot is built around the tower before the checks; 'all' runs the flicker check on every plot
+const plotList = plot === 'all' ? [0, 1, 2, 3, 4] : plot !== null ? [Number(plot)] : [];
 const tag = `${level}${plot !== null ? '-p' + plot : ''}-${quality}${opt('dpr', 1) != 1 ? '-dpr' + opt('dpr', 1) : ''}`;
 
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -44,17 +46,22 @@ await page.addInitScript((q) => {
 await page.goto(app, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 15000 });
 await page.waitForTimeout(800);
-if (plot !== null) { const errs = await page.evaluate(([n, c]) => window.__debug.loadPlot(Number(n), c), [plot, level]); log(`plot ${plot} loaded${errs.length ? ' with errors ' + JSON.stringify(errs) : ''}`); await page.waitForTimeout(500); }
+const loadPlot = async (n) => { const errs = await page.evaluate(([n, c]) => window.__debug.loadPlot(Number(n), c), [n, level]); log(`plot ${n} loaded${errs.length ? ' with errors ' + JSON.stringify(errs) : ''}`); await page.waitForTimeout(500); };
+if (plotList.length) await loadPlot(plotList[0]);
 const info = await page.evaluate(() => window.__debug.info());
 log(`app ${app} · level ${level} · quality ${quality} · ${vw}x${vh} dpr ${opt('dpr', 1)} · GPU ${info.gpu}`);
 
 if (cmd === 'all' || cmd === 'flicker') {
-  for (const kind of ['depth', 'shadow']) {
-    for (const [name, pose] of Object.entries(POSES)) {
-      const r = await page.evaluate((p) => window.__debug.flicker(p), { ...pose, kind });
-      const ok = r.max <= FLICKER_MAX[kind];
-      if (!ok) fails.push(`flicker ${kind} ${name}`);
-      log(`flicker ${kind.padEnd(6)} ${name.padEnd(5)} max ${(r.max * 100).toFixed(2)}% mean ${(r.mean * 100).toFixed(2)}% (limit ${(FLICKER_MAX[kind] * 100).toFixed(1)}%) ${ok ? 'PASS' : 'FAIL'}`);
+  // twice per pose with a 4 mm camera move (depth) or a 4 cm sun move (shadow); with --plot all every plot of the district is built and checked
+  for (const n of plotList.length ? plotList : [null]) {
+    if (plotList.length > 1 && n !== plotList[0]) await loadPlot(n);
+    for (const kind of ['depth', 'shadow']) {
+      for (const [name, pose] of Object.entries(POSES)) {
+        const r = await page.evaluate((p) => window.__debug.flicker(p), { ...pose, kind });
+        const ok = r.max <= FLICKER_MAX[kind], label = n === null ? '' : `plot ${n} `;
+        if (!ok) fails.push(`flicker ${label}${kind} ${name}`);
+        log(`flicker ${label}${kind.padEnd(6)} ${name.padEnd(6)} max ${(r.max * 100).toFixed(2)}% mean ${(r.mean * 100).toFixed(2)}% (limit ${(FLICKER_MAX[kind] * 100).toFixed(1)}%) ${ok ? 'PASS' : 'FAIL'}`);
+      }
     }
   }
 }

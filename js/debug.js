@@ -1,6 +1,7 @@
 // Hooks for the browser check scripts (tests/browser). Nothing here runs unless a script calls it.
 import * as THREE from 'three';
 import { aimSun } from './world.js';
+import { windClock } from './vegetation.js';
 
 export function installDebug({ renderer, scene, camera, loadPlot = null }) {
   const targets = new Map();
@@ -29,9 +30,20 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }) {
   //  'shadow': the camera stays, the sun's aim point moves 4 cm, as it does every frame while the camera follows the
   //            tower. Stable shadows do not change at all; a swimming shadow map shimmers along every shadow edge.
   function flicker({ kind = 'depth', radius = 44, height = 24, look = [0, 2, 0], arc = Math.PI * 2, pairs = 12, w = 320, h = 180, tol = 40 } = {}) {
-    const out = [];
+    const out = [], m4 = new THREE.Matrix4(), tp = new THREE.Vector3(), ts = new THREE.Vector3();
+    // a pose whose camera sits inside a tree crown shows the crown cut by the near plane, which says nothing about the ground: skip it
+    const inTree = (p) => {
+      let hit = false;
+      scene.traverse((o) => {
+        if (hit || !o.userData.tree) return;
+        for (let i = 0; i < o.count && !hit; i++) { o.getMatrixAt(i, m4); m4.decompose(tp, new THREE.Quaternion(), ts); if (Math.hypot(tp.x - p[0], tp.z - p[2]) < 2.6 * ts.x && p[1] < tp.y + 6 * ts.y) hit = true; }
+      });
+      return hit;
+    };
+    windClock.frozen = performance.now() / 1000;
     for (let i = 0; i < pairs; i++) {
       const a = (i / pairs) * arc, p = [Math.cos(a) * radius, height, Math.sin(a) * radius];
+      if (inTree(p)) continue;
       let A, B;
       if (kind === 'shadow') {
         A = snap(p, look, w, h, look);
@@ -47,8 +59,8 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }) {
       }
       out.push(changed / (w * h));
     }
-    aimSun(focus.set(0, 0, 0));
-    return { max: Math.max(...out), mean: out.reduce((s, v) => s + v, 0) / out.length, perPose: out };
+    aimSun(focus.set(0, 0, 0)); windClock.frozen = null;
+    return { skipped: pairs - out.length, max: Math.max(...out, 0), mean: out.reduce((s, v) => s + v, 0) / out.length, perPose: out };
   }
 
   function info() {
