@@ -5,8 +5,8 @@ import { CFG, phaseAt } from './config.js';
 // Smooth, seeded gusts, so the player can read the trend and wait for a lull.
 export function gustAt(t) { return 0.5 * Math.sin(0.37 * t) + 0.3 * Math.sin(0.91 * t + 1.3) + 0.2 * Math.sin(2.1 * t + 0.4); }
 
-export function windAt(t, n, diff, ph = phaseAt(n)) {
-  const speed = Math.max(0, ph.base + ph.gust * gustAt(t)) * ph.mult * diff.wind;
+export function windAt(t, n, diff, ph = phaseAt(n), scale = 1) {
+  const speed = Math.max(0, ph.base + ph.gust * gustAt(t)) * ph.mult * diff.wind * scale;
   const a = 1.2 * Math.sin(0.031 * t) + 0.4 * Math.sin(0.13 * t + 2);
   return { x: speed * Math.cos(a), z: speed * Math.sin(a), speed, angle: a, trend: gustAt(t + 1.5) - gustAt(t) };
 }

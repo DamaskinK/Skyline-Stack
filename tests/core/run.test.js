@@ -154,3 +154,17 @@ describe('tall floors', () => {
     expect(run.bestHeight).toBeGreaterThanOrEqual(10);
   });
 });
+
+describe('plot runs (district mode)', () => {
+  const level = { id: 'kosice', target: 3, weather: [{ fromFloor: 0, kind: 'rain' }], buildingType: 'panel', events: [] };
+  it('scales the wind by windScale', () => {
+    const a = new Run(DIFFICULTY.normal, { level }), b = new Run(DIFFICULTY.normal, { level, windScale: 0.5 });
+    for (let i = 0; i < 400; i++) { a.step(CFG.DT); b.step(CFG.DT); }
+    expect(b.wind.speed).toBeCloseTo(a.wind.speed * 0.5, 6);
+  });
+  it('reports lives lost in the result', () => {
+    const run = new Run(DIFFICULTY.normal, { level });
+    run.lives = DIFFICULTY.normal.lives - 1; run.end();
+    expect(run.result.livesLost).toBe(1);
+  });
+});

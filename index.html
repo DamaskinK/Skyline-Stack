@@ -44,6 +44,7 @@
     <div class="lives" id="hLives" aria-label="Lives"></div>
     <div class="tag" id="hDiff">NORMAL</div>
     <div class="lbl" id="hTarget"></div>
+    <div class="lbl req" id="hReq"></div>
   </div>
   <div class="hud bl box">
     <div class="chip">
@@ -210,6 +211,18 @@
     <div class="stars" id="doneStars" role="img" aria-label="Stars"></div>
     <div class="stats" id="doneStats"></div>
     <div class="actions"><button type="button" class="btn" id="btnRetry">RETRY</button><button type="button" class="btn ghost" id="btnContinue">CONTINUE</button></div>
+  </div>
+</section>
+
+<!-- ── district plot result ── -->
+<section class="screen dim" id="sPlot" hidden>
+  <div class="panel">
+    <header><h2 id="plotTitle">PLOT RESULT</h2></header>
+    <div class="verdict" id="plotCount"></div>
+    <div class="stars" id="plotStars" role="img" aria-label="Stars"></div>
+    <div class="stats" id="plotStats"></div>
+    <div class="resbox" id="plotDistrict"></div>
+    <div class="actions"><button type="button" class="btn" id="btnPlotMap">DISTRICT MAP</button><button type="button" class="btn ghost" id="btnPlotRetry">RETRY</button></div>
   </div>
 </section>
 

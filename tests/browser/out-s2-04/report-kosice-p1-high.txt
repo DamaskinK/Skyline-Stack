@@ -1,0 +1,10 @@
+plot 1 loaded
+app http://localhost:8000 · level kosice · quality high · 1280x720 dpr 1 · GPU ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)
+flicker depth  menu  max 0.34% mean 0.25% (limit 1.0%) PASS
+flicker depth  game  max 0.52% mean 0.37% (limit 1.0%) PASS
+flicker depth  low   max 0.53% mean 0.36% (limit 1.0%) PASS
+flicker shadow menu  max 0.00% mean 0.00% (limit 0.2%) PASS
+flicker shadow game  max 0.00% mean 0.00% (limit 0.2%) PASS
+flicker shadow low   max 0.00% mean 0.00% (limit 0.2%) PASS
+console errors: none
+RESULT PASS

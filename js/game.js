@@ -9,8 +9,11 @@ import { makeBlockMesh, makeFoundation, makeRoof, makeCrown } from './entities.j
 import { FX, People, strikeBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
-import { settings, loadScores, saveLevelResult } from './settings.js';
-import { levelById, cityById } from './levels.js';
+import { settings, loadScores, saveLevelResult, loadDistrictProgress, saveDistrictResult } from './settings.js';
+import { levelById, cityById, nextLevel } from './levels.js';
+import { resultCounts, plotStars, plotResidents, towerBonuses, districtTotals, nextPlot, plotOf } from './core/district.js';
+import { cityProgress } from './core/district-progress.js';
+import { showDistrictTowers, clearDistrictTowers } from './district-towers.js';
 import { loadLevelAssets, loadPlotExtract } from './assets.js';
 import { applyLevelAssets, level } from './level-scene.js';
 
@@ -42,6 +45,7 @@ export class Game {
   get drops() { return this.run ? this.run.drops : 0; }
 
   get levelId() { return level.id; }
+  get loadedPlotId() { return level.plotId; }
   // Fetch a level's assets and put them in the scene. Resolves to the list of files that failed (may be empty).
   async loadLevel(id, onProgress) {
     const { assets, errors } = await loadLevelAssets(id, onProgress, (aid, v) => { if (aid === 'music') Music.provide(id, v); });
@@ -57,11 +61,27 @@ export class Game {
     const [{ assets, errors }, osm] = await Promise.all([
       loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), loadPlotExtract(cityId, plotId)]);
     applyLevelAssets(cityId, assets, plot, osm);
+    showDistrictTowers(cityId, plotId, cityProgress(loadDistrictProgress(), cityId).plots);
     return errors;
   }
 
-  start(mode = this.mode, diffKey = settings.difficulty, levelId = 'kosice') {
+  // Start a district plot (the scene of the plot must be loaded with loadPlot): its type, target, requirement, wind and weather.
+  startPlot(cityId, plotId, diffKey = settings.difficulty) {
+    const city = cityById(cityId), plot = city.district.plots.find((p) => p.id === plotId);
     this.clear();
+    this.mode = 'plot'; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
+    this.cityId = cityId; this.plotId = plotId; this.plotDef = plot;
+    // a level-shaped definition from the city (day arc, grade) with the plot's own target, type and weather; no events yet
+    this.levelDef = { ...city, target: plot.target, weather: plot.weather, buildingType: plot.buildingType, events: [] };
+    this.prevBest = 0; this.state = 'play'; this.paused = false; this.saved = false;
+    People.setWalkers(9);
+    this.run = new Run(this.diff, { level: this.levelDef, endless: false, windScale: plot.windScale });
+    this.objects.push(makeFoundation(0, 0, plot.buildingType, city.city));
+    this.ui.showHud();
+  }
+
+  start(mode = this.mode, diffKey = settings.difficulty, levelId = 'kosice') {
+    this.clear(); this.plotDef = null; this.plotId = null;
     this.mode = mode; this.diffKey = diffKey; this.diff = DIFFICULTY[diffKey] || DIFFICULTY.normal;
     this.cityId = levelId; this.levelDef = mode === 'level' ? levelById(levelId) : null;
     this.prevBest = mode === 'level' ? 0 : (loadScores(levelId)[0]?.score || 0);
@@ -191,10 +211,32 @@ export class Game {
     }
   }
 
+  // A plot run ended: does it count, save it with the district helpers, then show the plot result.
+  finishPlot(result) {
+    const city = cityById(this.cityId), plot = this.plotDef;
+    const r = { height: result.floors, reached: result.completed, livesLost: result.livesLost, perfects: result.perfects, landings: result.landings };
+    const counts = resultCounts(plot, r), before = cityProgress(loadDistrictProgress(), this.cityId);
+    const after = saveDistrictResult(this.cityId, this.plotId, r);
+    const tot = districtTotals(city.district, after.plots), st = plotOf(after.plots, this.plotId);
+    this.lastResult = {
+      ...result, diff: this.diffKey, plotId: this.plotId, counts, stars: plotStars(plot, r), plot: r,
+      best: st.bestHeight, residents: plotResidents(city.district, after.plots, this.plotId), bonuses: towerBonuses(city.district, after.plots, this.plotId),
+      totals: tot, goalReached: after.goalReached, goalNew: after.goalReached && !before.goalReached,
+      nextCity: nextLevel(this.cityId), nextPlot: nextPlot(city.district, after.plots),
+    };
+    if (result.completed) {
+      const top = this.floorMeshes[this.floorMeshes.length - 1];
+      if (top) { const crown = makeCrown(plot.buildingType); crown.position.y = CFG.H / 2; top.add(crown); }
+    }
+    if (counts) Sfx.fanfare(); else Sfx.over();
+    setTimeout(() => { if (this.state === 'over') this.ui.plotDone(this.lastResult, plot, city); }, 1400);
+  }
+
   gameOver(result) {
     if (this.state === 'over' || this.state === 'menu') return;
     this.state = 'over';
     this.lastResult = { ...result, diff: this.diffKey };
+    if (this.plotDef) { this.finishPlot(result); return; }
     if (this.levelDef) {
       saveLevelResult(this.levelDef.id, result.stars, result.floors);
       if (result.completed) {

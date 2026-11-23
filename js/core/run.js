@@ -14,10 +14,10 @@ export class Run {
   // (Endless on a city: no target, the city's weather segments loop with growing strength). No level at all = plain
   // Endless with the old global weather cycle and its quake every CFG.quakeEvery floors.
   // The level's `events` list decides which events can happen; core emits no other.
-  constructor(diff, { bx = 0, bz = 0, level = null, endless = false, buildingType = null } = {}) {
+  constructor(diff, { bx = 0, bz = 0, level = null, endless = false, buildingType = null, windScale = 1 } = {}) {
     // buildingType (Endless picks one) overrides the level's own; the trait multipliers are folded into the difficulty
     this.buildingType = buildingType || (level && level.buildingType) || null;
-    this.diff = applyTrait(diff, this.buildingType); this.level = level; this.endless = !!(level && endless); this.landings = 0;
+    this.diff = applyTrait(diff, this.buildingType); this.level = level; this.windScale = windScale; this.endless = !!(level && endless); this.landings = 0;
     this.allowedEvents = level ? level.events || [] : ['lightning', 'quake'];
     this.wx = weatherAt(level, 0, this.endless);
     this.tower = new Tower(bx, bz, this.diff);
@@ -68,7 +68,7 @@ export class Run {
     const n = T.n, ph = weatherAt(this.level, n, this.endless);
     if (ph.seg !== this.wx.seg) this.emit('weather', { floor: n, kind: ph.kind });
     this.wx = ph; T.wx = ph;
-    this.wind = windAt(this.t, n, this.diff, ph);
+    this.wind = windAt(this.t, n, this.diff, ph, this.windScale);
     // lightning and sandstorm gusts: telegraphed by a warning, then a fixed kick in the wind direction
     const strike = CFG.features.lightning && ph.lightning && this.hasEvent('lightning') ? 'lightning'
       : CFG.features.lightning && ph.gustEvent && this.hasEvent('sandstormGust') ? 'gust' : null;
@@ -196,7 +196,7 @@ export class Run {
     this.over = true;
     this.result = {
       score: this.score, floors: Math.max(this.bestHeight, this.tower.n), pop: this.pop, perfects: this.perfects,
-      landings: this.landings, completed: false, stars: 0, ...extra,
+      landings: this.landings, completed: false, stars: 0, livesLost: this.diff.lives - this.lives, ...extra,
     };
     this.emit('over', { result: this.result });
   }

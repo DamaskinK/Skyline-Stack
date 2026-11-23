@@ -287,3 +287,12 @@ svg.off path { fill: #1a2148; stroke: #2c3a78; }
 .pinlbl.up { transform: translate(-50%, calc(-100% - 26px)); }
 .resbox .lbl { line-height: 1.6; }
 @media (max-width: 860px) { .panel.map header h2 { font-size: 15px; } .resbox .lbl { font-size: 8px; } }
+
+/* S0002 04: plot requirement in the HUD, verdict on the plot result screen */
+#hReq { color: var(--cyan); font-size: 9px; max-width: 220px; text-align: right; }
+#hReq:empty { display: none; }
+#hReq.bad { color: var(--bad); }
+.verdict { background: #0f1533; padding: 10px 12px; box-shadow: inset 0 0 0 2px var(--line); font-size: 12px; line-height: 1.6; }
+.verdict b { display: block; font-family: var(--f-disp); font-size: 12px; margin-bottom: 4px; }
+.verdict.ok b { color: var(--ok); } .verdict.bad b { color: var(--bad); }
+#plotStats { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }

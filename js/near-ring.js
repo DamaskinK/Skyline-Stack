@@ -266,7 +266,7 @@ export function buildNearRing(osm, kit = {}, hide = null) {
   // Historic centre (small footprints, no tall height tag): 2-4 storey baroque / classicist houses, pastel plaster, red hip roofs.
   // Everything larger or taller: plain calm facade, flat roof.
   const walls = new Map(), tiles = new Builder(), flats = new Builder(), relief = new Builder(), kept = [];
-  const frameR = settings.quality === 'low' ? 75 : 150;     // window frames only where the camera can see them; cornices and plinths everywhere
+  const frameR = settings.quality === 'low' ? 75 : 110;     // window frames only where the camera can see them; cornices and plinths everywhere
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   const wallB = (kind, v) => { const k = kind + v; if (!walls.has(k)) walls.set(k, { kind, v, b: new Builder() }); return walls.get(k).b; };
   for (const bd of osm.buildings) {

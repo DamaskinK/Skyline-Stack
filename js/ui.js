@@ -3,6 +3,10 @@ import { BUILDING_TYPES } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
 import { settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
 import { levelById, DISTRICT_CITIES } from './levels.js';
+import { showDistrictTowers } from './district-towers.js';
+import { loadDistrictProgress } from './settings.js';
+import { cityProgress } from './core/district-progress.js';
+import { requirementText } from './district-map.js';
 import { createDistrictMap } from './district-map.js';
 import { Sfx } from './audio.js';
 import { People } from './fx.js';
@@ -66,7 +70,7 @@ export function createUI(game) {
   for (const b of $$('.mi, .card-opt, .seg button, .tabs button')) b.addEventListener('pointerenter', () => { if (document.activeElement !== b) { b.focus({ preventScroll: true }); Sfx.ui(); } });
 
   // ── new game ──
-  let pickDiff = settings.difficulty, pickMode = 'level';
+  let pickDiff = settings.difficulty, pickMode = 'endless';
   const dc = $('#diffCards');
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
@@ -78,17 +82,12 @@ export function createUI(game) {
   function syncNew() {
     for (const b of $$('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === pickDiff));
     for (const b of $$('[data-mode]')) b.setAttribute('aria-pressed', String(b.dataset.mode === pickMode));
-    const k = levelById('kosice');
-    $('#modeNote').textContent = pickMode === 'level'
-      ? `1 star: reach ${k.target} floors. 2 stars: lose at most one life. 3 stars: at least half your landings perfect.`
-      : 'ENDLESS: one tower, as high as you can. The weather keeps changing as you climb.';
+    $('#modeNote').textContent = 'ENDLESS: one tower on the Kosice city centre plot, as high as you can. The weather keeps changing as you climb. Districts are played from the cards below.';
   }
   syncNew();
   // Mode cards: Kosice level (with its best stars) and Endless. The world map (ticket 20) will replace this.
   function renderModes() {
-    const k = levelById('kosice'), best = loadProgress().levels[k.id];
     $('#modeCards').innerHTML =
-      `<button type="button" class="card-opt" data-mode="level"><b>${k.city.toUpperCase()}</b><span class="sub">Level 1 · build ${k.target} floors</span><span>${[1, 2, 3].map((i) => STAR(i <= (best?.stars || 0))).join('')}</span></button>` +
       `<button type="button" class="card-opt" data-mode="endless"><b>ENDLESS</b><span class="sub">No target, as high as you can</span></button>`;
     for (const b of $$('[data-mode]')) b.onclick = () => { pickMode = b.dataset.mode; Sfx.ui(); syncNew(); };
     syncNew();
@@ -96,29 +95,49 @@ export function createUI(game) {
       `<button type="button" class="card-opt" data-district="${c.id}"><b>${c.city.toUpperCase()}</b><span class="sub">${c.fictional ? 'Made-up city' : c.country} · 5 plots · goal ${c.district.goal} residents</span></button>`).join('');
     for (const b of $$('[data-district]')) b.onclick = () => { Sfx.init(); Sfx.uiOk(); districtMap.render(b.dataset.district); show('sMap'); };
   }
-  // District map (S0002 05). Play on a plot starts the existing Kosice level run until ticket 04 wires per-plot scenes.
+  // District map (S0002 05). Play loads the scene of the plot and runs it with the plot's rules.
   const districtMap = createDistrictMap({
-    onPlay: (cityId) => { if (cityId === 'kosice') startGame('level', pickDiff, 'kosice'); },
+    onPlay: (cityId, plotId) => { if (cityId === 'kosice') startGame('plot', pickDiff, cityId, plotId); },
     onBack: back,
   });
+  // Back to the district map after a plot: the finished towers stand on their sites, the next open plot is selected.
+  function toMap(cityId) {
+    const plotId = game.plotId;
+    game.clear(); game.state = 'menu'; game.paused = false;
+    $('#hud').hidden = true; $('#wxCard').hidden = true;
+    const info = districtMap.render(cityId, { focusNext: true });
+    const plots = cityProgress(loadDistrictProgress(), cityId).plots;
+    const shown = plotId ? showDistrictTowers(cityId, plotId, plots, { withCurrent: true }) : null;
+    if (!shown || !plots[plotId] || !plots[plotId].counted) buildDemo();
+    People.setWalkers(9);
+    stack = ['sTitle', 'sNew']; show('sMap');
+    return info;
+  }
   $('#btnStart').onclick = () => startGame(pickMode, pickDiff);
   let starting = false;
-  async function startGame(mode, diff, level = 'kosice') {
+  // plot mode: a district plot of `level` (a city id). Endless and the other modes run on the city centre plot (Kosice: the cathedral).
+  async function startGame(mode, diff, level = 'kosice', plotId = null) {
     if (starting) return; starting = true;
     Sfx.init(); Sfx.uiOk(); stack = [];
-    if (game.levelId !== level) await loadLevel(level);
+    const plots = (DISTRICT_CITIES.find((c) => c.id === level) || {}).district?.plots;
+    const pid = plotId || (plots ? plots[plots.length - 1].id : null);
+    if (pid && (game.levelId !== level || game.loadedPlotId !== pid || mode === 'plot')) await loadPlot(level, pid);
+    else if (!pid && game.levelId !== level) await loadLevel(level);
     clearDemo(); hideScreens();
-    game.start(mode, diff, level);
+    if (mode === 'plot') game.startPlot(level, pid, diff); else game.start(mode, diff, level);
     starting = false;
   }
+  const restart = () => (game.mode === 'plot' ? startGame('plot', game.diffKey, game.cityId, game.plotId) : startGame(game.mode, game.diffKey, game.cityId));
   // Loading screen with progress. A failed asset is named on screen and the game goes on with what it has.
-  async function loadLevel(level) {
+  const loadLevel = (level) => loadWith((setP) => game.loadLevel(level, setP));
+  const loadPlot = (level, pid) => loadWith((setP) => game.loadPlot(level, pid, setP));
+  async function loadWith(load) {
     const bar = $('#loadBar'), fill = bar.querySelector('i'), text = $('#loadText');
     const setP = (p) => { fill.style.width = `${(p * 100).toFixed(0)}%`; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); };
     setP(0); text.classList.remove('err'); text.textContent = 'Fetching the city...';
     show('sLoading', false);
     try {
-      const errors = await game.loadLevel(level, setP);
+      const errors = await load(setP);
       if (errors.length) {
         text.classList.add('err');
         text.textContent = `Some files did not load (${errors.map((e) => e.url.split('/').pop()).join(', ')}). Playing without them.`;
@@ -216,7 +235,7 @@ export function createUI(game) {
     if (game.paused) { stack = []; show('sPause'); } else { hideScreens(); stack = []; }
   }
   $('#btnPause').onclick = togglePause; $('#btnResume').onclick = togglePause;
-  $('#btnRestart').onclick = () => { game.paused = false; startGame(game.mode, game.diffKey, game.cityId); };
+  $('#btnRestart').onclick = () => { game.paused = false; restart(); };
   function syncMute() { $('#muteX').hidden = !settings.muted; $('#muteWave').hidden = settings.muted; $('#btnMute').setAttribute('aria-label', settings.muted ? 'Unmute sound' : 'Mute sound'); }
   function toggleMute() { setSetting('muted', !settings.muted); syncMute(); }
   function cycleCam() { game.camMode = (game.camMode + 1) % 3; setSetting('camera', game.camMode); }
@@ -230,8 +249,10 @@ export function createUI(game) {
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
-  $('#btnAgain').onclick = () => startGame(game.mode, game.diffKey, game.cityId);
-  $('#btnRetry').onclick = () => startGame(game.mode, game.diffKey, game.cityId);
+  $('#btnAgain').onclick = restart;
+  $('#btnRetry').onclick = restart;
+  $('#btnPlotRetry').onclick = restart;
+  $('#btnPlotMap').onclick = () => { Sfx.uiOk(); toMap(game.cityId); };
   $('#btnContinue').onclick = () => { Sfx.uiBack(); toMenu(); };   // no level 2 yet: back to the menu
 
   // ── game over ──
@@ -274,6 +295,30 @@ export function createUI(game) {
       $('#doneStats').innerHTML = `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">PERFECTS</span><b>${r.perfects}/${r.landings}</b></div><div><span class="lbl">RESIDENTS</span><b>${r.pop}</b></div>`;
       stack = []; show('sLevelDone');
     },
+    // Result of a district plot: counted or not (and why), stars, residents, district progress, next city.
+    plotDone(r, plot, city) {
+      $('#hud').hidden = true;
+      const q = plot.require || {}, p = r.plot, share = p.landings ? Math.round(100 * p.perfects / p.landings) : 0, why = [];
+      if (!p.reached) why.push(`the tower did not reach ${plot.target} floors (best ${r.floors})`);
+      if (p.reached && q.maxLivesLost != null && p.livesLost > q.maxLivesLost) why.push(`${p.livesLost} lives lost, the limit is ${q.maxLivesLost}`);
+      if (p.reached && q.minPerfectShare != null && !(p.landings > 0 && p.perfects / p.landings >= q.minPerfectShare)) why.push(`${share} % perfect landings, ${Math.round(q.minPerfectShare * 100)} % needed`);
+      $('#plotTitle').textContent = r.counts ? `${plot.name.toUpperCase()} BUILT` : `${plot.name.toUpperCase()} NOT COUNTED`;
+      $('#plotCount').className = `verdict ${r.counts ? 'ok' : 'bad'}`;
+      $('#plotCount').innerHTML = r.counts
+        ? `<b>COUNTED</b> You met the requirement: ${esc(requirementText(plot))}.`
+        : `<b>NOT COUNTED</b> ${esc(why.join('; '))}. Needed: ${esc(requirementText(plot))}.`;
+      $('#plotStars').innerHTML = [1, 2, 3].map((i) => STAR(i <= r.stars)).join('');
+      $('#plotStars').setAttribute('aria-label', `${r.stars} of 3 stars`);
+      const bon = [r.bonuses.view ? 'VIEW +20 %' : '', r.bonuses.skyline ? 'SKYLINE +15 %' : ''].filter(Boolean).join(' · ');
+      $('#plotStats').innerHTML = `<div><span class="lbl">HEIGHT</span><b>${r.floors} FL</b></div><div><span class="lbl">PERFECTS</span><b>${p.perfects}/${p.landings}</b></div><div><span class="lbl">LIVES LOST</span><b>${p.livesLost}</b></div>`
+        + (r.counts ? `<div><span class="lbl">RESIDENTS</span><b>${r.residents}</b></div><div><span class="lbl">BONUS</span><b>${bon || 'NONE'}</b></div>` : `<div><span class="lbl">BEST HERE</span><b>${r.best} FL</b></div>`);
+      const t = r.totals, pct = Math.min(100, Math.round(t.residents / t.goal * 100));
+      $('#plotDistrict').innerHTML = `<div class="lbl">${esc(city.city.toUpperCase())} DISTRICT · RESIDENTS <b>${t.residents}</b> / ${t.goal}</div>`
+        + `<div class="bar res" role="progressbar" aria-label="Residents towards the goal" aria-valuemin="0" aria-valuemax="${t.goal}" aria-valuenow="${t.residents}"><i style="width:${pct}%"></i></div>`
+        + `<div class="lbl">${t.counted} / ${t.plots} PLOTS BUILT · ${t.stars} / ${t.maxStars} STARS</div>`
+        + (r.goalReached ? `<div class="verdict ok"><b>${r.goalNew ? 'GOAL REACHED' : 'GOAL REACHED EARLIER'}</b> ${r.nextCity ? `Next city opened: ${esc(r.nextCity.city)}.` : 'Next city opened.'}</div>` : '');
+      stack = []; show('sPlot');
+    },
     gameOver(r, record) {
       $('#hud').hidden = true;
       const lv = !!game.levelDef;   // a failed level run: result screen, no high-score form
@@ -296,6 +341,10 @@ export function createUI(game) {
       if ($('#hud').hidden) return;
       const T = game.tower, n = T ? T.n : 0, ph = game.weather, w = game.wind;
       setText('hTarget', game.levelDef ? `TARGET ${n} / ${game.levelDef.target}` : '');
+      const pd = game.plotDef, rr = game.run;
+      setText('hReq', !pd ? '' : [pd.require.maxLivesLost != null ? `LOSE AT MOST ${pd.require.maxLivesLost}: LOST ${rr.diff.lives - rr.lives}` : '',
+        pd.require.minPerfectShare != null ? `${Math.round(pd.require.minPerfectShare * 100)} % PERFECT: ${rr.landings ? Math.round(100 * rr.perfects / rr.landings) : 0} %` : ''].filter(Boolean).join(' · ') || 'NO EXTRA REQUIREMENT');
+      $('#hReq').classList.toggle('bad', !!pd && ((pd.require.maxLivesLost != null && rr.diff.lives - rr.lives > pd.require.maxLivesLost) || (pd.require.minPerfectShare != null && rr.landings >= 4 && rr.perfects / rr.landings < pd.require.minPerfectShare)));
       setText('hScore', String(game.score));
       setText('hPop', String(game.pop));
       setText('floorBig', String(n));

@@ -53,11 +53,12 @@ export function createDistrictMap({ onPlay, onBack }) {
     return view + sky;
   }
 
-  function render(id = cityId) {
+  function render(id = cityId, { focusNext = false } = {}) {
     cityId = id;
     const city = cityById(id), d = city.district;
     const progress = cityProgress(loadDistrictProgress(), id), plots = progress.plots;
     const tot = districtTotals(d, plots), next = nextPlot(d, plots);
+    if (focusNext && next) selected = next.id;
     if (!selected || !d.plots.some((p) => p.id === selected)) selected = (next || d.plots[d.plots.length - 1]).id;
     const playable = city.id === 'kosice';
 
