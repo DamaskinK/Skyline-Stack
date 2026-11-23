@@ -25,7 +25,8 @@ installDebug({ renderer, scene, camera, loadPlot: (n, city = 'kosice') => game.l
 
 applyQuality(); People.applyTraffic(); resize(); applyPostQuality();
 window.addEventListener('resize', () => { resize(); resizePost(); });
-onSettings((k) => { if (k === 'quality') { applyQuality(); People.applyTraffic(); applyPostQuality(); }   // the car count follows the preset and the finished plots });
+// the car count follows the preset and the finished plots
+onSettings((k) => { if (k === 'quality') { applyQuality(); People.applyTraffic(); applyPostQuality(); } });
 window.__post = post;
 
 const $flash = document.getElementById('flash'), $vig = document.getElementById('vignette');
