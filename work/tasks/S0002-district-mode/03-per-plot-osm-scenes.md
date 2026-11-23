@@ -6,7 +6,7 @@ builds around the plot being played; the middle and far rings stay per city and 
 **Blocked by:** 01, S0001 ticket 38
 
 **Type:** feature
-**Status:** ready-for-agent
+**Status:** claimed
 **Read:** plan "Scenes"; S0001 tickets 12, 13, 34, 38 Comments.
 
 - [ ] Five Kosice plot extracts generated and committed; ODbL credit kept; total ~2-3 MB.
