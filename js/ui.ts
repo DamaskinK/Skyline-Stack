@@ -1,8 +1,10 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
 import { BUILDING_TYPES, buildingTypeById } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
-import { NAME_KEY, settings, setSetting, loadScores, addScore, resetScores, loadProgress } from './settings.js';
-import { levelById, DISTRICT_CITIES, LEVELS } from './levels.js';
+import { NAME_KEY, settings, setSetting, loadScores, addScore, resetScores, loadProgress, loadLastCity, saveLastCity } from './settings.js';
+import { levelById, cityById, DISTRICT_CITIES, LEVELS } from './levels.js';
+import { landmarkSpots } from './level-scene.js';
+import { introKeys, introDuration } from './core/intro-path.js';
 import { showDistrictTowers, clearDistrictTowers } from './district-towers.js';
 import { loadDistrictProgress } from './settings.js';
 import { cityProgress } from './core/district-progress.js';
@@ -15,7 +17,7 @@ import { buildDemo, clearDemo } from './game.js';
 import type { Game, GameUi, GameMode } from './game.js';
 import type { AssetError } from './assets.js';
 import type { Run } from './core/run.js';
-import type { Level, DifficultyId, District, Settings } from './types.js';
+import type { Level, DifficultyId, District, Plot, Settings } from './types.js';
 
 // The page (index.html) always has the elements the code asks for, so a missing one is a bug and fails loudly later.
 const $ = <T extends HTMLElement = HTMLElement>(s: string): T => document.querySelector(s) as T;
@@ -128,17 +130,63 @@ export function createUI(game: Game): GameUi {
   }
   $('#btnStart').onclick = () => startGame(pickMode, pickDiff, pickCity);
   let starting = false;
+  // ── menu scene and transitions ──
+  // The veil is a black layer between the 3D scene and the screens: a scene swap happens while it is opaque.
+  const $veil = $('#veil'), $menuLoad = $('#menuLoad');
+  const veilOn = (): Promise<void> => { $veil.classList.add('on'); return new Promise((r) => setTimeout(r, 300)); };
+  const veilOff = (): void => { $veil.classList.remove('on'); };
+  // The main menu flies over the real scene of the last played city (first city: Kosice), on its centre (last) plot.
+  let menuLoading: Promise<void> = Promise.resolve();
+  function menuTarget(): { city: Level; pid: string } {
+    const last = loadLastCity(), city = DISTRICT_CITIES.find((c) => c.id === last && c.built) || DISTRICT_CITIES.find((c) => c.built) as Level;
+    const plots = (city.district as District).plots;
+    return { city, pid: plots[plots.length - 1].id };
+  }
+  function loadMenuScene(): Promise<void> {
+    const { city, pid } = menuTarget();
+    buildDemo(city.id);
+    if (game.levelId === city.id && game.loadedPlotId === pid) { showDistrictTowers(city.id, pid, cityProgress(loadDistrictProgress(), city.id).plots); return menuLoading; }
+    menuLoading = menuLoading.then(async () => {
+      $menuLoad.textContent = S.menuLoading(city.city); $menuLoad.hidden = false;
+      let swapped = false;
+      try {
+        await game.loadPlot(city.id, pid, undefined, async () => { if (game.state === 'menu' && !starting) { swapped = true; await veilOn(); } });
+      } catch (e) { console.warn('menu scene', e); }   // the procedural demo stays
+      $menuLoad.hidden = true;
+      if (swapped) { buildDemo(city.id); People.setWalkers(9); veilOff(); }
+    });
+    return menuLoading;
+  }
+  // The camera pass before a plot: place card over a fly-by of the landmarks in view; Space, Enter, Esc or a click skips it.
+  function runIntro(cityId: string, plot: Plot): Promise<void> {
+    const city = cityById(cityId) as Level, plots = (city.district as District).plots;
+    $('#introKicker').textContent = S.introPlot(city.fictional ? S.madeUpCity : city.country, plots.indexOf(plot) + 1, plots.length);
+    $('#introCity').textContent = city.city; $('#introPlot').textContent = plot.name;
+    const spots = landmarkSpots(plot.landmarksInView), c = (game.camera as THREE.PerspectiveCamera).position;
+    const keys = introKeys({ p: [c.x, c.y, c.z], l: [0, 15, 0] }, spots, { p: [30, 42, 44], l: [0, 2, 0] });
+    return new Promise((resolve) => {
+      const done = (): void => { if (!game.intro) return; game.intro = null; resolve(); };
+      game.intro = { t: 0, dur: introDuration(spots.length), keys, done };
+      $('#sIntro').onclick = done;
+      stack = []; show('sIntro', false);
+    });
+  }
   // plot mode: a district plot of `level` (a city id). Endless and the other modes run on the city centre plot (Kosice: the cathedral).
   async function startGame(mode: GameMode, diff: DifficultyId, level = 'kosice', plotId: string | null = null): Promise<void> {
     if (starting) return; starting = true;
     Sfx.init(); Sfx.uiOk(); stack = [];
+    await menuLoading;
     const plots = (DISTRICT_CITIES.find((c) => c.id === level) || {}).district?.plots;
     const pid = plotId || (plots ? plots[plots.length - 1].id : null);
+    await veilOn();
     if (pid && (game.levelId !== level || game.loadedPlotId !== pid || mode === 'plot')) await loadPlot(level, pid);
     else if (!pid && game.levelId !== level) await loadLevel(level);
     // the plot being played stands on its own site: the district towers around it are rebuilt without it (the map showed it too)
     if (pid) showDistrictTowers(level, pid, cityProgress(loadDistrictProgress(), level).plots); else clearDistrictTowers();
-    clearDemo(); hideScreens();
+    clearDemo(); saveLastCity(level);
+    if (mode === 'plot') { hideScreens(); await new Promise((r) => requestAnimationFrame(r)); veilOff(); await runIntro(level, (plots as Plot[]).find((p) => p.id === pid) as Plot); }
+    else veilOff();
+    hideScreens();
     if (mode === 'plot') game.startPlot(level, pid as string, diff); else game.start(mode, diff, level);
     starting = false;
   }
@@ -217,6 +265,7 @@ export function createUI(game: Game): GameUi {
     Sfx.init();
     const scr = current();
     if (scr) {
+      if (scr.id === 'sIntro') { if (e.code === 'Space' || e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); game.intro?.done(); } return; }
       if (e.key === 'Escape' || e.key === 'Backspace') {
         if (scr.id === 'sPause') { togglePause(); e.preventDefault(); return; }
         back(); e.preventDefault(); return;
@@ -263,8 +312,8 @@ export function createUI(game: Game): GameUi {
   function toMenu() {
     game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
-    clearDistrictTowers();                    // the menu tower stands at the origin: no finished tower on that spot
-    stack = []; show('sTitle'); buildDemo(); People.setWalkers(9);
+    clearDistrictTowers();                    // the menu tower stands at the origin: no finished tower on that spot (loadMenuScene shows the others)
+    stack = []; show('sTitle'); People.setWalkers(9); void loadMenuScene();
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
@@ -390,5 +439,6 @@ export function createUI(game: Game): GameUi {
     },
   };
   show('sTitle');
+  void loadMenuScene();
   return ui;
 }

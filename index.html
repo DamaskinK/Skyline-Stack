@@ -16,6 +16,7 @@
 <canvas id="c" aria-label="Skyline Stack game scene"></canvas>
 <div id="vignette"></div>
 <div id="flash"></div>
+<div id="veil"></div>
 
 <!-- ── in-game HUD ── (all visible text comes from js/strings.ts: data-t = text, data-t-aria = aria-label) -->
 <div id="hud" hidden>
@@ -77,6 +78,7 @@
 <div id="touch"><button id="tFocus" type="button" class="btn" data-t="hud.slowmo"></button></div>
 
 <!-- ── title screen ── -->
+<div id="menuLoad" class="menu-load" hidden role="status"></div>
 <section class="screen" id="sTitle">
   <div class="title-wrap">
     <h1 class="logo" aria-label="Skyline Stack">
@@ -173,6 +175,16 @@
 </section>
 
 <!-- ── loading a level ── -->
+<!-- ── city intro: place card over the camera pass, skippable ── -->
+<section class="screen intro" id="sIntro" hidden tabindex="-1" aria-live="polite">
+  <div class="intro-card">
+    <div class="intro-kicker" id="introKicker"></div>
+    <h2 id="introCity"></h2>
+    <div class="intro-plot" id="introPlot"></div>
+  </div>
+  <div class="intro-skip" data-t="intro.skip"></div>
+</section>
+
 <section class="screen dim" id="sLoading" hidden>
   <div class="panel narrow">
     <header><h2 id="loadTitle" data-t="load.title"></h2></header>

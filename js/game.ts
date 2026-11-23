@@ -20,6 +20,7 @@ import type { AssetError } from './assets.js';
 import { applyLevelAssets, level } from './level-scene.js';
 import type { Block, District, DifficultyId, Difficulty, Hook, Level, Plot, PlotResult, RunEvent, RunResult, Vec3, Wind, WeatherCycle, DistrictTotals, LevelAssets, OsmExtract } from './types.js';
 import type { Tower } from './physics.js';
+import type { Pose } from './core/intro-path.js';
 
 type Mesh = ReturnType<typeof makeBlockMesh>;
 export type GameState = 'menu' | 'play' | 'over';
@@ -56,6 +57,8 @@ export class Game {
   state: GameState = 'menu'; mode: GameMode = 'endless'; paused = false;
   objects: THREE.Object3D[] = []; debris: Debris[] = []; keys: { focus?: boolean } = {}; camMode = 0;
   flashV = 0; shake = 0;
+  // The camera pass before a plot (main.ts moves the camera; the UI creates it and is told when it ends)
+  intro: { t: number; dur: number; keys: Pose[]; done: () => void } | null = null;
   diffKey: DifficultyId = settings.difficulty; diff: Difficulty = DIFFICULTY[settings.difficulty];
   // Both are set by main.js right after the game is made, before anything runs.
   ui = null as unknown as GameUi; camera: THREE.PerspectiveCamera | null = null;
@@ -91,12 +94,13 @@ export class Game {
 
   // Build the scene of one district plot of a city (near ring from the plot's own extract, rings and landmarks offset to it).
   // Resolves to the list of files that failed. Ticket 04 calls this before game.start().
-  async loadPlot(cityId: string, plotId: string, onProgress?: (fraction: number) => void): Promise<AssetError[]> {
+  async loadPlot(cityId: string, plotId: string, onProgress?: (fraction: number) => void, beforeApply?: () => Promise<void>): Promise<AssetError[]> {
     const plot = (cityById(cityId)?.district?.plots || []).find((p) => p.id === plotId);
     if (!plot) throw new Error(`No plot "${plotId}" in ${cityId}`);
     // a real city has one OpenStreetMap extract per plot; fictional Newtown is the procedural city and has none
     const [{ assets, errors }, osm] = await Promise.all([
       loadLevelAssets(cityId, onProgress, (aid, v) => { if (aid === 'music') Music.provide(cityId, v); }), 'x' in plot.site ? null : loadPlotExtract(cityId, plotId)]);
+    if (beforeApply) await beforeApply();   // the menu fades to black here, so the old scene is not seen being replaced
     // the loaded files are typed by manifest id in LevelAssets; the extract is the plot's OSM json
     applyLevelAssets(cityId, assets as LevelAssets, plot, osm as OsmExtract | null);
     showDistrictTowers(cityId, plotId, cityProgress(loadDistrictProgress(), cityId).plots);
@@ -286,7 +290,7 @@ let demo: THREE.Object3D[] = [];
 const DEMO_FLOORS = 10;   // floors are 2.8 tall now, so fewer of them fill the same skyline
 export function buildDemo(levelId = 'kosice'): void {
   clearDemo();
-  const lv = (levelById(levelId) || levelById('kosice')) as Level, type = lv.buildingType || 'panel', bt = BUILDING_TYPES[type];
+  const lv = (cityById(levelId) || levelById('kosice')) as Level, type = lv.buildingType || 'panel', bt = BUILDING_TYPES[type];
   demo.push(makeFoundation(0, 0, type, lv.city));
   for (let i = 0; i < DEMO_FLOORS; i++) {
     const m = makeBlockMesh(ENDLESS_COLORS[Math.floor(i / 5) % ENDLESS_COLORS.length], false, i % 3, bt.facade);

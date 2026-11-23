@@ -14,6 +14,7 @@ import type { LevelAssets, OsmExtract, Plot, Pt2, Site } from './types.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
 export const level: { id: string | null; plotId: string | null; env: THREE.Texture | null } = { id: null, plotId: null, env: null };
+let lmRoot: THREE.Object3D | null = null;
 let pmrem: THREE.PMREMGenerator | null = null, envRT: THREE.WebGLRenderTarget | null = null;
 
 function fitWidth(obj: THREE.Object3D, width: number): void {
@@ -53,7 +54,7 @@ function procRoutes(ox: number, oz: number): { p: number[]; off: number }[] {
 }
 
 export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | null = null, plotOsm: OsmExtract | null = null): void {
-  disposeGroup(group); group.clear();
+  disposeGroup(group); group.clear(); lmRoot = null;
   level.id = id; level.plotId = plot ? plot.id : null; level.env = assets.sky ?? null; People.setCity(id);
   envRT?.dispose(); envRT = null;
   if (assets.sky) {
@@ -69,7 +70,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
     const off = plot && plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
     const near = buildNearRing(osm, assets, landmarkHide(id));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
-    const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
+    const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
     traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
     Trams.use(near.userData.tram); People.setParked(near.userData.parked);
   }
@@ -77,7 +78,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
   if (!osm) {
     const off = plot ? plotOffset(id, plot) : { x: 0, z: 0 };
     setProcOffset(-off.x, -off.z);
-    const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); }
+    const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
     People.setRoutes(procRoutes(-off.x, -off.z));
   } else setProcOffset(0, 0);
   if (assets.bench) {
@@ -89,4 +90,13 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
       group.add(b);
     }
   }
+}
+
+// Where the landmarks of the loaded scene stand in world metres (origin = the plot's site), for the camera pass of the city intro.
+// `ids` are the plot's landmarksInView; a landmark group matches when its name is the id or ends with it. Streets (no model) match nothing.
+export function landmarkSpots(ids: string[]): Pt2[] {
+  if (!lmRoot) return [];
+  const out: Pt2[] = [];
+  for (const c of lmRoot.children) if (ids.some((id) => c.name === id || c.name.endsWith('-' + id))) out.push({ x: lmRoot.position.x + c.position.x, z: lmRoot.position.z + c.position.z });
+  return out;
 }

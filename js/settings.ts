@@ -2,6 +2,7 @@
 const KEY = 'skyline_settings_v2';
 const PROGRESS = 'skyline_progress_v3';
 const DISTRICT = 'skyline_district_v1';
+const LAST_CITY = 'skyline_last_city_v1';
 export const NAME_KEY = 'skyline_name_v1';
 import type { DistrictProgress, PlotResult, EndlessEntry, Progress, Settings } from './types.js';
 import { sanitize, recordLevel, recordEndless } from './core/stars.js';
@@ -49,6 +50,9 @@ export function loadDistrictProgress(): DistrictProgress {
   if (!kosice) throw new Error('levels.js has no Kosice district');
   return migrateFromLevels(p, loadProgress(), 'kosice', kosice);
 }
+// The city of the last started game: the main menu flies over it next time.
+export function loadLastCity(): string | null { const v = read(LAST_CITY); return typeof v === 'string' ? v : null; }
+export function saveLastCity(id: string): void { write(LAST_CITY, id); }
 export function saveDistrictResult(cityId: string, plotId: string, result: PlotResult) {
   const district = cityById(cityId)?.district;
   if (!district) throw new Error(`no district for city ${cityId}`);

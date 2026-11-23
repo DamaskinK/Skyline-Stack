@@ -3,13 +3,14 @@ import * as THREE from 'three';
 import { CFG, CAM_OFFSETS } from './config.js';
 import { renderer, scene, camera, applyQuality, resize, updateWorld } from './world.js';
 import { dayAt } from './core/dayarc.js';
+import { introPose } from './core/intro-path.js';
 import { updateCrane, updateMarker } from './entities.js';
 import { FX, People, updateWeather, updateBolt } from './fx.js';
 import { Sfx } from './audio.js';
 import { Music } from './music.js';
 import { Trams } from './trams.js';
 import { settings, onSettings } from './settings.js';
-import { Game, buildDemo } from './game.js';
+import { Game } from './game.js';
 import { createUI } from './ui.js';
 import { installDebug } from './debug.js';
 import { DISTRICT_CITIES } from './levels.js';
@@ -70,10 +71,16 @@ function render(rdt: number) {
   updateMarker(markerOn, b?.x ?? 0, T ? T.topY() + 0.02 : 0, b?.z ?? 0, ph.name === 'Fog' ? 0.45 : 0.22);
 
   // camera
-  if (game.state === 'menu') {
-    // slow orbit; on wide screens the tower sits right of centre, clear of the menu
-    const a = clock * 0.08, k = camera.aspect > 1.1 ? 10 : 0;
-    camPos.lerp(tmpTarget.set(Math.cos(a) * 44, 24, Math.sin(a) * 44), Math.min(1, rdt * 2));
+  if (game.intro) {
+    // city intro: the camera follows the pass over the landmarks (skipped or finished by the UI)
+    const it = game.intro; it.t += rdt;
+    const q = introPose(it.keys, it.t / it.dur);
+    camPos.set(...q.p); camLook.set(...q.l); tmpLook.copy(camLook);
+    if (it.t >= it.dur) it.done();
+  } else if (game.state === 'menu') {
+    // slow fly-over of the loaded city: a wide orbit that rises and sinks; on wide screens the tower sits right of centre, clear of the menu
+    const a = clock * 0.06, k = camera.aspect > 1.1 ? 10 : 0, r = 48 + 6 * Math.sin(clock * 0.05), h = 25 + 4 * Math.sin(clock * 0.11);
+    camPos.lerp(tmpTarget.set(Math.cos(a) * r, h, Math.sin(a) * r), Math.min(1, rdt * 2));
     tmpLook.set(-k * Math.sin(a), 19, k * Math.cos(a));
   } else {
     const targetY = T ? T.topY() + 4.5 : 8;
@@ -82,7 +89,7 @@ function render(rdt: number) {
     camPos.lerp(tmpTarget.set(cx, camY, cz).add(off), Math.min(1, rdt * 3));
     tmpLook.set(cx, camY - (T ? 0.5 : 6), cz);
   }
-  camLook.lerp(tmpLook, Math.min(1, rdt * 3));
+  if (!game.intro) camLook.lerp(tmpLook, Math.min(1, rdt * 3));
   camera.position.copy(camPos);
   if (game.shake > 0) {
     game.shake -= rdt;
@@ -114,7 +121,7 @@ function render(rdt: number) {
   game.ui.update(rdt, Math.atan2(camera.position.z - camLook.z, camera.position.x - camLook.x));
 }
 
-buildDemo(); People.setWalkers(9);
+People.setWalkers(9);   // the menu demo tower is built by the UI (ui.ts loadMenuScene)
 let last = performance.now(), acc = 0;
 function frame(now: number) {
   requestAnimationFrame(frame);

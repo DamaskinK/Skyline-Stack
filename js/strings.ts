@@ -33,6 +33,7 @@ export const UI: Record<string, string> = {
   'help.weatherNote': 'Each city has its own weather by floor and its own events. A warning comes before every hit.',
 
   'load.title': 'Loading',
+  'intro.skip': 'Space or click to skip',
   'pause.title': 'Paused', 'pause.resume': 'Resume', 'pause.restart': 'Restart', 'pause.quit': 'Quit to menu',
   'plot.toMap': 'Back to district map', 'plot.retry': 'Retry',
   'over.record': 'New record', 'over.name': 'Your name for the high scores', 'over.save': 'Save', 'over.menu': 'Menu',
@@ -57,6 +58,9 @@ export const S = {
 
   // loading
   fetching: 'Fetching the city...',
+  madeUpCity: 'Made-up city',
+  menuLoading: (city: string): string => `Loading ${city}...`,
+  introPlot: (place: string, n: number, total: number): string => `${place} · plot ${n} of ${total}`,
   filesFailed: (names: string): string => `Some files did not load (${names}). Playing without them.`,
   loadFailed: (msg: string): string => `Could not load the city: ${msg}. Playing the basic scene.`,
 
