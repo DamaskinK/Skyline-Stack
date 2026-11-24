@@ -8,7 +8,7 @@ version of every house so the old town and the estates read the same from the ga
 **Blocked by:** 03
 
 **Type:** improve
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Baked atlases per kit (old town, panel, in-between); windows with a hint of interior/reflection instead of flat blue.
 - [ ] Far houses use them with correct bay alignment to the near modules (no visible jump at the switch).
