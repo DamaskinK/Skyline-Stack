@@ -86,28 +86,34 @@
       "bytes": 85484
     },
     {
+      "id": "modernkit",
+      "type": "gltf",
+      "url": "assets/levels/kosice/modernkit.glb",
+      "bytes": 82804
+    },
+    {
       "id": "housefacade_col",
       "type": "texture",
       "url": "assets/levels/kosice/housefacade_col.webp",
-      "bytes": 27754
+      "bytes": 52652
     },
     {
       "id": "housefacade_nrm",
       "type": "texture",
       "url": "assets/levels/kosice/housefacade_nrm.webp",
-      "bytes": 312278
+      "bytes": 601076
     },
     {
       "id": "housefacade_msk",
       "type": "texture",
       "url": "assets/levels/kosice/housefacade_msk.webp",
-      "bytes": 28878
+      "bytes": 53210
     },
     {
       "id": "housefacade",
       "type": "json",
       "url": "assets/levels/kosice/housefacade.json",
-      "bytes": 1784
+      "bytes": 3348
     }
   ]
 }

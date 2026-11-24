@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import bpy
 import housekit as hk
+import modernkit as mk                                                       # S0004 13: the modern modules share the cells, roles and materials
 from lib import cli, log, reset
 
 W, H = hk.W, hk.H
@@ -28,7 +29,12 @@ CELLS = {
     'pn_ground': (['pn_door', 'pn_win', 'pn_win', 'pn_win'], ['pn_foot'], H), 'pn_loggia': (['pn_core', 'pn_win', 'pn_loggia', 'pn_win'], [], H),
     'pn_balcony': (['pn_core', 'pn_win', 'pn_balcony', 'pn_win'], [], H), 'pn_blank': (['pn_blank'], [], H), 'pn_edge': (['pn_edge'], [], 0.82),
     'mid_ground': (['mid_ground'], [], H), 'mid_upper': (['mid_bay'], [], H), 'mid_cornice': (['mid_cornice'], [], 0.4), 'mid_parapet': (['mid_parapet'], [], 0.56),
+    'bk_ground': (['bk_ground'], [], H), 'bk_upper': (['bk_bay'], [], H), 'bk_upper_b': (['bk_bay_b'], [], H), 'bk_cornice': (['bk_cornice'], [], 0.5),
+    'rs_ground': (['rs_ground'], [], H), 'rs_upper': (['rs_balcony', 'rs_win', 'rs_win'], [], H), 'rs_end': (['rs_win'], [], H), 'rs_edge': (['rs_edge'], [], 0.48),
+    'of_ground': (['of_lobby'], [], H), 'of_upper': (['of_fin', 'of_cw'], [], H), 'of_upper_p': (['of_panel', 'of_cw', 'of_cw'], [], H), 'of_band': (['of_band'], [], H),
+    'of_edge': (['of_edge'], [], 0.98),
 }
+MODS = {**hk.MODS, **mk.MODS}
 
 def set_pass(mats, mode):
     """Replace the node tree of the four kit materials by an emission shader of the pass."""
@@ -69,9 +75,9 @@ def setup():
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); cam.data.type = 'ORTHO'; cam.data.sensor_fit = 'HORIZONTAL'; cam.data.clip_end = 100
     sc.collection.objects.link(cam); sc.camera = cam
     mats = hk.make_mats()
-    for name, m in hk.MODS.items():
+    for name, m in MODS.items():
         for f in m.bm.faces: f[m.al] = 1.0                                   # occlusion comes from the real AO pass, not from the hand-set vertex values
-    objs = {n: m.to_object(mats) for n, m in hk.MODS.items()}
+    objs = {n: m.to_object(mats) for n, m in MODS.items()}
     for o in objs.values(): o.hide_render = True
     return mats, objs
 
@@ -145,8 +151,7 @@ def main():
         ch, cw = c['col'].shape[:2]; bw, bh = cw + 2 * GUT, ch + 2 * GUT
         if x + bw > AW: x, y, rowh = 0, y + rowh, 0
         place[name] = (x, y); x += bw; rowh = max(rowh, bh)
-    AH = 1
-    while AH < y + rowh: AH *= 2
+    AH = -(-(y + rowh) // 64) * 64                                            # a multiple of 64, not a power of two (WebGL 2 mipmaps any size): the modern cells add a row, not a second 1024
     log('atlas', AW, AH)
     atl = {k: np.zeros((AH, AW, 3), np.float32) for k in ('col', 'nrm', 'msk')}; atl['nrm'][:] = (0.5, 0.5, 1.0); atl['col'][:] = 0.5
     meta = {'size': [AW, AH], 'ppm': ppm, 'bay': W, 'storey': H, 'cells': {}}

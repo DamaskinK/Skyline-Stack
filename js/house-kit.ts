@@ -11,7 +11,7 @@ import { addFacadeWall, facadesReady } from './baked-facades.js';
 import type { FacadeBuilder } from './baked-facades.js';
 
 export const BAY = 3.0, STOREY = 3.4;
-export type Style = 'old' | 'panel' | 'mid';
+export type Style = 'old' | 'panel' | 'mid' | 'barracks' | 'resi' | 'office';     // the last three: modern kit (scripts/blender/modernkit.py, S0004 13)
 type Cls = 'plaster' | 'accent' | 'detail' | 'glass';
 const CLASSES: Cls[] = ['plaster', 'accent', 'detail', 'glass'];
 
@@ -29,20 +29,7 @@ export class HouseKit {
   private mats: Record<Cls, THREE.MeshStandardMaterial>;
   private c = new THREE.Color();
   private constructor(root: THREE.Object3D) {
-    root.updateMatrixWorld(true);
-    // every module is a direct child of the scene (a Mesh, or a Group of one Mesh per material class)
-    for (const node of root.children) {
-      const list: Part[] = [];
-      node.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const name = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).name;
-        const cls = CLASSES.find((c) => name.includes(c));
-        if (!cls) return;
-        list.push({ geo: mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), cls });
-      });
-      if (list.length) this.parts.set(node.name, list);
-    }
+    this.load(root);                                 // every module is a direct child of the scene (a Mesh, or a Group of one Mesh per material class)
     const plaster = (accent: boolean) => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: accent ? 0.88 : 0.93, ...surface('plaster', [0.4, 0.4], 0.5) });
     const glass = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x56708a, roughness: 0.32, metalness: 0.0, envMapIntensity: 0.7, emissive: 0xffc477, emissiveIntensity: 0 });
     // the instance colour of a pane is its lit state (1 = light on, 0.8 = dark); the glow of the night only reaches the lit ones
@@ -50,11 +37,28 @@ export class HouseKit {
     this.mats = { plaster: plaster(false), accent: plaster(true), detail: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), glass };
     glowMats.push(glass);
   }
-  static from(root: THREE.Object3D | null | undefined): HouseKit | null {
+  private load(root: THREE.Object3D): void {
+    root.updateMatrixWorld(true);
+    for (const node of root.children) {
+      const list: Part[] = [];
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const name = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material).name;
+        const cls = CLASSES.find((c) => name.includes(c));
+        if (cls) list.push({ geo: mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), cls });
+      });
+      if (list.length) this.parts.set(node.name, list);
+    }
+  }
+  /** `modern`: the modern modules (modernkit.glb, S0004 13); without them the modern styles fall back to the in-between kit. */
+  static from(root: THREE.Object3D | null | undefined, modern?: THREE.Object3D | null): HouseKit | null {
     if (!root) return null;
     const k = new HouseKit(root);
+    if (modern) k.load(modern);
     return k.parts.has('old_bay_a') && k.parts.has('pn_win') && k.parts.has('mid_bay') ? k : null;
   }
+  get modern(): boolean { return this.parts.has('bk_bay') && this.parts.has('rs_win') && this.parts.has('of_cw'); }
   get count(): number { let n = 0; for (const b of this.batches.values()) n += b.lit.length; return n; }
 
   /** One module instance: origin at the left foot of the bay, local +z along the outward normal (rotation `rot` about y), stretched `sx` along the wall. */
@@ -108,7 +112,8 @@ export interface Edge { x0: number; z0: number; x1: number; z1: number }
 
 /** Fill the wall of every footprint edge with modules. Returns the edges that are too short for a bay (the caller draws them as plain wall). */
 export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
-  const { p, sign, style, storeys, h, near } = s, n = p.length / 2, short: Edge[] = [];
+  const { p, sign, storeys, h, near } = s, n = p.length / 2, short: Edge[] = [];
+  const style: Style = (s.style === 'barracks' || s.style === 'resi' || s.style === 'office') && !kit.modern ? 'mid' : s.style;
   // longest edge: the arched gate of an old house and the entrance of a panel block go there
   let best = -1, bl = 0;
   for (let i = 0; i < n; i++) { const j = (i + 1) % n, l = Math.hypot(p[2 * j] - p[2 * i], p[2 * j + 1] - p[2 * i + 1]); if (l > bl) { bl = l; best = i; } }
@@ -135,6 +140,8 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
       const u = bay * BAY * sx, last = bay === bays - 1 && stretch > 0;
       kit.add(mod, ox + tx * u, y, oz + tz * u, rot, last ? (BAY * sx + stretch) / BAY : sx, pl, ac, lit(bay, y, i));
     };
+    const end = Math.abs((dx * ax[0] + dz * ax[1]) / l) < 0.5 && l < 0.7 * bl, q0 = s.seed * 4 | 0;     // end wall across the long axis; pattern offset (same as addFacadeWall)
+    const door = (bay: number) => bays >= 3 && i === best && bay === Math.floor(bays / 2);
     for (let bay = 0; bay < bays; bay++) {
       for (let st = 0; st < storeys; st++) {
         const y = st * STOREY; let mod: string;
@@ -144,15 +151,27 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
           else if (st === 1) mod = (bay + (eh > 0.5 ? 1 : 0)) % 2 ? 'old_bay_c' : 'old_bay_d';
           else mod = (bay + (eh > 0.5 ? 1 : 0)) % 2 ? 'old_bay_b' : 'old_bay_a';
         } else if (style === 'panel') {
-          const end = Math.abs((dx * ax[0] + dz * ax[1]) / l) < 0.5 && l < 0.7 * bl;      // an end wall of the block (an edge across its long axis): small stair / kitchen windows. Steps along a long side keep their bays
           if (!near) mod = 'pn_far';
           else if (end) mod = 'pn_blank';
           else {
-            const q = (bay + s.seed * 4 | 0) % 4;
+            const q = (bay + q0) % 4;
             if (q === 0) mod = st === 0 ? 'pn_door' : 'pn_core';
             else if (q === 2 && st > 0) mod = s.loggia ? 'pn_loggia' : 'pn_balcony';
             else mod = 'pn_win';
           }
+        } else if (style === 'barracks') {                                   // renovated barracks: rusticated base, arched (or plain) windows
+          if (!near) mod = st === 0 ? 'bk_ground_far' : 'bk_far';
+          else if (st === 0) mod = door(bay) ? 'bk_door' : 'bk_ground';
+          else mod = s.loggia ? 'bk_bay' : 'bk_bay_b';
+        } else if (style === 'resi') {                                       // new flats: glazed ground floor, balcony every third bay of a long side
+          if (!near) mod = st === 0 ? 'rs_ground_far' : 'rs_far';
+          else if (st === 0) mod = door(bay) ? 'rs_door' : 'rs_ground';
+          else mod = !end && (bay + q0) % 3 === 0 ? 'rs_balcony' : 'rs_win';
+        } else if (style === 'office') {                                     // offices: lobby; curtain wall with fins (long sides) and coloured panels (ends), or ribbon glazing
+          if (!near) mod = st === 0 ? 'of_lobby_far' : 'of_far';
+          else if (st === 0) mod = door(bay) ? 'of_entry' : 'of_lobby';
+          else if (!s.loggia) mod = 'of_band';
+          else mod = end ? ((bay + q0) % 3 === 0 ? 'of_panel' : 'of_cw') : ((bay + q0) % 2 === 0 ? 'of_fin' : 'of_cw');
         } else {
           if (!near) mod = 'mid_far';
           else if (st === 0) mod = bays >= 3 && i === best && bay === Math.floor(bays / 2) ? 'mid_door' : 'mid_ground';
@@ -165,6 +184,9 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
       if (!near) continue;                                                 // beyond the detail radius the roof line is part of the flat plate
       if (style === 'old') { put('old_cornice', bay, h - 0.52, ov); if (!s.pitched) put('old_parapet', bay, h, ov); }
       else if (style === 'mid') { put('mid_cornice', bay, h - 0.4, ov); put('mid_parapet', bay, h, ov); }
+      else if (style === 'barracks') { put('bk_cornice', bay, h - 0.5, ov); if (!s.pitched) put('old_parapet', bay, h, ov); }
+      else if (style === 'resi') put('rs_edge', bay, h, ov);
+      else if (style === 'office') put('of_edge', bay, h, ov);
       else put('pn_edge', bay, h, ov);
     }
   }

@@ -9,7 +9,7 @@ import type { LevelAssets } from './types.js';
 export interface Cell { rect: [number, number, number, number]; bays: number; h: number }
 interface Meta { size: [number, number]; bay: number; storey: number; cells: Record<string, Cell> }
 export const BAY = 3, STOREY = 3.4;
-export type FacadeStyle = 'old' | 'panel' | 'mid';
+export type FacadeStyle = 'old' | 'panel' | 'mid' | 'barracks' | 'resi' | 'office';
 
 let meta: Meta | null = null, material: THREE.MeshStandardMaterial | null = null;
 /** The atlas of the level that is being built, or null when its files are missing (the callers then keep the old flat plates / canvas facades). */
@@ -100,6 +100,7 @@ export function addFacadeWall(w: FacadeWall): void {
   const bays = Math.max(1, Math.round(w.len / BAY)), { b } = w;
   const q = (y0: number, y1: number, cell: string, phase = 0) => b.quad(w.ox, w.oz, w.tx, w.tz, w.nx, w.nz, w.len, y0, y1, cell, bays, phase, w.plaster, w.accent, w.seed);
   const top = w.y0 + w.h, base = w.y0 + (w.foundation ?? 0);                  // `foundation`: wall that reaches below the ground storey (middle ring)
+  if (w.style === 'barracks' || w.style === 'resi' || w.style === 'office') { modernWall(w, q); return; }
   const cap = w.lean ? 0 : w.style === 'old' ? 0.52 : w.style === 'mid' ? 0.4 : 0;           // cornice inside the top storey; the panel edge and the parapets stand on top
   if (w.foundation) q(w.y0, base, w.style === 'panel' ? 'pn_blank' : w.style === 'old' ? 'old_upper' : 'mid_upper');
   const ground = w.style === 'old' ? 'old_ground' : w.style === 'mid' ? 'mid_ground' : w.end ? 'pn_blank' : 'pn_ground';
@@ -117,4 +118,23 @@ export function addFacadeWall(w: FacadeWall): void {
   if (w.style === 'old') { q(top - cap, top, 'old_cornice'); if (!w.pitched) q(top, top + 0.5, 'old_parapet'); }
   else if (w.style === 'mid') { q(top - cap, top, 'mid_cornice'); q(top, top + 0.56, 'mid_parapet'); }
   else q(top, top + 0.82, 'pn_edge');
+}
+
+/** The modern kit (S0004 13): same module choice as `addHouse` for barracks, new flats and offices (`loggia` picks the arched / curtain-wall variant). */
+function modernWall(w: FacadeWall, q: (y0: number, y1: number, cell: string, phase?: number) => void): void {
+  const top = w.y0 + w.h, base = w.y0 + (w.foundation ?? 0), st = w.style;
+  const cap = !w.lean && st === 'barracks' ? 0.5 : 0, q3 = (w.q0 % 3) / 3, q2 = (w.q0 % 2) / 2;
+  if (w.foundation) q(w.y0, base, st === 'barracks' ? 'bk_upper' : st === 'resi' ? 'rs_end' : 'of_band');
+  q(base, base + STOREY, st === 'barracks' ? 'bk_ground' : st === 'resi' ? 'rs_ground' : 'of_ground');
+  if (w.storeys > 1) {
+    const y1 = top - cap;
+    if (st === 'barracks') q(base + STOREY, y1, w.loggia ? 'bk_upper' : 'bk_upper_b');
+    else if (st === 'resi') q(base + STOREY, y1, w.end ? 'rs_end' : 'rs_upper', w.end ? 0 : q3);
+    else if (!w.loggia) q(base + STOREY, y1, 'of_band');
+    else q(base + STOREY, y1, w.end ? 'of_upper_p' : 'of_upper', w.end ? q3 : q2);
+  }
+  if (w.lean) return;
+  if (st === 'barracks') { q(top - cap, top, 'bk_cornice'); if (!w.pitched) q(top, top + 0.5, 'old_parapet'); }
+  else if (st === 'resi') q(top, top + 0.48, 'rs_edge');
+  else q(top, top + 0.98, 'of_edge');
 }

@@ -19,11 +19,13 @@ import { FacadeBuilder } from './baked-facades.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
-/** A roof of the near ring: `tile` (pitched, with its ridge) or flat (`panel`, `old`, `mid`, with the footprint and its winding sign). */
-export interface RoofSite { kind: 'tile' | 'panel' | 'old' | 'mid'; h: number; dist: number; hv: number; roof?: RoofInfo; color?: THREE.Color; p?: number[]; sign?: number }
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
+// S0004 13 modern kit: white plaster and dark metal roofs of the renovated barracks, white / grey render with cladding of the new flats, office frames and fins (Aupark green)
+const BK_PALETTE = [0xf3f1eb, 0xeeebe3, 0xf6f4ef], BK_ROOF = [0x4a4e53, 0x55595e, 0x40444a];
+const RS_PALETTE = [0xf2f2ef, 0xe8e8e5, 0xdcdddb, 0xefebe3], RS_CLAD = [0x3c4046, 0x8a5e40, 0xb0533c, 0x6b7076];
+const OF_PALETTE = [0xc9ccd0, 0xb9b5ae, 0xdedfdc, 0x9da3aa], OF_FIN = [0x7fb23a, 0xa9afb5, 0xe6e6e2, 0x3d4a5a];
 const MID_PALETTE = [0xe6e1d6, 0xdcd3c1, 0xe8dcc0, 0xd7c9a8, 0xe3d6c4, 0xd3d8cf];   // 1930s-50s blocks: plaster in pale ochre and grey
 export const ROOF_COLORS = [0xb4573c, 0xa84c36, 0x9a5a44, 0x8a4a3a, 0xc0623f, 0x7d5a4c, 0xb0523a].map((c) => new THREE.Color(c));
 
@@ -327,11 +329,10 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // Everything larger or taller: plain calm facade, flat roof.
   const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder();
   const spots: Record<string, { x: number; z: number; h: number; storeys: number; d: number }> = {}; group.userData.houseSpots = spots;     // nearest house of each style (screenshot poses)
-  const roofs: RoofSite[] = []; group.userData.roofs = roofs;        // every roof that stands: perches for the pigeons (js/birds.ts), roof props (js/roof-props.ts)
   const frameR = settings.quality === 'low' ? 75 : 110, kitR = settings.quality === 'low' ? 32 : 48;     // window frames only where the camera can see them; cornices and plinths everywhere
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   // S0004 02: houses are assembled from the Blender module kit (js/house-kit.ts); `?houses=procedural` or a kit that failed to load keeps the procedural facades
-  const hk = new URLSearchParams(location.search).get('houses') === 'procedural' ? null : HouseKit.from(kit.housekit as THREE.Object3D | undefined);
+  const hk = new URLSearchParams(location.search).get('houses') === 'procedural' ? null : HouseKit.from(kit.housekit as THREE.Object3D | undefined, kit.modernkit as THREE.Object3D | undefined);
   const far = new FacadeBuilder();                          // houses beyond the kit radius: baked atlas walls (js/baked-facades.ts)
   const fill = new Builder();                                // plain wall for edges too short for a bay, and gable ends
   const shadowWalls = new Builder();                         // walls pushed 0.9 m into the house: the modules do not cast shadows, this does (invisible in the colour pass)
@@ -345,28 +346,31 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
     if (area < 8 && bd.k !== 'church') continue;             // pillars, plinths and pedestals (an OSM footprint of 3-4 m2 is no house): drawn as nothing, still an obstacle in the plan
     const tiny = area < 15 && bd.k !== 'church';             // a kiosk, a transformer hut, a shed: one storey with a shop front and a roof, never a 7-14 m blank pillar
-    const bh = bd.h ?? 0, panel = !tiny && ((bd.lv ?? 0) >= 5 || (bd.a && bh >= 12));                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
-    const old = tiny || (bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel);
+    const modern = !tiny && hk?.modern ? bd.m : undefined;                 // S0004 13: renovated barracks, new flats, offices (OSM class from scripts/build-osm-level.mjs)
+    const bh = bd.h ?? 0, panel = !tiny && !modern && ((bd.lv ?? 0) >= 5 || (bd.a && bh >= 12));                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
+    const old = tiny || (!modern && bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel);
     let storeys: number;
     if (tiny) storeys = 1;
+    else if (modern) storeys = Math.min(20, Math.max(1, Math.round((bh >= 3 ? bh : modern === 'barracks' ? 10 + hv * 4 : modern === 'resi' ? 14 + hv * 7 : 14 + hv * 14) / STOREY_H)));
     else if (bd.k === 'church') storeys = 6;
     else if (old) storeys = bh >= 3 ? Math.min(6, Math.max(2, Math.round(bh / STOREY_H))) : 2 + Math.floor(hv * 3);
     else storeys = Math.min(20, Math.max(2, Math.round((bh >= 3 ? bh : 9 + hv * 8) / STOREY_H)));
     const h = storeys * STOREY_H;
-    { const kind = old ? 'old' : panel ? 'panel' : 'mid', d0 = Math.hypot(cx, cz), cur = spots[kind]; if (d0 > 30 && (!cur || d0 < cur.d)) spots[kind] = { x: cx, z: cz, h, storeys, d: d0 }; }
+    { const kind = modern ?? (old ? 'old' : panel ? 'panel' : 'mid'), d0 = Math.hypot(cx, cz), cur = spots[kind]; if (d0 > 30 && (!cur || d0 < cur.d)) spots[kind] = { x: cx, z: cz, h, storeys, d: d0 }; }
     const v = Math.floor(hv * 1000) % OLD_PALETTE.length;
     const W = old ? wallB('old', bd.k === 'church' ? 99 : v) : wallB('plain', Math.floor(hv * 977) % PLAIN_PALETTE.length);
-    const pitched = old && area < 1500 && convexish(p, area) && rectAxis(p) !== null, wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
+    const pitched = (old || modern === 'barracks') && area < 1500 && convexish(p, area) && rectAxis(p) !== null, wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
     const shade = 0.93 + 0.13 * hash(cx * 3.1, cz * 1.7), warm = (hash(cz, cx * 2.3) - 0.5) * 0.06;     // slight plaster variation per building
     tint.setRGB(shade * (1 + warm), shade, shade * (1 - warm));
     band.setHex(bd.k === 'church' ? 0xdad3c3 : old ? OLD_PALETTE[v] : PLAIN_PALETTE[Math.floor(hv * 977) % PLAIN_PALETTE.length]).multiplyScalar(1.06 * shade);
     const sign = polyArea(p) >= 0 ? 1 : -1;                    // outward normal of edge d is (dz, -dx) for counter-clockwise rings
     if (hk) {
       const sc = Math.floor(hv * 733) % PANEL_SCHEMES.length;
-      const base = old ? OLD_PALETTE[v] : panel ? PANEL_SCHEMES[sc][0] : MID_PALETTE[Math.floor(hv * 977) % MID_PALETTE.length];
+      const mi = Math.floor(hv * 977), MP = modern === 'barracks' ? BK_PALETTE : modern === 'resi' ? RS_PALETTE : OF_PALETTE, MA = modern === 'barracks' ? BK_ROOF : modern === 'resi' ? RS_CLAD : OF_FIN;
+      const base = modern ? MP[mi % MP.length] : old ? OLD_PALETTE[v] : panel ? PANEL_SCHEMES[sc][0] : MID_PALETTE[mi % MID_PALETTE.length];
       const plaster = new THREE.Color(base).multiply(tint), roofCol = ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length];
-      const accent = old ? roofCol : new THREE.Color(PANEL_SCHEMES[sc][1]);
-      const short = addHouse(hk, { p, sign, style: old ? 'old' : panel ? 'panel' : 'mid', storeys, h, pitched: pitched && old, near: dist < kitR, plaster, accent, seed: hv, loggia: hash(cz * 1.3, cx) > 0.5, gate: hash(cx * 2.1, cz) > 0.45, far });
+      const accent = modern ? new THREE.Color(MA[Math.floor(hv * 7919) % MA.length]) : old ? roofCol : new THREE.Color(PANEL_SCHEMES[sc][1]);
+      const short = addHouse(hk, { p, sign, style: modern ?? (old ? 'old' : panel ? 'panel' : 'mid'), storeys, h, pitched, near: dist < kitR, plaster, accent, seed: hv, loggia: hash(cz * 1.3, cx) > (modern === 'barracks' ? 0.3 : modern === 'office' ? 0.35 : 0.5), gate: hash(cx * 2.1, cz) > 0.45, far });
       {                                                      // shadow proxy: the footprint ring pushed inwards along the mitred normals (deeper than the loggias)
         const q: number[] = [];
         for (let i = 0; i < n; i++) {
@@ -418,13 +422,11 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     }
     }
     if (pitched) {
-      const rc = ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
+      const rc = modern ? new THREE.Color(BK_ROOF[Math.floor(hv * 7919) % BK_ROOF.length]) : ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
       const roof = (hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null) ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
-      if (hk && dist < kitR) addDormers(hk, roof, rc, plasterC, hv);
-      roofs.push({ kind: 'tile', h, roof, dist, hv, color: rc });
+      if (hk && dist < kitR && !modern) addDormers(hk, roof, rc, plasterC, hv);       // the barracks have plain metal roofs
     } else {
       fillPoly(flats, p, h, 8);
-      roofs.push({ kind: panel ? 'panel' : old ? 'old' : 'mid', h, p, sign, dist, hv });
       if (!hk) for (let i = 0; i < n; i++) { const j = (i + 1) % n; stripe(relief, p[2 * i], p[2 * i + 1], p[2 * j], p[2 * j + 1], 0.22, h, h + 0.5, band); }   // parapet
     }
   }

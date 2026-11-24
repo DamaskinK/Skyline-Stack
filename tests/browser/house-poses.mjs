@@ -1,5 +1,5 @@
 // Screenshots of the near-ring houses per Kosice plot from fixed rules (S0004 02): an aerial view, a street-level view of the nearest old-town house and of the nearest panel block.
-// Usage: node tests/browser/house-poses.mjs [--quality high|low] [--out dir] [--houses kit|procedural] [--plots 0,1,2,3,4] [--size 1280x720]
+// Usage: node tests/browser/house-poses.mjs [--app http://localhost:8000] [--quality high|low] [--out dir] [--houses kit|procedural] [--plots 0,1,2,3,4] [--size 1280x720]
 // Prints draw calls and triangles of each frame. Needs the game served (npm run serve).
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -12,13 +12,13 @@ const browser = await chromium.launch({ headless: true, executablePath: '/Applic
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 await page.addInitScript((q) => { try { const k = 'skyline_settings_v2'; localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) || '{}'), quality: q, hints: false })); } catch { /* ignore */ } }, quality);
-await page.goto(`http://localhost:8000/?houses=${houses}`, { waitUntil: 'load' });
+await page.goto(`${opt('app', 'http://localhost:8000')}/?houses=${houses}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__game && window.__debug, null, { timeout: 20000 }); await page.waitForTimeout(800);
 for (const n of plots) {
   await page.evaluate((n) => window.__debug.loadPlot(n, 'kosice'), n); await page.waitForTimeout(1500);
   const spots = await page.evaluate(() => window.__debug.houseSpots());
   const shots = { aerial: { pos: [0, 70, 75], look: [0, 4, -15] } };
-  for (const kind of ['old', 'panel', 'mid']) {
+  for (const kind of ['old', 'panel', 'mid', 'barracks', 'resi', 'office']) {
     const s = spots[kind]; if (!s) continue;
     const d = Math.hypot(s.x, s.z) || 1, ux = -s.x / d, uz = -s.z / d;                  // from the house towards the tower
     shots[`${kind}-street`] = { pos: [s.x + ux * 26 - uz * 8, 6, s.z + uz * 26 + ux * 8], look: [s.x, Math.min(s.h * 0.45, 12), s.z] };
