@@ -23,7 +23,8 @@
 - [ ] Tall blank pale pillars along the road on the Kulturpark plot (seen by the S0004 13 modeler) - find their source and fix.
 - [ ] Far-facade glass of offices shows a room with curtains - offices get an office interior/reflective glass cell.
 - [x] FIRST: flicker regression in this worktree - after S0004 16 tile roofs the depth check on game/low poses rose to 0.75-0.8 % mean, 1.0-1.27 % max on every plot (was 0.26 %). Likely the new high-frequency clay-tile/membrane textures aliasing (check mipmaps, anisotropy, texel scale) or another WIP; bisect over the s/S0004-wip commits and fix so flicker --plot all --quality all passes again.
-- [ ] Barracks roofs (S0004 13) should read as dark metal, not tinted clay tiles.
+- [x] Barracks roofs (S0004 13) should read as dark metal, not tinted clay tiles.
 
 ## Comments
 - Flicker regression: not the tile textures. Ticket 19's menu picture skips `updateWeather` while the menu shows, so the rain/snow/streak pools stayed at their creation default `visible = true` (rain lines from random points to the origin) and moved between the two flicker renders. `js/fx.ts` creates the pools hidden. depth game/low back to 0.21 % mean / 0.38 % max on plot 1; `check.mjs flicker --plot all --quality all` PASS.
+- Barracks roofs: own `metal` builder and `metalRoofMaterial` in near-ring.ts (dark coated steel, 0.5 m standing seams, metalness 0.45); shot tests/browser/out-s4-18/kit-high-p2-barracks-high.png. flicker all presets passed with it.

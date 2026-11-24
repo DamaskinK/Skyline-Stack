@@ -228,6 +228,22 @@ export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Col
 }
 
 
+// Standing-seam sheet metal (S0004 18): dark coated steel, a seam every 0.5 m running up the slope (u = 4 m per repeat, 8 seams), a little sheen
+let metalTex: THREE.CanvasTexture | null = null;
+function metalRoofMaterial(): THREE.MeshStandardMaterial {
+  if (!metalTex) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 8; const g = c.getContext('2d')!;
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle = '#ffffff'; g.fillRect(i * 32, 0, 32, 8);
+      g.fillStyle = '#9a9a9a'; g.fillRect(i * 32, 0, 2, 8);        // groove
+      g.fillStyle = '#e4e4e4'; g.fillRect(i * 32 + 2, 0, 3, 8);    // raised seam, lit edge
+      g.fillStyle = '#d6d6d6'; g.fillRect(i * 32 + 5 + (i % 3), 0, 7, 8);
+    }
+    metalTex = new THREE.CanvasTexture(c); metalTex.wrapS = metalTex.wrapT = THREE.RepeatWrapping; metalTex.colorSpace = THREE.SRGBColorSpace; metalTex.anisotropy = 4;
+  }
+  return material(metalTex, { vertexColors: true, roughness: 0.5, metalness: 0.45 });
+}
+
 // Tile UVs of a roof face (S0004 16): u along the eave (horizontal, direction ex, ez), v up the slope, 4 m per repeat; so the tile courses run level on every face.
 function slopeUv(o: Vec, ex: number, ez: number, n: Vec): UvFn | null {
   const el = Math.hypot(ex, ez); if (el < 1e-4) return null;
@@ -340,7 +356,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // ── buildings: walls grouped by facade kind and colour, pitched tile roofs and flat roofs in two meshes ──
   // Historic centre (small footprints, no tall height tag): 2-4 storey baroque / classicist houses, pastel plaster, red hip roofs.
   // Everything larger or taller: plain calm facade, flat roof.
-  const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder();
+  const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), metal = new Builder(), flats = new Builder(), relief = new Builder();   // metal: standing-seam roofs of the renovated barracks
   const spots: Record<string, { x: number; z: number; h: number; storeys: number; d: number }> = {}; group.userData.houseSpots = spots;     // nearest house of each style (screenshot poses)
   const roofs: RoofSite[] = []; group.userData.roofs = roofs;        // every roof that stands: perches for the pigeons (js/birds.ts), roof props (js/roof-props.ts)
   const frameR = settings.quality === 'low' ? 75 : 110, kitR = settings.quality === 'low' ? 32 : 48;     // window frames only where the camera can see them; cornices and plinths everywhere
@@ -437,7 +453,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     }
     if (pitched) {
       const rc = modern ? new THREE.Color(BK_ROOF[Math.floor(hv * 7919) % BK_ROOF.length]) : ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
-      const gable = hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null, roof = gable ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
+      const gable = hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(modern ? metal : tiles, fill, p, h, rc, plasterC) : null, roof = gable ?? pitchedRoof(modern ? metal : tiles, p, h, rc, 0, 0.5);
       if (hk && dist < kitR && !modern) addDormers(hk, roof, rc, plasterC, hv);       // the barracks have plain metal roofs
       roofs.push({ kind: 'tile', h, roof, dist, hv, color: rc, p, sign, gable: !!gable });
     } else {
@@ -459,6 +475,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     mesh(b, calmMat(v === 99 ? 0xdad3c3 : kind === 'old' ? OLD_PALETTE[v] : PLAIN_PALETTE[v], kind, v, true), group, true);
   }
   mesh(tiles, tileMaterial(kit) ?? material(tile(tileRoofTex), { vertexColors: true, ...surface('roof', 3, 1.1) }), group, true);
+  mesh(metal, metalRoofMaterial(), group, true);
   mesh(relief, material(null, { vertexColors: true, roughness: 0.9 }), group, false);   // no shadow casting: the details are too small to show in the shadow map
   mesh(flats, membraneMaterial(kit) ?? material(tile(roofTex), { color: 0xb8b8b8 }), group);
   buildRoofProps(group, roofs, kit);                         // S0004 16: machine rooms, vents, masts, dishes, chimneys, roof windows, gutters (js/roof-props.ts)
