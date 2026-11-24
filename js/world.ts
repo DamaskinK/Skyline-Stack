@@ -6,6 +6,7 @@ import { settings } from './settings.js';
 import { NEWTOWN } from './levels.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { surface } from './surfaces.js';
+import { updateBirds } from './birds.js';
 import { NEWTOWN_GRID, newtownFurniture, newtownSite, newtownPlaced, hits, footprint, auditObjects } from './core/placement.js';
 import { boxRing, ringRing } from './core/geometry2d.js';
 import { lightState } from './core/street-detail.js';
@@ -449,18 +450,8 @@ export const traffic: { waiting: number; minGap: number; count: number; want: nu
 };
 traffic.setCount(34);
 
-// ── sky life: birds, a plane with a contrail, a hot-air balloon ──
-const birdMat = new THREE.MeshBasicMaterial({ color: 0x2a2a35, side: THREE.DoubleSide });
-const wingGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.25, 0, 0, 0.25, 1.1, 0, 0], 3));
-const flocks: { g: THREE.Group; birds: { l: THREE.Mesh; r: THREE.Mesh; ph: number }[]; r: number; y: number; a: number; sp: number }[] = [];
-for (let f = 0; f < 3; f++) {
-  const g = new THREE.Group(); const birds: { l: THREE.Mesh; r: THREE.Mesh; ph: number }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const b = new THREE.Group(); const l = new THREE.Mesh(wingGeo, birdMat), r = new THREE.Mesh(wingGeo, birdMat); r.scale.x = -1;
-    b.add(l, r); b.position.set(-Math.abs(i - 3) * 1.6, rnd() * 0.6, (i - 3) * 1.4); g.add(b); birds.push({ l, r, ph: rnd() * 6 });
-  }
-  scene.add(g); flocks.push({ g, birds, r: 50 + f * 35, y: 26 + f * 30, a: f * 2, sp: 0.06 + f * 0.02 });
-}
+// ── sky life: a plane with a contrail, a hot-air balloon (birds: js/birds.ts) ──
+for (let i = 0; i < 42; i++) rnd();   // the old wire birds drew 42 numbers here: keep the sequence, so the plane and the balloon stay where they were (birds: js/birds.ts)
 const plane = new THREE.Mesh(mergeColored([[box(1.6, 1.6, 12, 0, 0, 0), 0xf2f2f2], [box(14, 0.25, 2.6, 0, 0, 0.5), 0xe0e0e0], [box(4.5, 0.2, 1.4, 0, 0.3, -5), 0xe0e0e0], [box(0.25, 2.4, 1.6, 0, 1.4, -5.2), 0xd63a3a]]), new THREE.MeshLambertMaterial({ vertexColors: true }));
 const trail = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 1, 8, 1, true).rotateX(Math.PI / 2).translate(0, 0, -0.5), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false }));
 scene.add(plane, trail);
@@ -606,12 +597,7 @@ export function updateWorld(dt: number, ph: Weather, wind: { x: number; z: numbe
   traffic.update(dt);
   const tl = Math.floor(clock / 3);
   for (const t of tlights) t.bulbs.forEach((b, i) => { b.visible = ((tl + t.phase) % 3) === i; });
-  for (const f of flocks) {
-    f.a += f.sp * dt;
-    f.g.position.set(Math.cos(f.a) * f.r, f.y + Math.sin(clock * 0.3 + f.r) * 3, Math.sin(f.a) * f.r);
-    f.g.rotation.y = -f.a;
-    for (const b of f.birds) { const s = Math.sin(clock * 9 + b.ph) * 0.7; b.l.rotation.z = s; b.r.rotation.z = -s; }
-  }
+  updateBirds(dt, clock, scene, camera, atm.night);
   flight.t += dt; if (flight.t > flight.dur) newFlight();
   const fk = flight.t / flight.dur;
   plane.position.lerpVectors(flight.from, flight.to, fk); plane.lookAt(flight.to);

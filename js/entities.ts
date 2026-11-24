@@ -5,6 +5,7 @@ import { CFG } from './config.js';
 import { scene, blockMats, glowMats } from './world.js';
 import { BUILDING_TYPES } from './building-types.js';
 import type { BuildingType, Vec3 } from './types.js';
+import { setCraneHint } from './birds.js';
 import { facade, roofTex, lobbyTexture, latticeTex } from './textures.js';
 
 const boxGeo = new THREE.BoxGeometry(CFG.W * 0.985, CFG.H * 0.985, CFG.D * 0.985);
@@ -184,6 +185,7 @@ export function updateCrane(cx: number, cz: number, jibY: number, hx: number, hy
   beacon.position.set(0, jibY + 6.2, 0); beacon.visible = Math.sin(clock * 4) > 0;
   trolley.position.set(14, jibY - 0.1, 3);
   hookBlock.position.set(hx, hy, hz);
+  setCraneHint(hx, hy, hz, cx - 14, jibY, cz, cx, cz);   // pigeons near the hook or the jib take off (js/birds.ts)
   hookBlock.rotation.z = Math.atan2(hx - cx, jibY - hy) * 0.8;
   const ty = jibY - 0.3;
   cablePos.set([cx - 0.3, ty, cz, hx - 0.2, hy + 0.4, hz, cx + 0.3, ty, cz, hx + 0.2, hy + 0.4, hz], 0);

@@ -13,6 +13,7 @@ import { towerCircles } from './core/placement.js';
 import { traffic } from './world.js';
 import { People } from './fx.js';
 import { Trams } from './trams.js';
+import { setPerchSources } from './birds.js';
 import type { LevelAssets, OsmExtract, Plot, Pt2, Site } from './types.js';
 
 const group = new THREE.Group(); group.name = 'level'; scene.add(group);
@@ -77,6 +78,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
     const near = buildNearRing(osm, assets, landmarkHide(id), towers, landmarkRings(id, off));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
+    setPerchSources(near.userData.roofs || null, lm || null);
     traffic.setLights(near.userData.streetLights || null); traffic.setRoutes(near.userData.carRoutes, near.userData.carInfo); People.setRoutes(near.userData.walkRoutes);
     Trams.use(near.userData.tram); People.setParked(near.userData.parked);
   }
@@ -86,6 +88,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
     setProcOffset(-off.x, -off.z);
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
     People.setRoutes(procRoutes(-off.x, -off.z));
+    setPerchSources(null, lm || null);
   } else setProcOffset(0, 0);
   if (assets.bench) {
     for (const s of [-1, 1]) {
