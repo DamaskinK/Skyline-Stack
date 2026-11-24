@@ -7,7 +7,7 @@ bugs".
 **Blocked by:** 14
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Real carriageway widths from OSM (`lanes`, `width`, highway class; Kosice main roads like Juzna trieda and
       Sturova are 2x2 lanes with the tram line in the middle on its own bed). Two-way traffic: cars drive on the right
