@@ -8,6 +8,7 @@ Agents live in `.claude/agents/`; each sets its own model.
 | Find code, list callers, summarise a large file | `skyline-scout` | haiku | read-only, short answers keep big files out of the main session |
 | Run tests and browser checks, download listed assets, fill data | `skyline-runner` | haiku | a recipe, no decisions |
 | Build a ticket: code, tests, checks, commit | `skyline-builder` | sonnet | the bulk of the work |
+| Make or improve 3D models in Blender (landmarks, house kit, trams, crowns, baked facades) | `skyline-modeler` | opus | models are what everything is built on (developer, 2026-11-24) |
 | Review a milestone's commits | `skyline-reviewer` | opus | catches what the builder missed; reads only the diff |
 | Talk to the developer, grilling, plan, tickets, ideas, choosing what is next | main session | opus | keeps the thread, stays thin |
 

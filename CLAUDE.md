@@ -40,7 +40,7 @@ npm test             # typecheck + Vitest (simulation core, tests/core)
 
 ## Agents and models
 The main session (Opus) talks to the developer, grills, plans, reviews and picks what is next; it does not build.
-Each ticket is built by a fresh `skyline-builder` (Sonnet); milestone reviews by `skyline-reviewer` (Opus); checks and
+Each ticket is built by a fresh `skyline-builder` (Sonnet); 3D models in Blender by `skyline-modeler` (Opus), because model quality matters most; milestone reviews by `skyline-reviewer` (Opus); checks and
 recipes by `skyline-runner` (Haiku); repo searches by `skyline-scout` (Haiku). Details: `docs/agents/model-routing.md`.
 
 ## Blender (models)
