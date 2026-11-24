@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import type { LevelAssets } from '../types.js';
 import { glowMats } from '../world.js';
+import { fountainJets } from './fountain-jets.js';
 import { Parts, landmarkMaterials, lathe, box, cyl, extrude, archShape, roundArch, gableRoof, shedRoof, stretchUV } from './style.js';
 
 // OSM names of the footprints the models replace
@@ -192,7 +193,8 @@ export function build(assets?: LevelAssets) {
   model('chapel', 'st-michael-chapel', chapel);
   const th = model('theatre', 'state-theatre', theatre);
   // Singing Fountain with its basin at the real place, Immaculata on Hlavna street
-  model('fountain', 'fountain', fountain);
+  const fo = model('fountain', 'fountain', fountain);
+  if (fo.children.some((c) => c instanceof THREE.LOD)) fo.add(fountainJets());     // the GLB has no jets: animated water (the procedural fallback draws its own)
   model('immaculata', 'immaculata', plagueColumn);
   root.userData.stats = { cathedral: cat.userData.tris, theatre: th.userData.tris };
   return root;

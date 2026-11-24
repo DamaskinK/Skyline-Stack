@@ -69,8 +69,8 @@ else:
     b.box(-HX + RW, HX - RW, 0, 0.70, HZ - RW, HZ + RW, 'stone'); b.box(-HX + RW, HX - RW, 0, 0.70, -HZ - RW, -HZ + RW, 'stone')
     b.box(-HX + RW, HX - RW, 0.28, 0.40, -HZ + RW, HZ - RW, 'glass')
     # jet clusters along the long axis
-    def jet(x, z, h, r=0.09, top=0.28):
-        with b.at(x, 0, z, 0): b.lathe([(0, WL), (r * 2.2, WL), (r * 1.2, WL + 0.15), (r, WL + h * 0.55), (top * 0.8, WL + h * 0.9), (top, WL + h), (0.0, WL + h + 0.15)], 6, 0, 'stone2')
+    # The jets are NOT modelled here: they are animated translucent water in js/landmarks/fountain-jets.ts (a baked cone reads as a grey spike). That file lists the same nozzles.
+    def jet(x, z, h, r=0.09, top=0.28): pass
     zs = (-7.5, 0.0, 7.5)
     for zc in zs:
         b.plan(ring_pts(0, zc, 2.6, 14), WL - 0.05, WL + 0.12, 'stone')                                           # granite ring plate round a cluster
