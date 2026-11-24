@@ -41,7 +41,7 @@ const camOffsets = CAM_OFFSETS.map((o) => new THREE.Vector3(...o));
 const camPos = new THREE.Vector3(30, 20, 40), camLook = new THREE.Vector3(0, 10, 0);
 const tmpOff = new THREE.Vector3(), tmpLook = new THREE.Vector3(), tmpTarget = new THREE.Vector3();
 let clock = 0, camY = 8, fovGoal = 50;
-const CFG_LOW_LIFT = 5, CFG_LOW_FOV = 8;   // metres the look-at point rises and degrees the field of view opens at floor 0, fading out by floor 10
+const CFG_LOW_LIFT = 5, CFG_LOW_FOV = 4;   // metres the look-at point rises and degrees the field of view opens at floor 0, fading out by floor 10
 
 function render(rdt: number) {
   clock += rdt;

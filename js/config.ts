@@ -2,7 +2,7 @@
 import type { BlockKind, BlockType, Difficulty, DifficultyId, Weather, WeatherKind, WeatherCycle } from './types.js';
 
 // Default camera offsets from the tower top, by camera mode (shared by the camera and the far-ring view clearing)
-export const CAM_OFFSETS: [number, number, number][] = [[-28, 9, -24], [30, 6, 12], [0, 26, 12]];
+export const CAM_OFFSETS: [number, number, number][] = [[-22, 8, -19], [24, 5, 10], [0, 21, 10]];
 
 export const CFG = {
   W: 4, D: 4, H: 2.8, FOUND_H: 2.4, G: 30, DT: 1 / 120,
