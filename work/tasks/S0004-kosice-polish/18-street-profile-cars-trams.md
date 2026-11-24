@@ -8,7 +8,7 @@
 **Type:** bug
 **Status:** claimed
 
-- [ ] Car models: some cars are stretched long (limousine-like yellow cars) - fix scaling (uniform scale from the real
+- [x] Car models: some cars are stretched long (limousine-like yellow cars) - fix scaling (uniform scale from the real
       car length, no non-uniform stretch along the road); no parked or moving car on or touching the tower pad
       (they stand right at the tower's base on Terasa).
 - [ ] Street cross-section of main roads, from the centre outwards: tram tracks on their own bed in the middle ->
@@ -28,3 +28,4 @@
 ## Comments
 - Flicker regression: not the tile textures. Ticket 19's menu picture skips `updateWeather` while the menu shows, so the rain/snow/streak pools stayed at their creation default `visible = true` (rain lines from random points to the origin) and moved between the two flicker renders. `js/fx.ts` creates the pools hidden. depth game/low back to 0.21 % mean / 0.38 % max on plot 1; `check.mjs flicker --plot all --quality all` PASS.
 - Barracks roofs: own `metal` builder and `metalRoofMaterial` in near-ring.ts (dark coated steel, 0.5 m standing seams, metalness 0.45); shot tests/browser/out-s4-18/kit-high-p2-barracks-high.png. flicker all presets passed with it.
+- Cars: the stretched yellow cars were the buses of the moving traffic (the car body scaled 1.5 x 2.3, 9.7 m long). `js/world.ts`: a real bus model (`busGeo`, 11 m, windows, wheels, lights; own instanced meshes, no non-uniform scale anywhere). Parked cars keep 3 m from the tower's pad (`CAR_PAD_GAP` in `js/core/placement.ts`, test added), moving cars turn round / re-enter 4 m before the end of a route, so none reaches the pad where the streets are cut. Shots (`tests/browser/s4-18.mjs`, loadPlot + fixed poses): tests/browser/out-s4-18/p0-high-high.png (no car near the pad), bus-high.png. npm test 129, audit all plots 0 findings.

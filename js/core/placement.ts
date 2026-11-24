@@ -175,7 +175,8 @@ export const RULES: Record<Kind, Rule> = {
 };
 
 export interface Placed { kind: Kind; x: number; z: number; ring: Ring; rot?: number; own?: number }   // own: index of the carriageway the object belongs to (exempt)
-const padHit = (ring: Ring): boolean => { const b = ringBox(ring); return b[2] > -PAD_HALF && b[0] < PAD_HALF && b[3] > -PAD_HALF && b[1] < PAD_HALF; };
+const padHit = (ring: Ring, gap = 0): boolean => { const b = ringBox(ring), g = PAD_HALF + gap; return b[2] > -g && b[0] < g && b[3] > -g && b[1] < g; };
+const CAR_PAD_GAP = 3;   // S0004 18: a parked car stands at least 3 m from the tower's pad, never at its edge
 
 // What an object would run into: the list of obstacle categories it overlaps or comes too close to ([] = free).
 export function hits(site: Site, o: Placed): string[] {
@@ -198,7 +199,7 @@ export function hits(site: Site, o: Placed): string[] {
   if (rule.tram !== undefined) for (const s of site.tram) { if (boxHit(box, s.box, rule.tram) && ringLine(ring, s.p, box, s.w / 2 + rule.tram) < s.w / 2 + rule.tram) { out.push('tram'); break; } }
   if (rule.basin !== undefined) for (const b of site.basins) { if (boxHit(box, b.box, RIM_W / 2 + rule.basin) && ringRing(ring, b.r) < RIM_W / 2 + rule.basin) { out.push('basin'); break; } }
   if (rule.river !== undefined) for (const b of site.river) { if (boxHit(box, b.box, rule.river) && ringRing(ring, b.r) < rule.river) { out.push('river'); break; } }
-  if (rule.pad && padHit(ring)) out.push('pad');
+  if (rule.pad && padHit(ring, o.kind === 'carStreet' || o.kind === 'carLot' ? CAR_PAD_GAP : 0)) out.push('pad');
   if (rule.tower) for (const t of site.towers) { if (ringRing(ring, circleRing(t.x, t.z, t.r + TOWER_MARGIN, 12)) === 0) { out.push('tower'); break; } }
   return out;
 }

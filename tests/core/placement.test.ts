@@ -56,6 +56,9 @@ describe('the audit sees what it must', () => {
   });
   it('finds a house on the plaza pad, objects on each other and a tower on the plaza', () => {
     expect(hits(site, { kind: 'lamp', x: 0, z: 0, ring: footprint('lamp', 0, 0) })).toContain('pad');
+    const cx = PAD_HALF + 2.2, free = { ...site, buildings: [], carriage: [], foot: [], basins: [], river: [], bikes: [], tram: [], towers: [] };   // S0004 18: a parked car keeps 3 m from the pad
+    expect(hits(free, { kind: 'carLot', x: cx, z: 0, ring: footprint('carLot', cx, 0, Math.PI / 2) })).toContain('pad');
+    expect(hits(free, { kind: 'carLot', x: PAD_HALF + 6, z: 0, ring: footprint('carLot', PAD_HALF + 6, 0, Math.PI / 2) })).not.toContain('pad');
     const a = { kind: 'tree' as const, x: 80, z: 80, ring: footprint('tree', 80, 80) }, b = { kind: 'tree' as const, x: 80.4, z: 80, ring: footprint('tree', 80.4, 80) };
     expect(countByCategory(auditObjects({ ...site, buildings: [], carriage: [], foot: [], basins: [], river: [], bikes: [], tram: [] }, [a, b]))).toEqual({ 'tree-tree': 1 });
   });

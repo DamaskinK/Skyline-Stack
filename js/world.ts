@@ -96,7 +96,7 @@ export const backdrop = new THREE.Group(); backdrop.name = 'procedural-backdrop'
 let realRings = false;
 // The procedural city (Newtown) is built once around its plaza. To play another plot the whole city group is moved by minus the
 // plot's site, so the tower (always at the world origin) stands on that plot. Cars follow; people get routes in the same frame (level-scene.js).
-export function setProcOffset(x = 0, z = 0): void { nearProc.position.set(x, 0, z); backdrop.position.set(x, 0, z); carMesh.position.set(x, 0, z); carLights.position.set(x, 0, z); }
+export function setProcOffset(x = 0, z = 0): void { nearProc.position.set(x, 0, z); backdrop.position.set(x, 0, z); carMesh.position.set(x, 0, z); carLights.position.set(x, 0, z); busMesh.position.set(x, 0, z); busLights.position.set(x, 0, z); }
 export function setNearProcedural(on: boolean): void { nearProc.visible = on; backdrop.visible = on; realRings = !on; traffic.mode = on ? 'grid' : 'osm'; traffic.setCount(traffic.want); }
 
 // ── ground, plaza, roads, sidewalks ──
@@ -361,17 +361,33 @@ const carGeo = mergeColored([
   ...[[-1, -1.3], [1, -1.3], [-1, 1.3], [1, 1.3]].map(([x, z]): [THREE.BufferGeometry, number] => [new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10).rotateZ(Math.PI / 2).translate(x * 0.95, 0.38, z), 0x1a1a1a]),
 ]);
 const carLightGeo = mergeColored([[box(0.4, 0.2, 0.08, -0.6, 0.75, 2.12), 0xfff6d0], [box(0.4, 0.2, 0.08, 0.6, 0.75, 2.12), 0xfff6d0], [box(0.4, 0.18, 0.08, -0.6, 0.8, -2.12), 0xff2a2a], [box(0.4, 0.18, 0.08, 0.6, 0.8, -2.12), 0xff2a2a]]);
+// the bus is its own model, 11 m long (S0004 18): scaling the car body along the road made 9 m yellow limousines
+const busGeo = mergeColored([
+  [box(2.5, 2.3, 10.6, 0, 1.55, 0), 0xffffff], [box(2.56, 0.85, 9.6, 0, 2.15, 0), 0x39424f], [box(2.4, 0.1, 10.2, 0, 2.75, 0), 0xe8e8e8],
+  [box(2.0, 0.5, 0.06, 0, 2.15, 5.32), 0x39424f],
+  ...[[-1, -3.6], [1, -3.6], [-1, 3.4], [1, 3.4]].map(([x, z]): [THREE.BufferGeometry, number] => [new THREE.CylinderGeometry(0.5, 0.5, 0.34, 12).rotateZ(Math.PI / 2).translate(x * 1.2, 0.5, z), 0x1a1a1a]),
+]);
+const busLightGeo = mergeColored([[box(0.4, 0.22, 0.08, -0.85, 0.95, 5.32), 0xfff6d0], [box(0.4, 0.22, 0.08, 0.85, 0.95, 5.32), 0xfff6d0], [box(0.4, 0.2, 0.08, -0.85, 1.0, -5.32), 0xff2a2a], [box(0.4, 0.2, 0.08, 0.85, 1.0, -5.32), 0xff2a2a]]);
 const carCols = [0xe74c3c, 0x3498db, 0xf1c40f, 0xecf0f1, 0x2ecc71, 0x34495e, 0xe67e22, 0x9b59b6];
 const MAX_CARS = 40;
 const carMesh = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 }), MAX_CARS);
 const carLights = new THREE.InstancedMesh(carLightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), MAX_CARS);
-carMesh.castShadow = true; carMesh.frustumCulled = carLights.frustumCulled = false; scene.add(carMesh, carLights);
+const busMesh = new THREE.InstancedMesh(busGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 }), MAX_CARS);
+const busLights = new THREE.InstancedMesh(busLightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), MAX_CARS);
+carMesh.castShadow = busMesh.castShadow = true; carMesh.frustumCulled = carLights.frustumCulled = busMesh.frustumCulled = busLights.frustumCulled = false; scene.add(carMesh, carLights, busMesh, busLights);
+const hideM = new THREE.Matrix4().makeScale(0, 0, 0);
+// car i is a car or a bus: the matching mesh gets its matrix, the other one a zero-size matrix (both meshes keep the car's index and colour)
+function putCar(i: number, bus: boolean, m: THREE.Matrix4): void {
+  (bus ? busMesh : carMesh).setMatrixAt(i, m); (bus ? busLights : carLights).setMatrixAt(i, m);
+  (bus ? carMesh : busMesh).setMatrixAt(i, hideM); (bus ? carLights : busLights).setMatrixAt(i, hideM);
+}
+const flushCars = () => { for (const m of [carMesh, carLights, busMesh, busLights]) m.instanceMatrix.needsUpdate = true; };
 type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number; rl?: number; px?: number; pz?: number };
 const cars: Car[] = [];
 for (let i = 0; i < MAX_CARS; i++) {
   const road = i % 4, lane = i % 8 < 4 ? 1 : -1, bus = i % 9 === 0, parked = i % 11 === 5;
   cars.push({ road, lane, pos: -LEN / 2 + rnd() * LEN, sp: parked ? 0 : (9 + rnd() * 7) * (bus ? 0.7 : 1), bus, parked });
-  carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
+  carMesh.setColorAt(i, new THREE.Color(carCols[i % carCols.length])); busMesh.setColorAt(i, new THREE.Color(0xf5b400));
 }
 export interface TrafficRoute { p: number[]; cum: number[]; len: number; ow: number; w: number; ln: number }
 // the traffic lights of the street in view (js/street-detail.ts): cars stop at the stop line of an arm that shows red or amber
@@ -395,7 +411,7 @@ function brake(x: number, z: number, hx: number, hz: number): number {
 export const traffic: { waiting: number; minGap: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][], info?: { ow: number; w: number; ln: number }[]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
   count: 34, want: 34, mode: 'grid', routes: [], waiting: 0, minGap: 1e9,
   setLights(h) { lightsNow = h; },
-  setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
+  setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = busMesh.count = busLights.count = this.count; },
   // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
   setRoutes(list, info = []) {
     this.routes = list.map((p, k) => {
@@ -422,16 +438,17 @@ export const traffic: { waiting: number; minGap: number; count: number; want: nu
       ahead = Math.min(ahead, Math.max(0, Math.min(1, (gap - mine) / 8))); minGap = Math.min(minGap, gap);
       if (ahead < 0.05) waiting++;
       c.s += c.d * (c.sp || 6) * 0.7 * dt * ahead;
-      if (r.ow) { if (c.s > r.len) c.s = 0; else if (c.s < 0) c.s = r.len; }       // a one-way street: leave at the end, come in again at the start
-      else if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
+      // the ends of a route: 4 m kept free, so no car reaches the tower's pad (where the streets are cut) or the edge of the extract
+      const E = 4;
+      if (r.ow) { if (c.s > r.len - E) c.s = E; else if (c.s < E) c.s = r.len - E; }       // a one-way street: leave at the end, come in again at the start
+      else if (c.s > r.len - E) { c.s = r.len - E; c.d = -1; } else if (c.s < E) { c.s = E; c.d = 1; }
       let k = 1; while (k < r.cum.length - 1 && r.cum[k] < c.s) k++;
       const l = r.cum[k] - r.cum[k - 1] || 1, f = (c.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
       const tx = (x1 - x0) / l * c.d, tz = (z1 - z0) / l * c.d, off = r.ow ? ((c.rl! + 0.5) * r.w / nl - r.w / 2) : Math.min(4, Math.max(1.7, r.w / 4));
       c.px = x0 + (x1 - x0) * f - tz * off; c.pz = z0 + (z1 - z0) * f + tx * off; o3.position.set(c.px, 0.04, c.pz); o3.rotation.set(0, Math.atan2(tx, tz), 0);
-      o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
-      carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);
+      o3.scale.set(1, 1, 1); o3.updateMatrix(); putCar(i, c.bus, o3.matrix);
     }
-    this.waiting = waiting; this.minGap = minGap; carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
+    this.waiting = waiting; this.minGap = minGap; flushCars();
   },
   update(dt) {
     if (this.mode === 'osm') { lightsNow?.update(dt); return this.updateRoutes(dt); }
@@ -442,10 +459,9 @@ export const traffic: { waiting: number; minGap: number; count: number; want: nu
       const off = c.parked ? c.lane * 3.4 : c.lane * 2;
       if (c.road < 2) { o3.position.set(c.pos, 0, side * ROAD + off); o3.rotation.set(0, c.lane > 0 ? Math.PI / 2 : -Math.PI / 2, 0); }
       else { o3.position.set(side * ROAD - off, 0, c.pos); o3.rotation.set(0, c.lane > 0 ? 0 : Math.PI, 0); }
-      o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
-      carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);
+      o3.scale.set(1, 1, 1); o3.updateMatrix(); putCar(i, c.bus, o3.matrix);
     }
-    carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
+    flushCars();
   },
 };
 traffic.setCount(34);
