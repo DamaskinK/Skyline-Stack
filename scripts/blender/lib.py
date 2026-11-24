@@ -441,3 +441,126 @@ def render_view(path, eye, target, lens=40, ortho=None):
     cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     sc.camera = cam; sc.render.filepath = path; bpy.ops.render.render(write_still=True)
     log('rendered', path)
+
+# ------------------------------------------------------------------ organic shapes (S0004 09): metaball sculpts for statues, clouds, cherubs
+MB_K = 1 / 0.574                                     # metaball radius per visible radius (threshold 0.6, stiffness 2; measured)
+
+class Sculpt:
+    """Organic closed shell from metaballs, written in GAME coordinates like `Build`. Elements melt into each other (robes, limbs, clouds).
+    `into(build, role)` converts it to a mesh (optional decimate) and appends it to a Build as one closed shell of that role.
+    Each Sculpt is its own metaball family (unique base name), so separate sculpts never merge."""
+    _n = 0
+    def __init__(self, res=0.05):
+        Sculpt._n += 1; name = f'sculpt{Sculpt._n}x'
+        self.mb = bpy.data.metaballs.new(name); self.mb.resolution = res; self.mb.render_resolution = res; self.mb.threshold = 0.6
+        self.ob = bpy.data.objects.new(name, self.mb); bpy.context.scene.collection.objects.link(self.ob)
+        self.stack = [Matrix.Identity(4)]
+    class _At:
+        def __init__(s, sc, m): s.sc, s.m = sc, m
+        def __enter__(s): s.sc.stack.append(s.sc.stack[-1] @ s.m)
+        def __exit__(s, *a): s.sc.stack.pop()
+    def at(self, x=0.0, y=0.0, z=0.0, ry=0.0, rx=0.0, rz=0.0, s=1.0):
+        """Nested frame: translate, then rotate about y (as Build.at), then x, then z (game axes), uniform scale s."""
+        m = Matrix.Translation((x, y, z)) @ Matrix.Rotation(ry, 4, 'Y') @ Matrix.Rotation(rx, 4, 'X') @ Matrix.Rotation(rz, 4, 'Z') @ Matrix.Scale(s, 4)
+        return Sculpt._At(self, m)
+    _G2B = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
+    def _el(self, typ, x, y, z, r, ax=0.0, ay=0.0, az=0.0, neg=False, stiff=2.0):
+        M = self.stack[-1] @ Matrix.Translation((x, y, z)) @ Matrix.Rotation(ay, 4, 'Y') @ Matrix.Rotation(ax, 4, 'X') @ Matrix.Rotation(az, 4, 'Z')
+        sc = M.to_scale()[0]; B = Sculpt._G2B @ M
+        e = self.mb.elements.new(); e.type = typ; e.co = B.to_translation(); e.radius = r * sc * MB_K; e.stiffness = stiff
+        q = (Sculpt._G2B.to_3x3() @ M.to_3x3().normalized() @ Sculpt._G2B.to_3x3().inverted()).to_quaternion(); e.rotation = q
+        e.use_negative = neg
+        return e, sc
+    def ball(self, x, y, z, r, **k): self._el('BALL', x, y, z, r, **k)
+    def ell(self, x, y, z, rx, ry, rz, **k):
+        """Ellipsoid with radii along the local game axes x (east), y (up), z (south); ax, ay, az rotate it (radians)."""
+        m = max(rx, ry, rz); e, sc = self._el('ELLIPSOID', x, y, z, m, **k)
+        e.size_x, e.size_y, e.size_z = rx / m, rz / m, ry / m                 # game y -> blender z, game z -> blender -y
+    def seg(self, p0, p1, r, **k):
+        """Capsule (limb, fold, scroll) between two local points, radius r."""
+        a, b = Vector(p0), Vector(p1); d = b - a; L = d.length / 2; c = (a + b) / 2
+        # capsule axis = blender local x; build the game-frame rotation that sends +x to d
+        q = Vector((1, 0, 0)).rotation_difference(d.normalized() if L > 1e-6 else Vector((1, 0, 0)))
+        M = self.stack[-1] @ Matrix.Translation(c) @ q.to_matrix().to_4x4()
+        sc = M.to_scale()[0]; B = Sculpt._G2B @ M
+        e = self.mb.elements.new(); e.type = 'CAPSULE'; e.co = B.to_translation(); e.radius = r * sc * MB_K; e.stiffness = k.get('stiff', 2.0)
+        R = Sculpt._G2B.to_3x3() @ M.to_3x3().normalized()
+        e.rotation = R.to_quaternion(); e.size_x = L * sc; e.use_negative = k.get('neg', False)
+    def mesh(self, ratio=1.0):
+        """Evaluated metaball surface as a mesh in Blender world coordinates, optionally decimated (collapse ratio)."""
+        dg = bpy.context.evaluated_depsgraph_get(); me = bpy.data.meshes.new_from_object(self.ob.evaluated_get(dg))
+        bpy.data.objects.remove(self.ob); bpy.data.metaballs.remove(self.mb)
+        if ratio < 1.0:
+            o = bpy.data.objects.new('dec', me); bpy.context.scene.collection.objects.link(o)
+            m = o.modifiers.new('d', 'DECIMATE'); m.ratio = ratio; m.use_collapse_triangulate = True
+            evaluated_copy(o); me = o.data; bpy.data.objects.remove(o)
+        return me
+    def into(self, build, role, ratio=1.0):
+        me = self.mesh(ratio); build.add_mesh(me, role); n = len(me.polygons); bpy.data.meshes.remove(me); return n
+
+def _add_mesh(self, me, role=None):
+    """Append a mesh (Blender world coordinates) to this Build as shells of one role."""
+    vs = [self.bm.verts.new(v.co) for v in me.vertices]
+    fs = []
+    for p in me.polygons:
+        try: f = self.bm.faces.new([vs[i] for i in p.vertices])
+        except ValueError: continue
+        f[self.lay] = ROLE_ORDER.index(role or self.role); fs.append(f)
+    return fs
+Build.add_mesh = _add_mesh
+
+# ------------------------------------------------------------------ Gothic details shared by the cathedral and the chapel (S0004 09)
+def arc_bar(b, pts, w, d, role='stone', closed=False):
+    """Chain of bars through local points (x, y) in the plane z = 0 of the current frame, section w (in plane) x d (depth, along z)."""
+    n = len(pts) if closed else len(pts) - 1
+    for i in range(n):
+        (x0, y0), (x1, y1) = pts[i], pts[(i + 1) % len(pts)]
+        b.beam((x0, y0, 0), (x1, y1, 0), d, w, (0, 0, 1), role)
+
+def circle_pts(cx, cy, r, n=12, a0=0.0, a1=2 * math.pi):
+    full = abs(a1 - a0 - 2 * math.pi) < 1e-6
+    k = n if full else n + 1
+    return [(cx + r * math.cos(a0 + (a1 - a0) * i / n), cy + r * math.sin(a0 + (a1 - a0) * i / n)) for i in range(k)]
+
+def tracery(b, w, h, R=1.1, lights=2, z=0.0, bar=0.16, d=0.22, role='stone'):
+    """Window tracery in the plane z of the current frame: outer arch of a pointed window (width w, springing h, two-centred radius R*w),
+    `lights` sub-lancets with their own pointed heads, and a ring (with an inner quatrefoil cusp) in the head. Bars are w x d."""
+    with b.at(0, 0, z, 0):
+        lw = w / lights
+        for i in range(1, lights):                                            # mullions to the springing of the sub-arches
+            x = -w / 2 + i * lw; b.beam((x, 0, 0), (x, h + lw * 0.55, 0), d, bar, (0, 0, 1), role)
+        sub_h = h
+        for i in range(lights):                                               # sub-arch heads
+            cx = -w / 2 + (i + 0.5) * lw
+            prof, top = arch_profile(lw, sub_h, 1.0, 4)
+            head = [p for p in prof[2:]]                                       # spring -> apex -> spring
+            arc_bar(b, [(cx + px, py) for px, py in [(lw / 2, sub_h)] + head + [(-lw / 2, sub_h)]], bar, d, role)
+        # ring in the head between the sub-arches and the outer arch
+        _, otop = arch_profile(w, h, R)
+        sub_top = arch_profile(lw, sub_h, 1.0)[1]
+        rr = max(0.2, min((otop - sub_top) * 0.42, w * 0.3)); cy = sub_top + rr * 0.95
+        arc_bar(b, circle_pts(0, cy, rr, 12), bar * 0.9, d, role, closed=True)
+        for k in range(4):                                                    # quatrefoil cusps: four small rings inside
+            a = math.pi / 4 + k * math.pi / 2
+            arc_bar(b, circle_pts(rr * 0.45 * math.cos(a), cy + rr * 0.45 * math.sin(a), rr * 0.36, 8), bar * 0.6, d * 0.8, role, closed=True)
+
+def crockets(b, p0, p1, n, s=0.35, role='stone'):
+    """Small leaf knobs (pyramids) along a line (gable rake, spire edge) between local points."""
+    for i in range(n):
+        t = (i + 0.5) / n; x, y, z = (p0[k] + (p1[k] - p0[k]) * t for k in range(3))
+        b.pyramid([(x - s / 2, z - s / 2), (x + s / 2, z - s / 2), (x + s / 2, z + s / 2), (x - s / 2, z + s / 2)], y, (x, y + s * 1.1, z), role)
+
+def openwork(b, cut, x0, x1, y0, y1, z, face_ry, t=0.28, role='stone', pitch=None):
+    """Pierced Gothic balustrade (parapet) along local x from x0 to x1 at height y0..y1, centred on plane z of the current frame (rotated by face_ry about y).
+    Quatrefoil holes cut through; a coping rail on top."""
+    with b.at(0, 0, 0, face_ry):
+        b.box(x0, x1, y0, y1, z - t / 2, z + t / 2, role)
+        b.box(x0 - 0.05, x1 + 0.05, y1, y1 + 0.16, z - t / 2 - 0.08, z + t / 2 + 0.08, role)
+    h = y1 - y0; s = h * 0.36; pitch = pitch or h * 0.95
+    n = max(1, int((x1 - x0) / pitch)); step = (x1 - x0) / n; cy = (y0 + y1) / 2
+    with cut.at(0, 0, 0, face_ry):
+        for i in range(n):
+            cx = x0 + (i + 0.5) * step
+            with cut.at(cx, cy, z, 0):
+                cut.prism([(s * (0.6 + 0.4 * abs(math.cos(2 * a))) * math.cos(a), s * (0.6 + 0.4 * abs(math.cos(2 * a))) * math.sin(a)) for a in (2 * math.pi * k / 16 for k in range(16))],
+                          -t / 2 - 0.06, t / 2 + 0.06)             # quatrefoil

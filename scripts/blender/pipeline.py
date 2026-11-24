@@ -36,9 +36,10 @@ def _periodic_noise(px, cells, seed, octaves=3):
         out += amp * (a * (1 - f)[:, None] + b * f[:, None]); tot += amp; amp *= 0.5
     return out / tot
 
-def write_stone_texture(path, normal_path, period=4.0, px=1024, course=0.5, c1=0xb8aa8c, c2=0x8c8271, mortar=0x6a6354, seed=3, block=(0.9, 1.7), joint=0.014, bevel=0.03):
+def write_stone_texture(path, normal_path, period=4.0, px=1024, course=0.5, c1=0xb8aa8c, c2=0x8c8271, mortar=0x6a6354, seed=3, block=(0.9, 1.7), joint=0.014, bevel=0.03, accents=()):
     """Ashlar masonry that tiles every `period` metres: courses of random block lengths, per-block tint, chipped bevelled edges, grain.
-    Writes the colour map and a normal map made from the same height field."""
+    Writes the colour map and a normal map made from the same height field. `accents`: [(probability, colour)] blocks of another stone
+    scattered among the others (S0004 09: the cathedral's patchwork of dark grey and reddish blocks in the pale sandstone)."""
     rng = np.random.default_rng(seed); ncourse = int(round(period / course)); ch = period / ncourse
     y = (np.arange(px) + 0.5) / px * period; x = (np.arange(px) + 0.5) / px * period
     X, Y = np.meshgrid(x, y)
@@ -61,7 +62,15 @@ def write_stone_texture(path, normal_path, period=4.0, px=1024, course=0.5, c1=0
         edge[rows] = d
         tint = 0.2 + 0.6 * rng.random(len(cuts)); tint = tint[(idx - 1) % len(cuts)]
         bright = 0.94 + 0.12 * rng.random(len(cuts)); bright = bright[(idx - 1) % len(cuts)]
-        col[rows] = (ca[None] * (1 - tint[:, None]) + cb[None] * tint[:, None]) * bright[:, None]
+        bc = ca[None] * (1 - tint[:, None]) + cb[None] * tint[:, None]
+        if accents:
+            pick = rng.random(len(cuts)); acc = np.zeros(len(cuts), int) - 1; lo = 0.0
+            for ai, (p, _) in enumerate(accents):
+                acc[(pick >= lo) & (pick < lo + p)] = ai; lo += p
+            ac = acc[(idx - 1) % len(cuts)]
+            for ai, (_, ah) in enumerate(accents):
+                m = ac == ai; bc[m] = _rgb(ah)[None] * (0.9 + 0.2 * tint[m, None])
+        col[rows] = bc * bright[:, None]
     grain = _periodic_noise(px, 64, seed + 1, 2); blot = _periodic_noise(px, 5, seed + 2, 3)
     col *= (0.86 + 0.28 * blot)[..., None] * (0.94 + 0.12 * grain)[..., None]
     groove = np.clip(1 - edge / joint, 0, 1)                       # mortar joint
@@ -75,29 +84,44 @@ def write_stone_texture(path, normal_path, period=4.0, px=1024, course=0.5, c1=0
     s = 3.2; nx, ny = -gx * s, gy * s; nz = np.ones_like(nx); l = np.sqrt(nx * nx + ny * ny + nz * nz)
     _save(normal_path, np.stack([nx / l * 0.5 + 0.5, ny / l * 0.5 + 0.5, nz / l * 0.5 + 0.5], -1), colour=False)
 
-def write_tile_texture(path, kind='cathedral', px=384, period=TILE_PERIOD, seed=7):
+def write_tile_texture(path, kind='cathedral', px=512, period=TILE_PERIOD, seed=7):
     """Roof tile patterns. `cathedral`: diamonds, mostly yellow and green (S0004 01, from the photos of the real roof);
     `chapel`: dark brown field with a yellow lattice; `slate`: dark brown plain tiles in rows; `red`: orange clay tiles in rows."""
     rng = np.random.default_rng(seed)
     u = (np.arange(px) + 0.5) / px * period; U, V = np.meshgrid(u, u)
     P = {k: _rgb(PALETTE[k]) for k in ('tileYellow', 'tileGreen', 'tileRed', 'tileBlue', 'tileBlack')}
-    if kind in ('cathedral', 'chapel'):
-        cells = 6 if kind == 'cathedral' else 24; L = period / cells
+    if kind == 'cathedral':
+        # S0004 09, from File:St. Elisabeth Cathedral - Old Town - Kosice - Slovakia (36169946860).jpg and File:Cathedral of St Elizabeth Košice, Staré Mesto, Slovakia.jpg:
+        # glazed beaver-tail tiles, a terracotta to red-brown field with horizontal zigzag bands of ochre yellow, green and dark brown and small dark lozenges between them.
+        cols, rows = 24, 16; tw, rh = period / cols, period / rows
+        r = np.floor(V / rh).astype(int); fy = V / rh - r
+        sh = (r % 2) * 0.5; c = np.floor(U / tw + sh).astype(int); fx = U / tw + sh - c; c = c % cols; r = r % rows
+        base = np.array([_rgb(0x9a4c2e), _rgb(0x86422d), _rgb(0xa45634), _rgb(0x763b2a)])
+        pick = rng.integers(0, 4, (rows, cols)); grid = base[pick]
+        zig = np.abs((np.arange(cols)[None, :] % 8) - 4)                                        # chevron: 3 per period
+        rr = np.arange(rows)[:, None]
+        band = (rr + zig) % 8
+        grid[band == 0] = _rgb(0xcf9f3a); grid[band == 1] = _rgb(0x3f7445)
+        dia = ((rr + 4 + zig) % 8 == 0) & ((np.arange(cols)[None, :] % 8) == 4)
+        grid[dia] = _rgb(0x3a2a22)
+        img = grid[r, c] * rng.normal(1.0, 0.035, (rows, cols))[r, c][..., None]
+        # beaver tail: rounded lower edge, each tile darker under the one above, thin gaps
+        tail = np.clip(1 - ((fx - 0.5) * 2) ** 2, 0, 1) ** 0.5
+        shadow = np.clip((fy - 0.12) / 0.2, 0, 1)
+        img *= (0.62 + 0.38 * shadow)[..., None]
+        img *= (0.85 + 0.15 * tail)[..., None]
+        edge = np.minimum(fx, 1 - fx); img *= (1 - 0.35 * np.clip(1 - edge / 0.07, 0, 1))[..., None]
+        img *= (0.92 + 0.14 * np.exp(-((fx - 0.4) ** 2 + (fy - 0.6) ** 2) / 0.03))[..., None]       # glaze highlight
+    elif kind == 'chapel':
+        cells = 24; L = period / cells
         a = (U + V) / L; b = (U - V) / L
         ia, ib = np.floor(a).astype(int) % cells, np.floor(b).astype(int) % cells
         fa, fb = a - np.floor(a), b - np.floor(b)
         img = np.zeros((px, px, 3))
-        if kind == 'cathedral':
-            chk = ((ia + ib) % 2 == 0)
-            img[chk] = P['tileYellow']; img[~chk] = P['tileGreen']
-            # a few accents: red lozenges and dark ones, rows of single darker green
-            for (i, j, k) in ((1, 1, 'tileRed'), (4, 4, 'tileBlack')):
-                m = (ia == i) & (ib == j); img[m] = P[k]
-        else:
-            brown = _rgb(0x5a4034); cream = _rgb(0xd8c27a)
-            line = (ia % 6 == 0) | (ib % 6 == 0)
-            img[:] = brown; img[line] = cream
-            img[(ia % 6 == 3) & (ib % 6 == 3)] = _rgb(0x3d6a4a)           # green lozenge in the lattice centres
+        brown = _rgb(0x5a4034); cream = _rgb(0xd8c27a)
+        line = (ia % 6 == 0) | (ib % 6 == 0)
+        img[:] = brown; img[line] = cream
+        img[(ia % 6 == 3) & (ib % 6 == 3)] = _rgb(0x3d6a4a)           # green lozenge in the lattice centres
         noise = rng.normal(1.0, 0.045, (cells, cells))[ia, ib][..., None]
         edge = np.minimum(np.minimum(fa, 1 - fa), np.minimum(fb, 1 - fb)); img *= (1 - 0.35 * np.clip(1 - edge / 0.06, 0, 1))[..., None] * noise
         img *= (0.94 + 0.12 * np.exp(-(((fa - 0.5) ** 2 + (fb - 0.5) ** 2) / 0.05)))[..., None]
@@ -164,7 +188,7 @@ def _flat_materials(cols):
 
 # ------------------------------------------------------------------ assembly
 def assemble(name, body, cut, inl, argv, out_glb, size=2048, tiling=None, geom_colours=None, views=None, lods=((6.0, 0.6), (25.0, 0.3)),
-             stone_to_tiles=True, merge=0.003, union=True):
+             stone_to_tiles=True, merge=0.003, union=True, flat_roles=('stone2',)):
     """Everything after the shells. `tiling`: {role: dict(png, normal, period, rough, metal, ao)} roles that repeat (their own material, in the order given:
     material 0 is the atlas). Roles with `ao` keep a small atlas patch (density 0.3) for baked occlusion. Returns the LOD objects."""
     def opt(k, d): return argv[argv.index(k) + 1] if k in argv else d
@@ -206,7 +230,20 @@ def assemble(name, body, cut, inl, argv, out_glb, size=2048, tiling=None, geom_c
         old_density = {r: ROLES[r]['density'] for r in tiling}
         for role, cfg in tiling.items():
             if cfg.get('ao'): ROLES[role]['density'] = 0.3
+        # S0004 09: roles in `flat_roles` (carved stone of statues, tracery, sculpted clouds: thousands of tiny islands whose packing margins would starve
+        # the atlas) share one small patch of the atlas: an even colour, the game's lighting does their shading
+        flat_objs = {r: parts.pop(r) for r in flat_roles if r in parts and len(parts) > 1}
         joined = unwrap_roles(parts, SIZE); joined.name = f'{name}_LOD0'
+        if flat_objs:
+            uvl = joined.data.uv_layers['atlas']
+            for l in uvl.data: l.uv = (l.uv.x * 0.975, l.uv.y)
+            for r, o in flat_objs.items():
+                l = o.data.uv_layers.new(name='atlas')
+                for d in l.data: d.uv = (0.9875, 0.5)
+                for k in [k for k in o.data.uv_layers.keys() if k not in ('atlas', 'pat')]: o.data.uv_layers.remove(o.data.uv_layers[k])
+            bpy.ops.object.select_all(action='DESELECT')
+            for o in flat_objs.values(): o.select_set(True)
+            joined.select_set(True); bpy.context.view_layer.objects.active = joined; bpy.ops.object.join(); joined = bpy.context.view_layer.objects.active
         log('atlas coverage', round(uv_coverage(joined) * 100, 1), '% ; texel density', round(texel_density(joined, SIZE), 1), 'px/m')
         tuv = None
         for role, o in tiling_objs.items():
