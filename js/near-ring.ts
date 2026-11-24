@@ -340,6 +340,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     cx /= n; cz /= n;
     if (hide && hide.has(bd.n as string)) continue;          // replaced by a hand-built landmark model
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
+    if (area < 8 && bd.k !== 'church') continue;             // pillars, plinths and pedestals (an OSM footprint of 3-4 m2 is no house): drawn as nothing, still an obstacle in the plan
     const tiny = area < 15 && bd.k !== 'church';             // a kiosk, a transformer hut, a shed: one storey with a shop front and a roof, never a 7-14 m blank pillar
     const bh = bd.h ?? 0, panel = !tiny && ((bd.lv ?? 0) >= 5 || (bd.a && bh >= 12));                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
     const old = tiny || (bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel);
