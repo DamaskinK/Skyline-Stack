@@ -461,5 +461,5 @@ VIEWS = {
     'apse': ((70, 16, -20), (22, 12, 0), 40),
     'close-wall': ((-4, 4, 33), (4, 6, 21), 45),           # a few metres from the south transept wall: stone sharpness
 }
-assemble('cathedral', body, cut, inl, argv, out_glb, size=2048, tiling=tiling, views=VIEWS, lods=((6.0, 0.4), (25.0, 0.1)),
+assemble('cathedral', body, cut, inl, argv, out_glb, size=2048, tiling=tiling, views=VIEWS, lods=((6.0, 0.4), (25.0, 0.1)), flat_roles=('stone2',),
          geom_colours={'stone': 0xb2a68e, 'stone2': 0xc9bfa9, 'tiles': 0x9a4e33, 'copper': 0x3d4248, 'gold': 0xe3b34a, 'glass': 0x34506a, 'dark': 0x23272c})

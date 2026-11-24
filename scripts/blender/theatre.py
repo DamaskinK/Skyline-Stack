@@ -14,12 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy, bmesh
 from lib import *
 from pipeline import *
+import sculpts as SC
 
 argv = cli(); out_glb = argv[0] if argv else '/tmp/theatre.glb'
 PI = math.pi
-PALETTE['copper'] = 0x4b6256; PALETTE['copperDark'] = 0x3c4f45; PALETTE['copperLight'] = 0x62796b; PALETTE['gold'] = 0xd6aa48
+PALETTE['copper'] = 0x445a50; PALETTE['copperDark'] = 0x36463f; PALETTE['copperLight'] = 0x566b60; PALETTE['gold'] = 0xd6aa48
 STYLES["stone"].update(c1=0xf4ecd0, c2=0xeadfbc, mortar=0xe0d4aa, bw=2.4, rh=1.0, msize=0.0, nz=0.12)
-STYLES['stone2'].update(c1=0xe9dfc2, c2=0xddd2b1, mortar=0xb9ad8e, bw=40.0, rh=0.9, msize=0.0, nz=0.12)
+STYLES['stone2'].update(c1=0x4f5f55, c2=0x47574d, mortar=0x47574d, bw=0.6, rh=0.4, msize=0.0, nz=0.5)     # S0004 09: patinated bronze of the statues (one flat atlas patch)
 
 body = Build('body'); cut = Build('cut'); inl = Build('inlay')
 
@@ -54,10 +55,22 @@ def surround(x, y, z, face, w, h, t=0.3, d=0.22):
 def pillar_ring(b, cx, cz, r, n, y0, y1, role='stone', rot=0.0):
     b.plan([(cx + r * math.cos(rot + 2 * PI * i / n), cz + r * math.sin(rot + 2 * PI * i / n)) for i in range(n)], y0, y1, role)
 
-def statue(b, x, y, z, h=2.4, role='copper'):
-    b.cbox(x, z, 0.8, 0.8, y, y + 0.7, 'stone')                                  # plinth
-    b.lathe([(0.0, y + 0.7), (0.34, y + 0.7), (0.3, y + 1.6), (0.22, y + h - 0.5), (0.0, y + h - 0.5)], 6, 0, role)          # body
-    b.lathe([(0.0, y + h - 0.55), (0.2, y + h - 0.45), (0.17, y + h - 0.1), (0.0, y + h)], 6, 0, role)                       # head
+STATUES = []                                                                    # (x, y, z, ry, h, pose, seed): sculpted bronze figures, built at the end
+
+def statue(b, x, y, z, h=2.4, role='copper', ry=None, pose=None):
+    """Bronze figure on a stone plinth (S0004 09: sculpted, lib.Sculpt, instead of a lathe); faces away from the building centre."""
+    b.cbox(x, z, 0.8, 0.8, y, y + 0.7, 'stone')
+    if ry is None: ry = math.atan2(x, z - 4.0)
+    STATUES.append((x, y + 0.7, z, ry, h - 0.7, pose or ('open', 'book', 'staff', 'prayer')[len(STATUES) % 4], len(STATUES)))
+
+def balusters(b, x0, x1, y, z, h=1.0, pitch=0.32, rail=0.22):
+    """Row of turned balusters between a plinth and a hand rail along local x at depth z."""
+    b.box(x0, x1, y, y + 0.14, z - rail / 2, z + rail / 2, 'stone'); b.box(x0 - 0.04, x1 + 0.04, y + h - 0.14, y + h, z - rail / 2 - 0.04, z + rail / 2 + 0.04, 'stone')
+    n = max(1, int((x1 - x0) / pitch))
+    for i in range(n):
+        xx = x0 + (i + 0.5) * (x1 - x0) / n
+        with inl.at(xx, y + 0.1, z, 0):                                          # inlay, not unioned: hundreds of touching shells upset the exact boolean
+            inl.lathe([(0, 0), (0.07, 0), (0.1, 0.19), (0.06, 0.39), (0.05, 0.59), (0.08, h - 0.36), (0.06, h - 0.26), (0.0, h - 0.2)], 6, 0, 'stone')
 
 def dome(b, x, y, z, r, rot=0.0, n=16, role='copper', lantern=True, gold=True, tall=1.0):
     """Baroque dome: drum-less lathe with a lantern and a ball."""
@@ -114,7 +127,8 @@ def build():
         b.box(sx * (AV_HW - 0.5) - 0.5, sx * (AV_HW - 0.5) + 0.5, GROUND + 0.2, GROUND + 5.4, AV_Z - 0.2, AV_Z + 0.15, 'stone')
     # balcony slab and balustrade in front of the loggia
     b.box(-AV_HW + 0.2, AV_HW - 0.2, GROUND + 0.2, GROUND + 0.5, AV_Z, AV_Z + 0.6, 'stone')
-    b.box(-AV_HW + 0.25, AV_HW - 0.25, GROUND + 0.5, GROUND + 1.55, AV_Z + 0.35, AV_Z + 0.55, 'stone')
+    for (bx0, bx1) in ((-AV_HW + 0.3, -3.3), (-1.7, 1.7), (3.3, AV_HW - 0.3)):                     # balustrade with turned balusters between the column pairs
+        balusters(b, bx0, bx1, GROUND + 0.5, AV_Z + 0.45, 1.05)
     # steps
     for i in range(3): b.box(-AV_HW - 0.8 + i * 0.2, AV_HW + 0.8 - i * 0.2, 0, 0.17 * (3 - i), AV_Z + 0.2, AV_Z + 0.2 + 0.5 * (3 - i), 'stone')
     # corner pavilions: round, with a cornice ring
@@ -130,11 +144,27 @@ def build():
     pillar_ring(b, D['x'], D['z'], D['r'] + 0.45, 16, D['y1'] - 0.5, D['y1'] + 0.25, 'stone', rot=PI / 16)
     pillar_ring(b, D['x'], D['z'], D['r'] + 0.3, 16, D['y0'] + 1.0, D['y0'] + 1.4, 'stone', rot=PI / 16)
     dome(b, D['x'], D['y1'] + 0.25, D['z'], 9.6, n=16, tall=1.18)
+    # S0004 09 (File:Kosice_State_Theatre_1.JPG, File:Kosice - National Theatre.jpg): stone ribs on the dome, four dormers with oculi, a figure on the lantern
+    s_ = 9.6 / 10.0; prof = [(10.4, 0.5), (9.8, 2.2), (8.4, 4.6), (6.2, 6.8), (3.6, 8.4), (1.9, 9.3)]
+    Y = D['y1'] + 0.25
+    for i in range(16):
+        a = (i + 0.5) * 2 * PI / 16 + PI / 16 * 0
+        a = PI / 16 * (2 * i)
+        pts = [(D['x'] + (rr * s_ + 0.08) * math.cos(a), Y + hh * s_ * 1.18, D['z'] + (rr * s_ + 0.08) * math.sin(a)) for rr, hh in prof]
+        for k in range(len(pts) - 1): b.beam(pts[k], pts[k + 1], 0.32, 0.22, (0, 1, 0), 'stone')
+    for face in (0.0, PI / 2, PI, -PI / 2):
+        with b.at(D['x'] + math.sin(face) * 8.6, Y + 2.2, D['z'] + math.cos(face) * 8.6, face):
+            b.box(-1.3, 1.3, 0, 2.6, -1.2, 0.5, 'stone')
+            b.prism([(1.55 * math.cos(PI * k / 8), 2.6 + 1.0 * math.sin(PI * k / 8)) for k in range(9)], -1.2, 0.6, 'stone')
+            b.prism([(0.75 * math.cos(2 * PI * k / 12), 1.4 + 0.75 * math.sin(2 * PI * k / 12)) for k in range(12)], 0.5, 0.58, 'glass')
+    STATUES.append((D['x'], Y + 15.2 * s_ * 1.18 + 0.5, D['z'], 0.0, 2.6, 'open', 99))
     # statues on the cornice and the pediment
     for sx in (-1, 1):
         for zz in (-6.0, 4.0, 14.0): statue(b, sx * (HW - 0.4), CORN + 0.6, zz, 2.3)
         statue(b, sx * (AV_HW + 0.3), CORN + 0.4, AV_Z + 0.1, 2.6)
-    statue(b, 0.0, CORN + 4.6, AV_Z - 0.2, 3.0)                                                  # group on the pediment apex
+    statue(b, 0.0, CORN + 4.6, AV_Z - 0.2, 3.0, ry=0.0, pose='open')                              # figure on the pediment apex
+    for sx in (-1, 1):                                                                           # reclining figures on the pediment slopes
+        STATUES.append((sx * 3.2, CORN + 2.6, AV_Z + 0.1, sx * 0.5, 1.6, 'book' if sx < 0 else 'staff', 50 + sx))
 
 def build_openings():
     # front, central bay: ground floor three round-headed doors/windows, first floor loggia (deep recesses between the paired columns)
@@ -184,6 +214,10 @@ def build_openings():
         cut.box(-HW, HW, y, y + 0.1, Z0 - 0.5, Z0 + 0.12, 'stone')
 
 build(); build_openings()
+sc = Sculpt(0.035)
+for (x, y, z, ry, h, pose, seed) in STATUES:
+    with sc.at(x, y, z, ry): SC.robed(sc, h, pose, seed=seed)
+log('statues', len(STATUES), 'faces', sc.into(inl, 'stone2', 0.22))
 
 VIEWS = {
     'front': ((-8, 4, 70), (0, 14, 0), 36),                  # from the singing fountain, as in the photo
@@ -193,5 +227,5 @@ VIEWS = {
     'aerial': ((60, 60, 60), (0, 12, 0), 42),
     'close': ((6, 4, 42), (0, 10, 28), 45),
 }
-assemble('theatre', body, cut, inl, argv, out_glb, size=2048, tiling={}, views=VIEWS,
-         geom_colours={'stone': 0xf1e8cc, 'stone2': 0xe9dfc2, 'tiles': 0x444444, 'copper': 0x56705f, 'gold': 0xd6aa48, 'glass': 0x34506a, 'dark': 0x2b2d31})
+assemble('theatre', body, cut, inl, argv, out_glb, size=2048, tiling={}, views=VIEWS, flat_roles=('stone2',),
+         geom_colours={'stone': 0xf1e8cc, 'stone2': 0x4f5f55, 'tiles': 0x444444, 'copper': 0x56705f, 'gold': 0xd6aa48, 'glass': 0x34506a, 'dark': 0x2b2d31})

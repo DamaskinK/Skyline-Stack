@@ -188,7 +188,7 @@ def _flat_materials(cols):
 
 # ------------------------------------------------------------------ assembly
 def assemble(name, body, cut, inl, argv, out_glb, size=2048, tiling=None, geom_colours=None, views=None, lods=((6.0, 0.6), (25.0, 0.3)),
-             stone_to_tiles=True, merge=0.003, union=True, flat_roles=('stone2',)):
+             stone_to_tiles=True, merge=0.003, union=True, flat_roles=()):
     """Everything after the shells. `tiling`: {role: dict(png, normal, period, rough, metal, ao)} roles that repeat (their own material, in the order given:
     material 0 is the atlas). Roles with `ao` keep a small atlas patch (density 0.3) for baked occlusion. Returns the LOD objects."""
     def opt(k, d): return argv[argv.index(k) + 1] if k in argv else d

@@ -151,4 +151,4 @@ else:
     ROLES['glass']['density'] = 0.3
     LODS = ((6.0, 0.6), (25.0, 0.3))
 
-assemble(name, body, cut, inl, argv, out_glb, size=size, tiling={}, views=views, geom_colours=geom, union=(WHICH != 'fountain'), lods=LODS)
+assemble(name, body, cut, inl, argv, out_glb, size=size, tiling={}, views=views, geom_colours=geom, union=(WHICH != 'fountain'), lods=LODS, flat_roles=('stone2',) if WHICH == 'immaculata' else ())
