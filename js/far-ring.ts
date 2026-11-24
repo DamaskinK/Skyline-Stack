@@ -10,6 +10,8 @@ import { Builder, hash, insideRing, material, mesh, calmMat, pitchedRoof, OLD_PA
 import { level, plotOffset } from './level-scene.js';
 import { cityById } from './levels.js';
 import { loadDistrictProgress } from './settings.js';
+import { FacadeBuilder, addFacadeWall, facadesReady } from './baked-facades.js';
+import { PANEL_SCHEMES } from './house-kit.js';
 import { tileRoofTex, roofTex, STOREY_H, STOREY_W } from './textures.js';
 import type { Vec } from './near-ring.js';
 import { ringBox, ringRing, circleRing, boxHit } from './core/geometry2d.js';
@@ -180,6 +182,7 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
 
   const walls = new Map<string, { kind: string; hex: number; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder();
   const wallB = (kind: string, hex: number, v: number): Builder => { const k = `${kind}${hex}${v}`; let e = walls.get(k); if (!e) { e = { kind, hex, v, b: new Builder() }; walls.set(k, e); } return e.b; };
+  const baked = facadesReady() ? new FacadeBuilder() : null;
   const ALPHA = 0.14, ca = Math.cos(ALPHA), sa = Math.sin(ALPHA), C = 60;                     // street lattice, turned a little off north
   // the default camera looks north-north-west past the tower: keep tall blocks out of that sector so the tower never melts into one
   const vx = -CAM_OFFSETS[0][0], vz = -CAM_OFFSETS[0][2], vl = Math.hypot(vx, vz);   // from the camera through the tower
@@ -192,7 +195,14 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
     const p = rectRing(cx, cz, w, d, rot), y0 = ty - 3;
     if (!fits(p)) return false;
     keep(p, kind);
-    addWalls(wallB(kind, hex, v), p, y0, h + 3);
+    if (baked) {                                                                   // same atlas cells as the far houses of the near ring (js/baked-facades.ts)
+      const style = kind === 'old' ? 'old' : kind === 'panel' ? 'panel' : 'mid', sc = PANEL_SCHEMES[(v + Math.floor(hash(cx, cz) * 7)) % PANEL_SCHEMES.length];
+      const plaster = new THREE.Color(kind === 'panel' ? sc[0] : hex).multiplyScalar(0.94 + 0.12 * hash(cx * 3.1, cz * 1.7)), accent = new THREE.Color(sc[1]);
+      for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4, dx = p[2 * j] - p[2 * i], dz = p[2 * j + 1] - p[2 * i + 1], l = Math.hypot(dx, dz);
+        addFacadeWall({ b: baked, ox: p[2 * j], oz: p[2 * j + 1], tx: -dx / l, tz: -dz / l, nx: dz / l, nz: -dx / l, len: l, y0, h: h + 3, foundation: 3, storeys, style, pitched: roof !== 'flat', loggia: hash(cz, cx) > 0.5, end: l < 9, eh: hash(cx + i, cz) > 0.5 ? 1 : 0, q0: Math.floor(hash(cx, cz * 1.3) * 4), plaster, accent, seed: hash(cx, cz) * 50 + i, lean: true });
+      }
+    } else addWalls(wallB(kind, hex, v), p, y0, h + 3);
     if (roof === 'hip') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color); else if (roof === 'low') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color, 1.3);
     else if (roof !== 'open') {
       const pts: THREE.Vector2[] = []; for (let i = 0; i < p.length; i += 2) pts.push(new THREE.Vector2(p[i], p[i + 1]));
@@ -250,6 +260,7 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
     place('old', 0xdad3c3, 99, x + 13 * Math.cos(ALPHA), z + 13 * Math.sin(ALPHA), 12, 26, ALPHA, 4, 'hip', pick(ROOF_COLORS, i / 9), ty);
   }
   group.userData.count = count;
+  if (baked) { const bm = baked.mesh(group, false, 'middle-facades'); if (bm) bm.frustumCulled = false; }
   for (const { kind, hex, v, b } of walls.values()) if (!b.empty) (mesh(b, calmMat(hex, kind, v), group, false) as THREE.Mesh).frustumCulled = false;
   const tm = mesh(tiles, material(tileRoofTex, { vertexColors: true }), group); if (tm) tm.frustumCulled = false;
   const fm = mesh(flats, material(roofTex, { color: 0xa8a8a8 }), group); if (fm) fm.frustumCulled = false;

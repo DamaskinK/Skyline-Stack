@@ -84,6 +84,30 @@
       "type": "gltf",
       "url": "assets/levels/kosice/housekit.glb",
       "bytes": 90836
+    },
+    {
+      "id": "housefacade_col",
+      "type": "texture",
+      "url": "assets/levels/kosice/housefacade_col.webp",
+      "bytes": 27754
+    },
+    {
+      "id": "housefacade_nrm",
+      "type": "texture",
+      "url": "assets/levels/kosice/housefacade_nrm.webp",
+      "bytes": 312278
+    },
+    {
+      "id": "housefacade_msk",
+      "type": "texture",
+      "url": "assets/levels/kosice/housefacade_msk.webp",
+      "bytes": 28878
+    },
+    {
+      "id": "housefacade",
+      "type": "json",
+      "url": "assets/levels/kosice/housefacade.json",
+      "bytes": 1784
     }
   ]
 }

@@ -5,6 +5,7 @@ import { CFG } from './config.js';
 import { scene, renderer, setEnvironment, setNearProcedural, setProcOffset, GROUND_Y } from './world.js';
 import { buildNearRing } from './near-ring.js';
 import { buildMiddleFar } from './far-ring.js';
+import { initFacades } from './baked-facades.js';
 import { landmarkHide, buildLandmarks, landmarkClear } from './landmarks/index.js';
 import { cityById } from './levels.js';
 import { towerCircles } from './core/placement.js';
@@ -56,6 +57,7 @@ function procRoutes(ox: number, oz: number): { p: number[]; off: number }[] {
 
 export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | null = null, plotOsm: OsmExtract | null = null): void {
   disposeGroup(group); group.clear(); lmRoot = null;
+  initFacades(assets);
   level.id = id; level.plotId = plot ? plot.id : null; level.env = assets.sky ?? null; People.setCity(id);
   envRT?.dispose(); envRT = null;
   if (assets.sky) {

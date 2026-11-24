@@ -48,3 +48,12 @@ that must change at run time.
 - `js/house-kit.ts` instances them along every footprint edge (one InstancedMesh per module and class, about 40 draw calls per plot); `js/near-ring.ts` keeps hip roofs (new: gable roofs, dormers) and draws the shadow from an
   invisible proxy of the walls, because modules do not cast shadows. Detail radius 48 m (High) / 32 m (Low); beyond it the flat plates. `?houses=procedural` keeps the old facades.
 - Lessons: no coplanar faces closer than 3 cm (flicker check), flat strips instead of 5 cm deep frame bars, an interior wall behind every module so a camera inside a footprint sees a plain wall.
+
+## Update 2026-11-24 (S0004 07): baked far facades
+- `scripts/blender/housebake.py` (run after `housekit.py` changes) renders the near modules in front view per cell (one storey of 1-4 bays, or a cornice / parapet strip) with Cycles in emission-only passes
+  (albedo, class masks, depth, ambient occlusion) into three 2048x1024 atlases next to `housekit.glb`: `housefacade_col.webp` (sRGB, lossy), `_nrm.webp` (normal x,y from the depth pass, AO in blue) and `_msk.webp`
+  (R plaster, G accent, B glass), 8 px wrapped gutters, plus `housefacade.json` (cell rectangles). About 0.35 MB in all (KTX2 is not available).
+- Game side: `js/baked-facades.ts` draws far walls as plain quads that repeat a cell along the wall (shader `textureGrad` on `fract` of the wall coordinate), tinted per house through the masks, glass lights at night per bay.
+  Near-ring houses beyond the kit radius and the whole middle ring use it (one mesh each); bays, order and stretch match `addHouse`, so the switch to the real modules does not shift.
+  Without the files the old flat `_far` plates and canvas facades stay.
+- Lesson: `onBeforeCompile` sees `#include <chunk>` unexpanded; to change a line inside a chunk, replace the include by the edited `THREE.ShaderChunk` text.

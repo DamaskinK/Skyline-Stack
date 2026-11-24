@@ -15,6 +15,7 @@ import type { Circle } from './core/placement.js';
 import { buildTramLine } from './trams.js';
 import { HouseKit, addHouse, addDormers, PANEL_SCHEMES } from './house-kit.js';
 import type { RoofInfo } from './house-kit.js';
+import { FacadeBuilder } from './baked-facades.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
@@ -312,6 +313,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   // S0004 02: houses are assembled from the Blender module kit (js/house-kit.ts); `?houses=procedural` or a kit that failed to load keeps the procedural facades
   const hk = new URLSearchParams(location.search).get('houses') === 'procedural' ? null : HouseKit.from(kit.housekit as THREE.Object3D | undefined);
+  const far = new FacadeBuilder();                          // houses beyond the kit radius: baked atlas walls (js/baked-facades.ts)
   const fill = new Builder();                                // plain wall for edges too short for a bay, and gable ends
   const shadowWalls = new Builder();                         // walls pushed 0.9 m into the house: the modules do not cast shadows, this does (invisible in the colour pass)
   const wallB = (kind: string, v: number): Builder => { const k = kind + v; let e = walls.get(k); if (!e) { e = { kind, v, b: new Builder() }; walls.set(k, e); } return e.b; };
@@ -342,7 +344,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
       const base = old ? OLD_PALETTE[v] : panel ? PANEL_SCHEMES[sc][0] : MID_PALETTE[Math.floor(hv * 977) % MID_PALETTE.length];
       const plaster = new THREE.Color(base).multiply(tint), roofCol = ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length];
       const accent = old ? roofCol : new THREE.Color(PANEL_SCHEMES[sc][1]);
-      const short = addHouse(hk, { p, sign, style: old ? 'old' : panel ? 'panel' : 'mid', storeys, h, pitched: pitched && old, near: dist < kitR, plaster, accent, seed: hv, loggia: hash(cz * 1.3, cx) > 0.5, gate: hash(cx * 2.1, cz) > 0.45 });
+      const short = addHouse(hk, { p, sign, style: old ? 'old' : panel ? 'panel' : 'mid', storeys, h, pitched: pitched && old, near: dist < kitR, plaster, accent, seed: hv, loggia: hash(cz * 1.3, cx) > 0.5, gate: hash(cx * 2.1, cz) > 0.45, far });
       {                                                      // shadow proxy: the footprint ring pushed inwards along the mitred normals (deeper than the loggias)
         const q: number[] = [];
         for (let i = 0; i < n; i++) {
@@ -405,6 +407,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   if (hk) {
     group.userData.houseModules = hk.count;
     hk.build(group);
+    far.mesh(group);
     mesh(fill, material(null, { vertexColors: true, roughness: 0.93, ...surface('plaster', [0.4, 0.4], 0.5) }), group, true);
     const sw = mesh(shadowWalls, material(null, { colorWrite: false, depthWrite: false, shadowSide: THREE.DoubleSide }), group, true);
     if (sw) { sw.receiveShadow = false; sw.name = 'house-shadow'; }

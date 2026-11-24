@@ -344,4 +344,4 @@ def main():
     export_glb(objs, out)
     if '--previews' in argv: previews(objs, argv[argv.index('--previews') + 1])
 
-main()
+if __name__ == "__main__": main()

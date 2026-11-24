@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { glowMats } from './world.js';
 import { surface } from './surfaces.js';
 import { hash } from './core/placement.js';
+import { addFacadeWall, facadesReady } from './baked-facades.js';
+import type { FacadeBuilder } from './baked-facades.js';
 
 export const BAY = 3.0, STOREY = 3.4;
 export type Style = 'old' | 'panel' | 'mid';
@@ -100,6 +102,7 @@ export interface HouseSpec {
   seed: number;                   // hash of the house, for the pattern of bays
   loggia: boolean;                // panel: loggia stacks (true) or projecting balconies (false)
   gate: boolean;                  // old: this house has an arched passage on its longest edge
+  far?: FacadeBuilder;            // beyond the detail radius: baked wall quads of the atlas (js/baked-facades.ts) instead of flat `_far` modules, when the atlas is loaded
 }
 export interface Edge { x0: number; z0: number; x1: number; z1: number }
 
@@ -123,6 +126,10 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
     const turn = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) * sign;      // > 0: convex corner
     const ov = turn > 0.09 && turn < 1.75 ? Math.min(0.5, 0.3 * Math.tan(turn / 2)) : 0;
     const eh = hash(x0 + i, z0 - i) , pl = s.plaster, ac = s.accent;
+    if (!near && s.far && facadesReady()) {                               // same bays, same pattern as the modules below, drawn as repeating atlas cells
+      addFacadeWall({ b: s.far, ox, oz, tx, tz, nx, nz, len: l, y0: 0, h, storeys, style, pitched: s.pitched, loggia: s.loggia, end: l < 9, eh: eh > 0.5 ? 1 : 0, q0: s.seed * 4 | 0, plaster: pl, accent: ac, seed: s.seed * 50 + i });
+      continue;
+    }
     const put = (mod: string, bay: number, y: number, stretch = 0) => {
       const u = bay * BAY * sx, last = bay === bays - 1 && stretch > 0;
       kit.add(mod, ox + tx * u, y, oz + tz * u, rot, last ? (BAY * sx + stretch) / BAY : sx, pl, ac, lit(bay, y, i));
