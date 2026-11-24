@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { calmFacade, STOREY_W, STOREY_H, roofTex, tileRoofTex, sidewalkTex, canvas2d, toTex } from './textures.js';
 import { glowMats, GROUND_Y } from './world.js';
 import { buildStreetLife } from './street-life.js';
+import { buildStreetDetail } from './street-detail.js';
 import { surface } from './surfaces.js';
 import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { settings } from './settings.js';
@@ -436,6 +437,8 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // street furniture, bike lanes, seats and standing spots for the people (js/street-life.js)
   const life = buildStreetLife(osm, kit, { group, plan });
   group.userData.life = life;
+  const detail = buildStreetDetail(plan, group);       // kerbs, crossings, markings, traffic lights, bikes, name plates (js/street-detail.js)
+  group.userData.streetLights = detail.lights; group.userData.detailCounts = detail.counts;
   // moving traffic: the streets nearest to the tower first, so the cars are where the camera looks
   group.userData.carRoutes = plan.routes.car;
   group.userData.walkRoutes = plan.routes.walk.map((p) => ({ p, off: 0.5, d: routeD(p), len: lineLen(p) }));

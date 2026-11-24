@@ -12,6 +12,8 @@ import {
   ringLine, ringRing,
 } from './geometry2d.js';
 import type { Box4, Line, Ring } from './geometry2d.js';
+import { planCrossings, planMarkings } from './street-detail.js';
+import type { Detail } from './street-detail.js';
 import type { OsmBuilding, OsmExtract, OsmPoly, OsmRoad, Site as MapSite } from '../types.js';
 
 export const PLAZA_HALF = 14;            // paved square around the tower
@@ -128,7 +130,8 @@ export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), t
 
 // ── the kinds of things that are placed, and what each must keep away from ──
 export type Kind = 'person' | 'tree' | 'hedge' | 'bed' | 'bush' | 'lamp' | 'carStreet' | 'carLot' | 'bench' | 'bin' | 'bollard' | 'rack' | 'planter' | 'kiosk' | 'stop' | 'sign'
-  | 'shop' | 'stall' | 'busker' | 'pole' | 'platform' | 'padSlab' | 'tower' | 'bikeLane' | 'tramBed' | 'block';
+  | 'shop' | 'stall' | 'busker' | 'pole' | 'platform' | 'padSlab' | 'tower' | 'bikeLane' | 'tramBed' | 'block'
+  | 'kerb' | 'zebra' | 'dash' | 'manhole' | 'drain' | 'tlight';
 // Clearances in metres between the object's footprint and the real edge of the obstacle (undefined = that obstacle does not matter).
 // foot: 'full' = the whole width of the footway, number = that many metres from its centre line. Objects never overlap each other (`solid`).
 interface Rule { b?: number; road?: number; foot?: 'full' | number; bike?: number; tram?: number; basin?: number; river?: number; pad?: boolean; tower?: boolean; solid?: boolean }
@@ -159,6 +162,13 @@ export const RULES: Record<Kind, Rule> = {
   tower: { b: TOWER_MARGIN, road: 0.5, foot: 'full', bike: 0.2, tram: 0.2, basin: TOWER_MARGIN, river: TOWER_MARGIN },   // a finished tower of another plot (its circle)
   bikeLane: { b: 0.1, basin: 0.5, river: 0.5, tram: 0.1, pad: true, tower: true },
   tramBed: { b: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
+  // street detail (S0004 03): kerbs stand on the edge of their own carriageway and are cut where another street, a lane, a bed or water is
+  kerb: { b: 0, road: 0, bike: 0, tram: 0, basin: 0.3, river: 0.3, pad: true, tower: true },
+  zebra: { b: 0.2, road: 0, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },     // paint on its own street: nothing else stands on it
+  dash: { b: 0.1, road: 0, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
+  manhole: { b: 0.2, road: 0, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
+  drain: { b: 0.2, road: 0, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
+  tlight: { b: 0.2, road: 0.2, foot: 0.3, bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
 };
 
 export interface Placed { kind: Kind; x: number; z: number; ring: Ring; rot?: number; own?: number }   // own: index of the carriageway the object belongs to (exempt)
@@ -188,7 +198,7 @@ export function hits(site: Site, o: Placed): string[] {
 
 // ── footprints of the things we place ──
 const OBB: Record<string, [number, number]> = {          // half length (local x), half depth (local z), metres
-  bench: [1.0, 0.35], bin: [0.3, 0.3], bollard: [0.12, 0.12], rack: [0.8, 0.3], planter: [0.6, 0.6], kiosk: [1.2, 1.0], stop: [1.8, 0.9], sign: [0.15, 0.15],
+  bench: [1.0, 0.35], bin: [0.3, 0.3], bollard: [0.12, 0.12], rack: [0.8, 0.9], planter: [0.6, 0.6], kiosk: [1.2, 1.0], stop: [1.8, 0.9], sign: [0.15, 0.15],
   shop: [1.7, 0.3], stall: [1.5, 1.0], busker: [0.8, 0.4], carStreet: [0.95, 2.2], carLot: [0.95, 2.2],
 };
 export const footprint = (kind: Kind, x: number, z: number, rot = 0): Ring => {
@@ -213,6 +223,7 @@ export interface Plan {
   items: Record<string, number[][]>; benches: number[][]; shops: { x: number; z: number; rot: number; d: number }[]; stalls: { x: number; z: number; rot: number }[]; musicians: { x: number; z: number; rot: number }[];
   sit: { x: number; z: number; rot: number }[]; stand: { x: number; z: number; rot: number; mate: boolean }[];
   tramLines: Route[]; tramBeds: { p: Line; paved: boolean }[]; poles: [number, number, number][]; platforms: { x: number; z: number; r: number; s: number; line: number }[];
+  detail: Detail;                                      // kerbs, crossings, markings, manholes, traffic lights (js/core/street-detail.ts)
   placed: Placed[];                                    // every object above as a footprint, for the audit
   routes: { car: Line[]; walk: Line[]; bike: Line[] };
   dropped: Record<string, number>;
@@ -225,7 +236,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[] } = {})
   const towers = opts.towers || [], kept = keptBuildings(osm0, towers), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers), site = makeSite(osm, kept, towers);
   const plan: Plan = {
     osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
-    shops: [], stalls: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
+    shops: [], stalls: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
   };
   const bbIn = (x: number, z: number, m = 0): boolean => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
   const clearPlaza = (x: number, z: number): boolean => Math.abs(x) < PLAZA_HALF + 2 && Math.abs(z) < PLAZA_HALF + 2;
@@ -245,8 +256,21 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[] } = {})
 
   // ── tram lines first (they are obstacles for everything else) ──
   planTram(osm, plan, bbIn, solidFree);
-  // ── bike lanes (obstacles for furniture) ──
-  planBikes(osm, plan);
+  // ── street detail (S0004 03): crossings and lights first (the bike lanes stop short of them), kerbs and markings after the lanes ──
+  const zebraRings: Ring[] = [];
+  const dctx = {
+    isCarriage: (r: OsmRoad) => r.k === 'main' || r.k === 'street' || r.k === 'lane', bbIn, clearPlaza,
+    place: (kind: Kind, x: number, z: number, rot: number, own: number | undefined, ring: Ring, solid: boolean): boolean => {
+      if (!solid) {       // paint does not run across a crossing
+        for (const zr of zebraRings) if (ringRing(ring, zr) < 0.4) return false;
+        return place(kind, x, z, rot, own, ring);
+      }
+      const ok = solidFree(kind, x, z, rot, own, ring); if (ok && kind === 'zebra') zebraRings.push(ring); return ok;
+    },
+  };
+  plan.detail = planCrossings(osm, dctx);
+  planBikes(osm, plan, zebraRings);
+  planMarkings(osm, dctx, plan.detail);
 
   // ── vegetation in the parks ──
   for (const g of osm.parks) {
@@ -334,8 +358,8 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[] } = {})
 }
 
 // ── bike lanes ──
-function planBikes(osm: OsmExtract, plan: Plan): void {
-  const { site } = plan, obstacles = [...site.buildings.map((b) => ({ r: b.r, box: b.box })), ...site.basins, ...site.river];
+function planBikes(osm: OsmExtract, plan: Plan, crossings: Ring[] = []): void {
+  const { site } = plan, obstacles = [...site.buildings.map((b) => ({ r: b.r, box: b.box })), ...site.basins, ...site.river, ...crossings.map((r) => ({ r, box: ringBox(r) }))];
   const cut = (p: Line, w: number): Line[] => lineOutside(p, obstacles, w / 2 + 0.3, 8);
   const lenOf = lineLen;
   const add = (p: Line, w: number, cycleway: boolean, route: boolean): void => {
@@ -387,11 +411,17 @@ function planTram(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number, m?: 
   });
   // stops: a platform on one side of the line with a small shelter
   lines.forEach((r, li) => {
-    for (const s of snapStops(r, osm.stops || [], 16, 60)) {
-      const side = Math.sin(r.len * 12.9 + s * 0.37) > 0 ? 1 : -1, [x, z, dx, dz] = pointAt(r, s), nx = -dz * side, nz = dx * side, o = 2.7;
-      const ring = boxRing(x + nx * o, z + nz * o, 1.2, 7, Math.atan2(dx, dz));
-      if (!free('platform', x + nx * o, z + nz * o, 0, undefined, ring)) continue;
-      plan.platforms.push({ x: x + nx * o, z: z + nz * o, r: 7, s, line: li });
+    for (const s0 of snapStops(r, osm.stops || [], 16, 60)) {
+      // the platform and its shelter are straight: it stands where the line turns less than 10 degrees over its 14 m, moved along the line (up to 9 m) when the stop itself is on a bend
+      for (const shift of [0, 3, -3, 6, -6, 9, -9]) {
+        const s = s0 + shift; if (s < 8 || s > r.len - 8) continue;
+        const a = pointAt(r, s - 7), b = pointAt(r, s + 7); if (a[2] * b[2] + a[3] * b[3] < Math.cos(10 * Math.PI / 180)) continue;
+        const side = Math.sin(r.len * 12.9 + s * 0.37) > 0 ? 1 : -1, [x, z, dx, dz] = pointAt(r, s), nx = -dz * side, nz = dx * side, o = 2.7;
+        const ring = boxRing(x + nx * o, z + nz * o, 1.2, 7, Math.atan2(dx, dz));
+        if (plan.platforms.some((q) => Math.hypot(q.x - (x + nx * o), q.z - (z + nz * o)) < 15)) continue;      // two platforms never overlap
+        if (!free('platform', x + nx * o, z + nz * o, 0, undefined, ring)) continue;
+        plan.platforms.push({ x: x + nx * o, z: z + nz * o, r: 7, s, line: li }); break;
+      }
     }
   });
 }
@@ -451,7 +481,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
       if (stops < 3 && l > 45) {
         const rot = Math.atan2(nx * side, nz * side) + Math.PI;
         if (free('stop', x, z, rot)) { items.stop.push([x, Y, z, rot]); stops++; stand.push({ x: x + 0.2, z: z + 0.4, rot: Math.atan2(-nx * side, -nz * side), mate: false }); }
-      } else if (signs < 10) {
+      } else if (signs < 14) {
         const sx = x0 + tx * 3 + nx * (r.w / 2 + 0.6) * side, sz = z0 + tz * 3 + nz * (r.w / 2 + 0.6) * side, rot = Math.atan2(tx, tz);
         if (bbIn(sx, sz, 10) && !clearPlaza(sx, sz) && free('sign', sx, sz, rot)) { items.sign.push([sx, Y, sz, rot]); signs++; }
       }

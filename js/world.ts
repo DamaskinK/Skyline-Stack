@@ -8,6 +8,8 @@ import { addTrees, addHedges, addFlowerBeds } from './vegetation.js';
 import { surface } from './surfaces.js';
 import { NEWTOWN_GRID, newtownFurniture, newtownSite, newtownPlaced, hits, footprint, auditObjects } from './core/placement.js';
 import { boxRing, ringRing } from './core/geometry2d.js';
+import { lightState } from './core/street-detail.js';
+import type { Light } from './core/street-detail.js';
 import type { Placed, Kind } from './core/placement.js';
 import type { District, Grade, GridXZ, Landmark, Plot, QualityId, Weather } from './types.js';
 import { facade, roofTex, shopTex, billboardTex, pavingTex, grassTex, sidewalkTex, puffTex, storeyUV, canvas2d, toTex } from './textures.js';
@@ -363,7 +365,7 @@ const MAX_CARS = 40;
 const carMesh = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 }), MAX_CARS);
 const carLights = new THREE.InstancedMesh(carLightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), MAX_CARS);
 carMesh.castShadow = true; carMesh.frustumCulled = carLights.frustumCulled = false; scene.add(carMesh, carLights);
-type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number };
+type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number; px?: number; pz?: number };
 const cars: Car[] = [];
 for (let i = 0; i < MAX_CARS; i++) {
   const road = i % 4, lane = i % 8 < 4 ? 1 : -1, bus = i % 9 === 0, parked = i % 11 === 5;
@@ -371,8 +373,27 @@ for (let i = 0; i < MAX_CARS; i++) {
   carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
 }
 export interface TrafficRoute { p: number[]; cum: number[]; len: number }
-export const traffic: { count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
-  count: 34, want: 34, mode: 'grid', routes: [],
+// the traffic lights of the street in view (js/street-detail.ts): cars stop at the stop line of an arm that shows red or amber
+let lightsNow: { lights: Light[]; update(dt: number): void; time(): number } | null = null;
+function brake(x: number, z: number, hx: number, hz: number): number {
+  if (!lightsNow) return 1;
+  const t = lightsNow.time(); let f = 1;
+  for (const l of lightsNow.lights) {
+    if (Math.abs(l.x - x) > 40 || Math.abs(l.z - z) > 40) continue;
+    for (const a of l.arms) {
+      if (a.tx * hx + a.tz * hz > -0.85) continue;                   // not driving toward the junction along this arm
+      const rx = x - l.x, rz = z - l.z, along = rx * a.tx + rz * a.tz - a.stop, side = rx * -a.tz + rz * a.tx;
+      if (Math.abs(side) > 4.5 || along < 0.6 || along > 14) continue;      // behind the line already, or still far away
+      const st = lightState(l, a.group, t);
+      if (st === 0 || (st === 1 && along < 6)) continue;
+      f = Math.min(f, Math.max(0, Math.min(1, (along - 2.6) / 5)));
+    }
+  }
+  return f;
+}
+export const traffic: { waiting: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
+  count: 34, want: 34, mode: 'grid', routes: [], waiting: 0,
+  setLights(h) { lightsNow = h; },
   setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
   // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
   setRoutes(list) {
@@ -384,22 +405,27 @@ export const traffic: { count: number; want: number; mode: 'grid' | 'osm'; route
   },
   updateRoutes(dt) {
     const R = this.routes; if (!R.length) return;
+    let waiting = 0;
     for (let i = 0; i < this.count; i++) {
       const c = cars[i], r = R[i % R.length];
       c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= i % 2 ? 1 : -1;
-      c.s += c.d * (c.sp || 6) * 0.7 * dt;
+      let hx = 0, hz = 0;
+      if (lightsNow) { let q = 1; while (q < r.cum.length - 1 && r.cum[q] < c.s) q++; const ll = r.cum[q] - r.cum[q - 1] || 1; hx = (r.p[2 * q] - r.p[2 * q - 2]) / ll * c.d; hz = (r.p[2 * q + 1] - r.p[2 * q - 1]) / ll * c.d; }
+      const ahead = lightsNow ? brake(c.px ?? 1e9, c.pz ?? 1e9, hx, hz) : 1;
+      if (ahead < 0.05) waiting++;
+      c.s += c.d * (c.sp || 6) * 0.7 * dt * ahead;
       if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
       let k = 1; while (k < r.cum.length - 1 && r.cum[k] < c.s) k++;
       const l = r.cum[k] - r.cum[k - 1] || 1, f = (c.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
       const tx = (x1 - x0) / l * c.d, tz = (z1 - z0) / l * c.d, off = 1.7;
-      o3.position.set(x0 + (x1 - x0) * f - tz * off, 0.04, z0 + (z1 - z0) * f + tx * off); o3.rotation.set(0, Math.atan2(tx, tz), 0);
+      c.px = x0 + (x1 - x0) * f - tz * off; c.pz = z0 + (z1 - z0) * f + tx * off; o3.position.set(c.px, 0.04, c.pz); o3.rotation.set(0, Math.atan2(tx, tz), 0);
       o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
       carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);
     }
-    carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
+    this.waiting = waiting; carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
   },
   update(dt) {
-    if (this.mode === 'osm') return this.updateRoutes(dt);
+    if (this.mode === 'osm') { lightsNow?.update(dt); return this.updateRoutes(dt); }
     for (let i = 0; i < this.count; i++) {
       const c = cars[i];
       c.pos += c.sp * dt * c.lane; if (c.pos > LEN / 2) c.pos -= LEN; if (c.pos < -LEN / 2) c.pos += LEN;

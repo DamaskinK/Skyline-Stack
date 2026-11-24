@@ -1,6 +1,7 @@
 // Hooks for the browser check scripts (tests/browser). Nothing here runs unless a script calls it.
 import * as THREE from 'three';
-import { aimSun, auditProcedural } from './world.js';
+import { aimSun, auditProcedural, updateWorld } from './world.js';
+import { PHASES } from './config.js';
 import { windClock } from './vegetation.js';
 import { auditScene, auditMiddle } from './placement-audit.js';
 
@@ -99,5 +100,8 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
   }
   // hide the house module meshes whose name matches `re` (for example 'far:glass'); an empty pattern shows all again
   const hideModules = (re: string) => { const r = re ? new RegExp(re) : null; scene.getObjectByName('near-ring')?.traverse((o) => { if (o.name.includes(':') && (o as THREE.InstancedMesh).isInstancedMesh) o.visible = !(r && r.test(o.name)); }); };
-  window.__debug = { snap, flicker, info, loadPlot, placementAudit, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
+  // S0004 03: where the street detail stands (traffic lights, crossings, bikes, plates, trams) for the screenshot poses, and the hour of the day
+  const detailSpots = () => { const n = scene.getObjectByName('near-ring'); const d = n?.userData.plan?.detail; return d ? { lights: d.lights.map((l: { x: number; z: number; arms: unknown[] }) => ({ x: l.x, z: l.z, n: l.arms.length })), zebras: d.zebras.slice(0, 40), signs: n?.userData.plan.items.sign.slice(0, 4), racks: n?.userData.plan.items.rack.slice(0, 4), counts: n?.userData.detailCounts } : null; };
+  const setHour = (hour: number) => { for (let i = 0; i < 60; i++) updateWorld(0.5, PHASES[0], { x: 0, z: 0 }, focus, 0, { hour, grade: null }); };
+  window.__debug = { detailSpots, setHour, snap, flicker, info, loadPlot, placementAudit, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }
