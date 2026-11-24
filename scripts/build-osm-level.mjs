@@ -17,6 +17,11 @@ const LEVELS = {
       { id: 'st-elisabeth', lat: 48.72028, lon: 21.25811 },     // centre of the cathedral footprint in the data
       { id: 'state-theatre', lat: 48.72173, lon: 21.25733 },    // National Theatre Kosice footprint
     ],
+    // S0004 13: modern building kit. `m` of a building: 'barracks' inside a named area of renovated barracks (Kasarne/Kulturpark: white plaster,
+    // arched windows, dark metal roofs); 'office' for office / hotel blocks of 4+ levels or 900+ m2 and shops of 3+ levels or 2500+ m2 (Aupark) outside the historic core;
+    // 'resi' for apartment blocks built since 1995 (start_date) or named residential projects (Safranova zahrada, KZC Residence). The core stays old town.
+    styleAreas: [{ name: /Kulturpark|Kas[aá]rne/i, m: 'barracks' }],
+    historicCore: { lat: 48.72028, lon: 21.25811, r: 420 },
   },
 };
 const PLOT_HALF = 260, PLOT_KEEP = 250;       // plot extract: a 500 m square around the plot site (the middle ring takes over beyond it)
@@ -80,6 +85,22 @@ const ROAD = {
   unclassified: ['street', 7], residential: ['street', 7], living_street: ['street', 6], service: ['lane', 4.5],
   pedestrian: ['walk', 6], footway: ['path', 2.5], path: ['path', 2], cycleway: ['path', 2.5], steps: ['path', 2], track: ['path', 3],
 };
+// S0004 13: which buildings get the modern kit (see styleAreas / historicCore above)
+const inPoly = (ring, lat, lon) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j]; if ((a.lat > lat) !== (b.lat > lat) && lon < (b.lon - a.lon) * (lat - a.lat) / (b.lat - a.lat) + a.lon) c = !c; } return c; };
+const styleRings = (L.styleAreas || []).flatMap((s) => raw.elements.filter((w) => w.type === 'way' && w.geometry && w.tags?.name && s.name.test(w.tags.name) && closed(w.geometry)).map((w) => ({ ring: w.geometry, m: s.m })));
+function modernClass(t, geom, a, lv) {
+  if (a < 40 || /^(garage|garages|shed|roof|carport|service|church|chapel|cathedral)$/.test(t.building) || t.historic || t.heritage) return null;
+  const lat = geom.reduce((s, g) => s + g.lat, 0) / geom.length, lon = geom.reduce((s, g) => s + g.lon, 0) / geom.length;
+  for (const s of styleRings) if (inPoly(s.ring, lat, lon)) return s.m;
+  const hc = L.historicCore;
+  if (hc && Math.hypot((lat - hc.lat) * mLat, (lon - hc.lon) * mLat * Math.cos(hc.lat * Math.PI / 180)) < hc.r) return null;
+  const year = parseInt(t.start_date, 10);
+  if (year && year < 1960) return null;
+  if (/^(office|hotel)$/.test(t.building) || t.office) return (lv >= 4 || a >= 900) ? 'office' : null;
+  if (/^(commercial|retail)$/.test(t.building)) return (lv >= 3 || a >= 2500) ? 'office' : null;          // shops: only the big glass boxes (Aupark), not the corner stores
+  if (/^(apartments|residential|yes)$/.test(t.building) && !t.amenity && !t.shop && ((year >= 1995) || (t.name && t.building !== 'yes') || (t.name && lv >= 3 && lv <= 8))) return 'resi';
+  return null;
+}
 function extract(site, keep, outId) {
   const mLon = 111320 * Math.cos(site.lat * Math.PI / 180);
   const toXZ = (g) => [(g.lon - site.lon) * mLon, -(g.lat - site.lat) * mLat];
@@ -111,6 +132,8 @@ function extract(site, keep, outId) {
       if (t.amenity === 'place_of_worship' || t.building === 'cathedral' || t.building === 'church') b.k = 'church';
       else if (t.amenity === 'theatre') b.k = 'theatre';
       if (t.name && (b.k || t.man_made === 'tower')) b.n = t.name;                // towers keep their name too (St. Urban's tower is hidden by name behind its Blender model)
+      const m = modernClass(t, w.geometry, Math.abs(area(p)), lv);
+      if (m && !b.k) b.m = m;
       out.buildings.push(b);
     } else if (t.highway && ROAD[t.highway]) {
       const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);
