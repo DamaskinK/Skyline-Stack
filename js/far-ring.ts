@@ -200,7 +200,7 @@ export function buildMiddleFar(opts: MiddleFarOptions = {}): THREE.Group {
       const plaster = new THREE.Color(kind === 'panel' ? sc[0] : hex).multiplyScalar(0.94 + 0.12 * hash(cx * 3.1, cz * 1.7)), accent = new THREE.Color(sc[1]);
       for (let i = 0; i < 4; i++) {
         const j = (i + 1) % 4, dx = p[2 * j] - p[2 * i], dz = p[2 * j + 1] - p[2 * i + 1], l = Math.hypot(dx, dz);
-        addFacadeWall({ b: baked, ox: p[2 * j], oz: p[2 * j + 1], tx: -dx / l, tz: -dz / l, nx: dz / l, nz: -dx / l, len: l, y0, h: h + 3, foundation: 3, storeys, style, pitched: roof !== 'flat', loggia: hash(cz, cx) > 0.5, end: l < 9, eh: hash(cx + i, cz) > 0.5 ? 1 : 0, q0: Math.floor(hash(cx, cz * 1.3) * 4), plaster, accent, seed: hash(cx, cz) * 50 + i, lean: true });
+        addFacadeWall({ b: baked, ox: p[2 * j], oz: p[2 * j + 1], tx: -dx / l, tz: -dz / l, nx: dz / l, nz: -dx / l, len: l, y0, h: h + 3, foundation: 3, storeys, style, pitched: roof !== 'flat', loggia: hash(cz, cx) > 0.5, end: l < 0.7 * Math.max(w, d), eh: hash(cx + i, cz) > 0.5 ? 1 : 0, q0: Math.floor(hash(cx, cz * 1.3) * 4), plaster, accent, seed: hash(cx, cz) * 50 + i, lean: true });
       }
     } else addWalls(wallB(kind, hex, v), p, y0, h + 3);
     if (roof === 'hip') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color); else if (roof === 'low') pitchedRoof(tiles, p, ty + h, rcol as THREE.Color, 1.3);

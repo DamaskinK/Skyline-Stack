@@ -2,7 +2,7 @@
 // Rates are first-attempt completion (the plot counted) over 30 seeds; bands are wide enough for a small retune.
 import { describe, it, expect } from 'vitest';
 import { playPlot, playDistrict, SKILLS, mulberry32, type SkillId } from '../../js/core/bot.js';
-import { plotStars } from '../../js/core/district.js';
+import { plotStars, towerResidents, plotBonuses } from '../../js/core/district.js';
 import { levelOf, need } from './helpers.js';
 
 const city = levelOf('kosice'), district = need(city.district, 'kosice district');
@@ -67,8 +67,11 @@ describe('Kosice district curve', () => {
     expect(reached / 20).toBeLessThanOrEqual(0.4);
   });
   it('has a goal that no three plots can reach but four can', () => {
-    const max = district.plots.map((p) => p.target * 14 * 1.35);   // generous upper bound per plot
-    expect(max.slice(0, 3).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+    // best case per plot: the target height with the skyline bonus and the view bonus where a landmark is in sight (a bigger tower than the target is rare, the bot never stacks past it much)
+    const max = district.plots.map((p) => towerResidents(p, p.target, { view: plotBonuses(p).view, skyline: true }));
+    const sum = (n: number) => max.slice(0, n).reduce((a, b) => a + b, 0);
     expect(district.goal).toBe(720);
+    expect(sum(3)).toBeLessThan(district.goal);
+    expect(sum(4)).toBeGreaterThanOrEqual(district.goal);
   });
 });

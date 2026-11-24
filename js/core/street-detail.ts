@@ -150,7 +150,7 @@ export function planMarkings(osm: OsmExtract, ctx: Ctx, d: Detail): Detail {
           if (!ctx.bbIn(mx, mz, 4) || ctx.clearPlaza(mx, mz)) continue;
           if (ctx.place('dash', mx, mz, rot, ri, boxRing(mx, mz, 0.1, 1.5, rot), false)) d.dashes.push([x0 + tx * s, z0 + tz * s, x0 + tx * (s + 3), z0 + tz * (s + 3)]);
         }
-        acc = s - l;
+        acc = Math.max(0, s - l);                       // a negative start would pull the next dash back across the bend
       }
     }
     // manholes in the lane, gully drains at the kerb

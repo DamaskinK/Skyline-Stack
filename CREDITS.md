@@ -31,6 +31,7 @@ Every external file used by the game, with its source and licence. Add a row whe
 | St. Elisabeth Cathedral model (own work, built by `scripts/blender/cathedral.py`) | project | n/a | project | `assets/levels/kosice/cathedral.glb` |
 | State Theatre, St. Urban's tower, St. Michael's chapel, Immaculata column and Singing Fountain models (own work, built by `scripts/blender/{theatre,urban,chapel,monuments}.py`; shapes modelled after photos on Wikimedia Commons that are not part of the repo, cited in the S0004 01 ticket) | project | n/a | project | `assets/levels/kosice/{theatre,urban,chapel,immaculata,fountain}.glb` |
 | Kosice house kit: old-town, panel-block and in-between modules (own work, built by `scripts/blender/housekit.py`; shapes modelled after Wikimedia Commons photos that are not part of the repo, cited in the S0004 02 ticket) | project | n/a | project | `assets/levels/kosice/housekit.glb` |
+| Baked far-facade atlases of the house kit (`housefacade_col/_nrm/_msk.webp` + `housefacade.json`: own work, the near modules of the kit rendered by `scripts/blender/housebake.py`, no outside image) | project | n/a | project | `assets/levels/kosice/housefacade_*.webp`, `housefacade.json` |
 | Cathedral stone, roof-tile and chapel/tower tile textures (procedural, written by `scripts/blender/pipeline.py`, baked into the GLBs) | project | n/a | project | inside `assets/levels/kosice/*.glb` |
 
 ## Credit lines to show on the credits screen (CC-BY 4.0)

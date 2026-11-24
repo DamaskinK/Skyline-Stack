@@ -112,6 +112,7 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
   // longest edge: the arched gate of an old house and the entrance of a panel block go there
   let best = -1, bl = 0;
   for (let i = 0; i < n; i++) { const j = (i + 1) % n, l = Math.hypot(p[2 * j] - p[2 * i], p[2 * j + 1] - p[2 * i + 1]); if (l > bl) { bl = l; best = i; } }
+  const bj = (best + 1) % n, ax = bl > 0 ? [(p[2 * bj] - p[2 * best]) / bl, (p[2 * bj + 1] - p[2 * best + 1]) / bl] : [1, 0];
   const lit = (a: number, b: number, c: number) => (hash(a * 1.7 + c, b * 2.3 + s.seed * 50) < 0.42 ? 1 : 0.8);
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, x0 = p[2 * i], z0 = p[2 * i + 1], x1 = p[2 * j], z1 = p[2 * j + 1], dx = x1 - x0, dz = z1 - z0, l = Math.hypot(dx, dz);
@@ -127,7 +128,7 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
     const ov = turn > 0.09 && turn < 1.75 ? Math.min(0.5, 0.3 * Math.tan(turn / 2)) : 0;
     const eh = hash(x0 + i, z0 - i) , pl = s.plaster, ac = s.accent;
     if (!near && s.far && facadesReady()) {                               // same bays, same pattern as the modules below, drawn as repeating atlas cells
-      addFacadeWall({ b: s.far, ox, oz, tx, tz, nx, nz, len: l, y0: 0, h, storeys, style, pitched: s.pitched, loggia: s.loggia, end: l < 9, eh: eh > 0.5 ? 1 : 0, q0: s.seed * 4 | 0, plaster: pl, accent: ac, seed: s.seed * 50 + i });
+      addFacadeWall({ b: s.far, ox, oz, tx, tz, nx, nz, len: l, y0: 0, h, storeys, style, pitched: s.pitched, loggia: s.loggia, end: Math.abs((dx * ax[0] + dz * ax[1]) / l) < 0.5 && l < 0.7 * bl, eh: eh > 0.5 ? 1 : 0, q0: s.seed * 4 | 0, plaster: pl, accent: ac, seed: s.seed * 50 + i });
       continue;
     }
     const put = (mod: string, bay: number, y: number, stretch = 0) => {
@@ -143,7 +144,7 @@ export function addHouse(kit: HouseKit, s: HouseSpec): Edge[] {
           else if (st === 1) mod = (bay + (eh > 0.5 ? 1 : 0)) % 2 ? 'old_bay_c' : 'old_bay_d';
           else mod = (bay + (eh > 0.5 ? 1 : 0)) % 2 ? 'old_bay_b' : 'old_bay_a';
         } else if (style === 'panel') {
-          const end = l < 9;                                              // an end wall of the block: small stair / kitchen windows
+          const end = Math.abs((dx * ax[0] + dz * ax[1]) / l) < 0.5 && l < 0.7 * bl;      // an end wall of the block (an edge across its long axis): small stair / kitchen windows. Steps along a long side keep their bays
           if (!near) mod = 'pn_far';
           else if (end) mod = 'pn_blank';
           else {

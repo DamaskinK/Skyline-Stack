@@ -69,7 +69,7 @@ export class FacadeBuilder {
   quad(ox: number, oz: number, tx: number, tz: number, nx: number, nz: number, len: number, y0: number, y1: number, cellName: string, bays: number, phase: number,
     plaster: THREE.Color, accent: THREE.Color, seed: number): void {
     const c = meta?.cells[cellName]; if (!c || y1 - y0 < 0.01 || len < 0.05) return;
-    const u1 = bays * BAY, v1 = y1 - y0, ux = phase * BAY;
+    const u1 = bays * BAY, v1 = y1 - y0, ux = phase * c.bays * BAY;
     const P = (u: number, y: number): [number, number, number] => [ox + tx * (u / u1) * len, y, oz + tz * (u / u1) * len];
     const A = P(0, y0), B = P(u1, y0), C = P(u1, y1), D = P(0, y1);
     for (const [p, u, v] of [[A, 0, 0], [B, u1, 0], [C, u1, v1], [A, 0, 0], [C, u1, v1], [D, 0, v1]] as [[number, number, number], number, number][]) {

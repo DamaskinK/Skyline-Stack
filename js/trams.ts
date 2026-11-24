@@ -56,9 +56,11 @@ function slab(b: Builder, p: number[], w: number, y0: number, y1: number, color:
 // points of a route from s0 to s1, every `step` metres
 const sample = (r: Route, s0: number, s1: number, step: number): number[] => { const out: number[] = []; const n = Math.max(2, Math.ceil((s1 - s0) / step) + 1); for (let i = 0; i < n; i++) { const q = pointAt(r, s0 + (s1 - s0) * i / (n - 1)); out.push(q[0], q[1]); } return out; };
 // overhead wire: hangs from the poles and sags between them (the strip is tilted, so the sag is a smooth curve)
+/** Height of the wire at `s` metres along a route: lowest half way between two poles (poles stand at 12 + 36k, see js/core/placement.ts). */
+export const wireY = (s: number): number => { const f = (((s - 12) % SPAN) + SPAN) % SPAN / SPAN; return WIRE_HI - SAG * 4 * f * (1 - f); };
 function wireStrip(b: Builder, r: Route): void {
   const n = Math.max(2, Math.ceil(r.len / 1.5) + 1), P: number[][] = [];
-  for (let i = 0; i < n; i++) { const s = r.len * i / (n - 1), f = (s % SPAN) / SPAN, q = pointAt(r, s); P.push([q[0], WIRE_HI - SAG * 4 * f * (1 - f), q[1], q[2], q[3]]); }
+  for (let i = 0; i < n; i++) { const s = r.len * i / (n - 1), q = pointAt(r, s); P.push([q[0], wireY(s), q[1], q[2], q[3]]); }
   const k = (): [number, number] => [0, 0];
   for (let i = 0; i + 1 < n; i++) {
     const a = P[i], c = P[i + 1], hw = 0.035, A = [a[0] - a[4] * hw, a[1], a[2] + a[3] * hw], B = [a[0] + a[4] * hw, a[1], a[2] - a[3] * hw];
@@ -83,8 +85,6 @@ function bodyGeometry(kind: 'front' | 'mid' | 'rear'): THREE.BufferGeometry {
   parts.push([box(2.1, 2.7, BELLOWS / 2, 0, 1.9, -h - BELLOWS / 4), BLACK]);           // bellows toward the next section
   if (kind === 'mid') {
     parts.push([box(2.1, 2.7, BELLOWS / 2, 0, 1.9, h + BELLOWS / 4), BLACK]);
-    // pantograph: orange arms from the roof up to the wire, black contact strip
-    parts.push([rod([0, 3.55, -2.4], [0, PAN_Y - 0.08, 0.2], 0.035), 0xe58a28], [rod([0, 3.55, -1.4], [0, PAN_Y - 0.08, 0.2], 0.03), 0xe58a28], [box(1.7, 0.05, 0.1, 0, PAN_Y - 0.03, 0.2), BLACK], [box(0.1, 0.04, 0.9, 0.8, PAN_Y - 0.03, 0.2), BLACK], [box(0.1, 0.04, 0.9, -0.8, PAN_Y - 0.03, 0.2), BLACK]);
   } else {
     // the face at +z: yellow roof front, big windscreen, yellow lamp panel, white band, blue bumper
     parts.push([box(2.4, 0.5, 0.14, 0, 3.2, h + 0.0), YELLOW], [box(2.3, 1.5, 0.08, 0, 2.3, h + 0.03), GLASS], [box(2.4, 0.5, 0.2, 0, 1.28, h + 0.08), YELLOW],
@@ -92,6 +92,12 @@ function bodyGeometry(kind: 'front' | 'mid' | 'rear'): THREE.BufferGeometry {
       [box(0.06, 1.5, 0.06, -1.17, 2.3, h + 0.05), WHITE], [box(0.06, 1.5, 0.06, 1.17, 2.3, h + 0.05), WHITE]);
   }
   return mergeColored(parts);
+}
+// pantograph of the middle section: the origin is the roof foot (y 3.55), the instance is scaled in y so the contact strip touches the wire at its height along the span
+const PAN_FOOT = 3.55;
+function pantographGeometry(): THREE.BufferGeometry {
+  const y = (v: number): number => v - PAN_FOOT;
+  return mergeColored([[rod([0, 0, -2.4], [0, y(PAN_Y - 0.08), 0.2], 0.035), 0xe58a28], [rod([0, 0, -1.4], [0, y(PAN_Y - 0.08), 0.2], 0.03), 0xe58a28], [box(1.7, 0.05, 0.1, 0, y(PAN_Y - 0.03), 0.2), BLACK], [box(0.1, 0.04, 0.9, 0.8, y(PAN_Y - 0.03), 0.2), BLACK], [box(0.1, 0.04, 0.9, -0.8, y(PAN_Y - 0.03), 0.2), BLACK]]);
 }
 // the lamps of a cab (+z end), white at the front of the tram, red at its rear, and the orange destination display
 function lampGeometry(color: number): THREE.BufferGeometry { const h = SECTION / 2; return mergeColored([[box(0.3, 0.2, 0.06, -0.85, 1.28, h + 0.2), color], [box(0.3, 0.2, 0.06, 0.85, 1.28, h + 0.2), color], [box(0.14, 0.14, 0.05, -0.45, 0.62, h + 0.3), color], [box(0.14, 0.14, 0.05, 0.45, 0.62, h + 0.3), color]]); }
@@ -117,7 +123,7 @@ function liveryTextures(): { map: THREE.CanvasTexture; emis: THREE.CanvasTexture
   for (const t of [map, emis]) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; }
   return { map, emis };
 }
-let kit: { body: THREE.BufferGeometry[]; lampW: THREE.BufferGeometry; lampR: THREE.BufferGeometry; led: THREE.BufferGeometry; skin: THREE.BufferGeometry; skinMat: THREE.MeshStandardMaterial; lampWMat: THREE.MeshStandardMaterial; lampRMat: THREE.MeshStandardMaterial } | null = null;
+let kit: { body: THREE.BufferGeometry[]; lampW: THREE.BufferGeometry; lampR: THREE.BufferGeometry; led: THREE.BufferGeometry; pan: THREE.BufferGeometry; skin: THREE.BufferGeometry; skinMat: THREE.MeshStandardMaterial; lampWMat: THREE.MeshStandardMaterial; lampRMat: THREE.MeshStandardMaterial } | null = null;
 const getKit = (): NonNullable<typeof kit> => {
   if (kit) return kit;
   const { map, emis } = liveryTextures();
@@ -126,7 +132,7 @@ const getKit = (): NonNullable<typeof kit> => {
   glowMats.push(skinMat, lampWMat, lampRMat);        // world.ts brightens them as night falls
   const plate = (s: number): THREE.BufferGeometry => new THREE.PlaneGeometry(SKIN_W, SKIN_H).rotateY(s * Math.PI / 2).translate(s * 1.19, SKIN_Y0 + SKIN_H / 2, 0);
   const skin = mergeGeometries([plate(1), plate(-1)]) as THREE.BufferGeometry;
-  kit = { body: [bodyGeometry('front'), bodyGeometry('mid'), bodyGeometry('rear')], lampW: lampGeometry(0xffffff), lampR: lampGeometry(0xffffff), led: ledGeometry(), skin, skinMat, lampWMat, lampRMat };
+  kit = { body: [bodyGeometry('front'), bodyGeometry('mid'), bodyGeometry('rear')], lampW: lampGeometry(0xffffff), lampR: lampGeometry(0xffffff), led: ledGeometry(), pan: pantographGeometry(), skin, skinMat, lampWMat, lampRMat };
   return kit;
 };
 const tramMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.15 });
@@ -192,13 +198,14 @@ export function buildTramLine(osm: OsmExtract, { group, plan }: TramHost): TramL
   const trams: TramRun[] = [], MAX = 3;
   // one InstancedMesh per kind of part, an instance per tram (or per section for the side plates)
   const K = getKit(), mk = (g: THREE.BufferGeometry, m: THREE.Material, n: number, shadow: boolean): THREE.InstancedMesh => { const im = new THREE.InstancedMesh(g, m, n); im.castShadow = shadow; im.receiveShadow = true; im.frustumCulled = false; im.count = 0; group.add(im); return im; };
-  const bodies = K.body.map((g) => mk(g, tramMat, MAX, true)), skins = mk(K.skin, K.skinMat, MAX * 3, false), lampW = mk(K.lampW, K.lampWMat, MAX, false), lampR = mk(K.lampR, K.lampRMat, MAX, false), led = mk(K.led, ledMat, MAX, false);
+  const bodies = K.body.map((g) => mk(g, tramMat, MAX, true)), skins = mk(K.skin, K.skinMat, MAX * 3, false), lampW = mk(K.lampW, K.lampWMat, MAX, false), lampR = mk(K.lampR, K.lampRMat, MAX, false), led = mk(K.led, ledMat, MAX, false), pan = mk(K.pan, tramMat, MAX, true);
   skins.name = 'tram-sides';
   if (runs.length) for (let i = 0; i < MAX; i++) {
     const run = runs[i % runs.length], onSame = Math.floor(i / runs.length);
     trams.push({ sections: [0, 1, 2].map(() => new THREE.Object3D()), run, phase: onSame * run.sch.period * 0.5 + i * 11.3, visible: false });
   }
   let clock = 0, want = 1;
+  const panM = new THREE.Matrix4(), panS = new THREE.Matrix4();
   const place = (t: TramRun): void => {
     const at = t.run.sch.at(clock + t.phase); t.at = at;
     t.sections.forEach((m, k) => {
@@ -212,9 +219,11 @@ export function buildTramLine(osm: OsmExtract, { group, plan }: TramHost): TramL
     const vis = trams.filter((t) => t.visible); let n = 0;
     for (const t of vis) {
       t.sections.forEach((m, k) => { bodies[k].setMatrixAt(n, m.matrix); skins.setMatrixAt(n * 3 + k, m.matrix); });
-      lampW.setMatrixAt(n, t.sections[0].matrix); lampR.setMatrixAt(n, t.sections[2].matrix); led.setMatrixAt(n, t.sections[0].matrix); n++;
+      lampW.setMatrixAt(n, t.sections[0].matrix); lampR.setMatrixAt(n, t.sections[2].matrix); led.setMatrixAt(n, t.sections[0].matrix);
+      const mid = t.sections[1], ws = (t.at as { s: number }).s - SECTION / 2 - PITCH + 0.2;                 // the contact strip is 0.2 m ahead of the middle of the section
+      pan.setMatrixAt(n, panM.copy(mid.matrix).multiply(panS.makeTranslation(0, PAN_FOOT, 0)).multiply(panS.makeScale(1, (wireY(ws) - 0.02 - PAN_FOOT) / (PAN_Y - 0.005 - PAN_FOOT), 1))); n++;
     }
-    for (const im of [...bodies, lampW, lampR, led]) { im.count = n; im.instanceMatrix.needsUpdate = true; }
+    for (const im of [...bodies, lampW, lampR, led, pan]) { im.count = n; im.instanceMatrix.needsUpdate = true; }
     skins.count = n * 3; skins.instanceMatrix.needsUpdate = true;
   };
   return {
