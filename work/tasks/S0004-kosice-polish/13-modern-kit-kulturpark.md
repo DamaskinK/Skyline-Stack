@@ -6,7 +6,7 @@ additions), new residential blocks (white/grey render, large windows, balconies 
 office buildings (glass curtain walls, aluminium fins, ground-floor lobbies) for Kulturpark and the business centre
 plot; far facades baked like S0004 07; near-ring assembler picks it by OSM tags/area.
 
-**Blocked by:** 09
+**Blocked by:** None (can start immediately).
 
 **Type:** improve
 **Status:** ready-for-agent

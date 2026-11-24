@@ -13,3 +13,5 @@ update district data, tests and the district map; keep the balance curve of S000
 - [ ] Site chosen with reasons and reference photo URLs in Comments; scene shows the real modern office buildings
       (needs the modern kit of ticket 13 for the look; use the in-between kit until 13 lands).
 - [ ] Balance re-checked; audit, flicker, plot-run pass.
+
+Developer, 2026-11-24: Kulturpark has trams nearby in reality - check OSM rails around Kulturpark and the business centre (Sturova, Namestie osloboditelov) and make sure the tram lines show where they really run.
