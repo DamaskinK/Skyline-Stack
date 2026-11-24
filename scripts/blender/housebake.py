@@ -95,6 +95,22 @@ def layout(objs, mods, over, mats):
 
 def srgb_enc(x): x = np.clip(x, 0, 1); return np.where(x <= 0.0031308, x * 12.92, 1.055 * np.power(x, 1 / 2.4) - 0.055)
 
+def paint_office_glass(col, msk):
+    """Office curtain wall (S0004 18): no room behind the pane, a mirror of the sky. Blue-grey, light at the top of each pane, darker towards the floor plate, two soft diagonal glints, a faint ceiling-void band."""
+    g = msk[:, :, 2] > 0.5; h, w = g.shape
+    ys = np.arange(h)[:, None].repeat(w, 1).astype(np.float32); xs = np.arange(w)[None, :].repeat(h, 0).astype(np.float32)
+    big = 1e9
+    ymin = np.where(g, ys, big).min(0)[None, :]; ymax = np.where(g, ys, -big).max(0)[None, :]
+    xmin = np.where(g, xs, big).min(1)[:, None]; xmax = np.where(g, xs, -big).max(1)[:, None]
+    t = np.clip((ys - ymin) / np.maximum(ymax - ymin, 1), 0, 1); s = np.clip((xs - xmin) / np.maximum(xmax - xmin, 1), 0, 1)
+    top_c = np.array([0.33, 0.47, 0.62]); bot_c = np.array([0.07, 0.12, 0.17])
+    base = bot_c + (top_c - bot_c) * (1 - t ** 0.8)[..., None]
+    d = s * 0.7 + (1 - t) * 0.5; glint = np.clip(1 - np.abs(d - 0.55) / 0.12, 0, 1) * 0.35 + np.clip(1 - np.abs(d - 0.9) / 0.05, 0, 1) * 0.2
+    base = base + glint[..., None] * np.array([0.5, 0.55, 0.6])
+    void = ((t > 0.9) & (t <= 1.0)).astype(np.float32)[..., None]; base = base * (1 - 0.35 * void)
+    col[g] = np.clip(base, 0, 1)[g]
+    return col
+
 def paint_glass(col, msk):
     """Window panes: a dark room (lighter ceiling, a curtain, a warm wall) with a soft sky reflection. Per column / row extents of the glass give each pane its own gradient."""
     g = msk[:, :, 2] > 0.5; h, w = g.shape
@@ -139,7 +155,7 @@ def main():
             me, bk = o.data, o.name == 'backdrop'; bpy.data.objects.remove(o)
             if bk: bpy.data.meshes.remove(me)
         alb, msk, dep, ao = passes['alb'], passes['msk'], passes['dep'], passes['ao']
-        col = paint_glass(alb.copy(), msk)
+        col = (paint_office_glass if name.startswith('of_') else paint_glass)(alb.copy(), msk)
         pl = msk[:, :, 0] > 0.5; n = np.random.default_rng(zlib.crc32(name.encode())).normal(0, 1, col.shape[:2]).astype(np.float32); n = blur(n, True)
         col[pl] *= (1.0 + 0.03 * n[pl])[:, None]                                # plaster grain
         nrm = normals(dep, ppm)
