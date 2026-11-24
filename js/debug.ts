@@ -87,6 +87,26 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
     return { middle, counts: a.counts, byCategory: a.byCategory, planByCategory: a.planFindings, mismatches: a.mismatches, sample: a.findings.slice(0, 8) };
   }
 
+  // footprint of every landmark model of the scene (convex hull of its first LOD in the frame of the scene, x east, z south), to freeze them as data in js/core/landmark-sites.ts
+  function landmarkHulls() {
+    const root = scene.getObjectByName('kosice-landmarks'), out: Record<string, number[]> = {}; if (!root) return out;
+    root.updateMatrixWorld(true);
+    const v = new THREE.Vector3();
+    for (const g of root.children) {
+      const pts = new Map<string, [number, number]>();
+      const lod = g.children[0] instanceof THREE.LOD ? (g.children[0] as THREE.LOD).levels[0]?.object : g;
+      lod?.traverse((o) => {
+        const m = o as THREE.Mesh; if (!m.isMesh) return;
+        const a = m.geometry.attributes.position;
+        for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); pts.set(`${Math.round(v.x * 4)},${Math.round(v.z * 4)}`, [v.x, v.z]); }
+      });
+      const P = [...pts.values()].sort((p, q) => p[0] - q[0] || p[1] - q[1]), cr = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+      const half = (list: [number, number][]) => { const h: [number, number][] = []; for (const p of list) { while (h.length >= 2 && cr(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p); } h.pop(); return h; };
+      const hull = [...half(P), ...half([...P].reverse())];
+      out[g.name] = hull.flatMap((p) => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]);
+    }
+    return out;
+  }
   const houseSpots = () => scene.getObjectByName('near-ring')?.userData.houseSpots ?? {};   // nearest old-town / panel / in-between house (S0004 02 screenshot poses)
   // instanced house modules of the near ring: meshes (draw calls, without the shadow pass), instances and triangles per module type
   function houseStats() {
@@ -103,5 +123,5 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
   // S0004 03: where the street detail stands (traffic lights, crossings, bikes, plates, trams) for the screenshot poses, and the hour of the day
   const detailSpots = () => { const n = scene.getObjectByName('near-ring'); const d = n?.userData.plan?.detail; return d ? { lights: d.lights.map((l: { x: number; z: number; arms: unknown[] }) => ({ x: l.x, z: l.z, n: l.arms.length })), zebras: d.zebras.slice(0, 40), signs: n?.userData.plan.items.sign.slice(0, 4), racks: n?.userData.plan.items.rack.slice(0, 4), counts: n?.userData.detailCounts } : null; };
   const setHour = (hour: number) => { for (let i = 0; i < 60; i++) updateWorld(0.5, PHASES[0], { x: 0, z: 0 }, focus, 0, { hour, grade: null }); };
-  window.__debug = { detailSpots, setHour, snap, flicker, info, loadPlot, placementAudit, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
+  window.__debug = { detailSpots, setHour, snap, flicker, info, loadPlot, placementAudit, landmarkHulls, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }

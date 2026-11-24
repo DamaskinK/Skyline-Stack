@@ -1,5 +1,6 @@
 // What a level's loaded assets add to the scene: the sky HDRI as image-based light, kit props next to the lobby.
 // Everything here is replaced when the level changes.
+import { landmarkRings } from './core/landmark-sites.js';
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { scene, renderer, setEnvironment, setNearProcedural, setProcOffset, GROUND_Y } from './world.js';
@@ -73,7 +74,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
     const off = plot && plotOsm ? plotOffset(id, plot) : { x: 0, z: 0 };
     // the finished towers of the other plots that stand inside this extract keep their site free (js/core/placement.ts)
     const city = cityById(id), towers = plot && plotOsm && city?.district ? towerCircles(city.site, city.district.plots, plot.id, osm.half) : [];
-    const near = buildNearRing(osm, assets, landmarkHide(id), towers);
+    const near = buildNearRing(osm, assets, landmarkHide(id), towers, landmarkRings(id, off));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
     traffic.setLights(near.userData.streetLights || null); traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);

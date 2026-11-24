@@ -6,11 +6,17 @@ import { auditObjects, auditPlan, clipNetwork, countByCategory, footprint, hits,
 import { boxRing, lineOutside, overlapArea, pointInRing, ringLine, ringRing } from '../../js/core/geometry2d.js';
 import { cityById } from '../../js/levels.js';
 import { NEWTOWN } from '../../js/levels.js';
+import { landmarkRings } from '../../js/core/landmark-sites.js';
 import type { OsmExtract } from '../../js/types.js';
 
 const nodeFs = 'node:fs';
 const fs = (await import(/* @vite-ignore */ nodeFs)) as { readFileSync(p: string, e: string): string };
 const kosice = cityById('kosice'), plots = kosice?.district?.plots ?? [];
+// where a plot lies in the frame of the city (as plotOffset in js/level-scene.ts)
+const offsetOf = (id: string): { x: number; z: number } => {
+  const c = kosice?.site as { lat: number; lon: number }, p = plots.find((q) => q.id === id)?.site as { lat: number; lon: number };
+  return { x: (p.lon - c.lon) * 111320 * Math.cos(c.lat * Math.PI / 180), z: -(p.lat - c.lat) * 111320 };
+};
 const extract = (id: string): OsmExtract => JSON.parse(fs.readFileSync(`assets/levels/kosice/plots/${id}.json`, 'utf8')) as OsmExtract;
 
 describe('2D geometry', () => {
@@ -57,7 +63,7 @@ describe('the audit sees what it must', () => {
 
 describe('Kosice plots', () => {
   it.each(plots.map((p) => p.id))('%s: nothing is placed on anything', (id) => {
-    const osm = extract(id), plan = planNearRing(osm, { towers: towerCircles(kosice?.site, plots, id, osm.half) });
+    const osm = extract(id), plan = planNearRing(osm, { towers: towerCircles(kosice?.site, plots, id, osm.half), landmarks: landmarkRings('kosice', offsetOf(id)) });
     const findings = auditPlan(plan);
     expect(countByCategory(findings), JSON.stringify(findings.slice(0, 5))).toEqual({});
     expect(plan.placed.length).toBeGreaterThan(300);       // the audit looks at something
@@ -86,6 +92,20 @@ describe('Kosice plots', () => {
       const osm = extract(p.id), towers = towerCircles(kosice?.site, plots, p.id, osm.half), plan = planNearRing(osm, { towers });
       for (const t of towers) for (const b of plan.site.buildings) expect(ringRing(b.r, boxRing(t.x, t.z, t.r, t.r, 0))).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('Kosice landmarks', () => {
+  it.each(plots.map((p) => p.id))('%s: no tree, bench, stall, musician, car or street stands inside a landmark model', (id) => {
+    const osm = extract(id), rings = landmarkRings('kosice', offsetOf(id)), plan = planNearRing(osm, { landmarks: rings });
+    const inside = rings.filter((r) => r.some((v, i) => i % 2 === 0 && Math.abs(v) < osm.half && Math.abs(r[i + 1]) < osm.half));
+    for (const o of plan.placed) for (const r of rings) if (o.kind !== 'kerb' && o.kind !== 'dash') expect(ringRing(o.ring, r), `${o.kind} at ${o.x.toFixed(1)},${o.z.toFixed(1)}`).toBeGreaterThan(0);
+    for (const s of [...plan.site.carriage, ...plan.site.foot]) for (const r of rings) expect(ringLine(r, s.p), `street ${s.id}`).toBeGreaterThan(0);
+    for (const r of inside) for (const b of plan.site.buildings) expect(overlapArea(b.r, r, 0.5)).toBeLessThan(1);
+  });
+  it('the Singing Fountain of Cathedral square stays clear of the plaza the tower stands on', () => {
+    const f = landmarkRings('kosice', offsetOf('cathedral'))[4];                 // ring order of KOSICE_LANDMARKS
+    expect(ringRing(f, boxRing(0, 0, 3.4, 3.4, 0))).toBeGreaterThan(1.5);          // the step of the tower is 6.8 m square
   });
 });
 

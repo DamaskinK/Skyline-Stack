@@ -45,6 +45,7 @@ export interface Site {
   bikes: Strip[];                                      // bike lanes planned on the streets (filled by planBikes)
   tram: Strip[];                                       // track beds (filled by planTram)
   towers: Circle[];                                    // finished towers of other plots inside this extract
+  landmarks: Obs[];                                    // footprints of the hand-built landmark models (js/core/landmark-sites.ts): fountain rim, column base, cathedral ...
 }
 
 // The street network without the pad square around the tower (S0002 10: no road, footway, rail or bike lane under the foundation);
@@ -68,13 +69,14 @@ export function trimNetwork(osm: OsmExtract, towers: Circle[] = []): OsmExtract 
 // Indices of the footprints that become houses: none within CLEAR of the tower, and where two footprints overlap (OpenStreetMap often
 // holds a building and its parts twice) the smaller one is dropped. (A footprint replaced by a hand-built landmark still counts as an
 // obstacle; the renderer just does not draw it.)
-export function keptBuildings(osm: OsmExtract, towers: Circle[] = []): number[] {
+export function keptBuildings(osm: OsmExtract, towers: Circle[] = [], landmarks: Ring[] = []): number[] {
   const cand: number[] = [];
   osm.buildings.forEach((bd, i) => {
     const p = bd.p; if (p.length < 6) return;
     let near = Infinity; for (let k = 0; k < p.length; k += 2) near = Math.min(near, Math.hypot(p[k], p[k + 1]));
     if (near < CLEAR || pointInRing(p, 0, 0)) return;
     if (towers.some((t) => ringRing(p, circleRing(t.x, t.z, t.r + TOWER_MARGIN, 12)) === 0)) return;
+    if (landmarks.some((l) => ringRing(p, l) === 0)) return;                   // a model stands there (its own OSM footprint included)
     cand.push(i);
   });
   const boxes = cand.map((i) => ringBox(osm.buildings[i].p)), areas = cand.map((i) => Math.abs(polyArea(osm.buildings[i].p))), gone = new Set<number>();
@@ -89,8 +91,8 @@ export function keptBuildings(osm: OsmExtract, towers: Circle[] = []): number[] 
 // A street, lane or footway is cut wherever it runs through a house (the house wins): carriageways keep 80 % of their half width
 // clear of a wall (a car in the right lane is 1.75 m off the centre and 2 m wide), footways 0.6 m (a walker is 0.5 m off the centre).
 // Cars, people, bike lanes and furniture all follow the cut lines.
-export function clipNetwork(osm: OsmExtract, kept: number[], towers: Circle[] = []): OsmExtract {
-  const houses = kept.map((i) => obs(osm.buildings[i].p)), roads: OsmRoad[] = [], posts = towers.map((t) => obs(circleRing(t.x, t.z, t.r, 12)));
+export function clipNetwork(osm: OsmExtract, kept: number[], towers: Circle[] = [], landmarks: Ring[] = []): OsmExtract {
+  const houses = [...kept.map((i) => obs(osm.buildings[i].p)), ...landmarks.map(obs)], roads: OsmRoad[] = [], posts = towers.map((t) => obs(circleRing(t.x, t.z, t.r, 12)));
   for (const r of osm.roads) {
     const gap = r.k === 'walk' || r.k === 'path' ? 0.6 : r.w / 2 * 0.8;
     let parts = lineOutside(r.p, houses, gap, 2);
@@ -115,7 +117,7 @@ export function towerCircles(city: MapSite | undefined, plots: { id: string; sit
   return out;
 }
 
-export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), towers: Circle[] = []): Site {
+export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), towers: Circle[] = [], landmarks: Ring[] = []): Site {
   const roads = osm.roads;
   return {
     half: osm.half,
@@ -124,7 +126,7 @@ export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), t
     foot: roads.map((r, id) => ({ r, id })).filter(({ r }) => r.k === 'walk' || r.k === 'path').map(({ r, id }) => strip(r.p, r.w, id)),
     basins: osm.water.filter((g) => Math.abs(polyArea(g.p)) < BASIN_MAX).map((g) => obs(g.p)),
     river: osm.water.filter((g) => Math.abs(polyArea(g.p)) >= BASIN_MAX).map((g) => obs(g.p)),
-    bikes: [], tram: [], towers,
+    bikes: [], tram: [], towers, landmarks: landmarks.map(obs),
   };
 }
 
@@ -179,6 +181,10 @@ const padHit = (ring: Ring): boolean => { const b = ringBox(ring); return b[2] >
 export function hits(site: Site, o: Placed): string[] {
   const rule = RULES[o.kind], ring = o.ring, box = ringBox(ring), out: string[] = [];
   if (rule.b !== undefined) for (const b of site.buildings) { if (boxHit(box, b.box, rule.b) && ringRing(ring, b.r) < rule.b) { out.push('building'); break; } }
+  if (rule.b !== undefined) {              // the finished tower of the next plot stands 6 m from the Singing Fountain of Cathedral square (real geometry): its circle may come within 0.5 m of a landmark
+    const lb = o.kind === 'tower' ? Math.min(rule.b, 0.5) : rule.b;
+    for (const b of site.landmarks ?? []) { if (boxHit(box, b.box, lb) && ringRing(ring, b.r) < lb) { out.push('landmark'); break; } }
+  }
   if (rule.road !== undefined) for (const s of site.carriage) {
     if (s.id === o.own || !boxHit(box, s.box, rule.road)) continue;
     if (ringLine(ring, s.p, box, s.w / 2 + rule.road) < s.w / 2 + rule.road) { out.push('road'); break; }
@@ -233,8 +239,8 @@ export interface Plan {
 const lineLen = lineLength;
 const dOf = (p: number[]): number => { let d = Infinity; for (let i = 0; i < p.length; i += 2) d = Math.min(d, Math.hypot(p[i], p[i + 1])); return d; };
 
-export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[] } = {}): Plan {
-  const towers = opts.towers || [], kept = keptBuildings(osm0, towers), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers), site = makeSite(osm, kept, towers);
+export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landmarks?: Ring[] } = {}): Plan {
+  const towers = opts.towers || [], lms = opts.landmarks || [], kept = keptBuildings(osm0, towers, lms), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers, lms), site = makeSite(osm, kept, towers, lms);
   const plan: Plan = {
     osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
     shops: [], stalls: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
@@ -593,6 +599,7 @@ export function auditPlan(plan: Plan, extra: Placed[] = []): Finding[] {
     for (const s of site.bikes) if (boxHit(b.box, s.box) && ringLine(b.r, s.p, b.box, s.w / 2) < s.w / 2) out.push({ cat: 'building-bike', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const s of site.tram) if (boxHit(b.box, s.box) && ringLine(b.r, s.p, b.box, s.w / 2) < s.w / 2) out.push({ cat: 'building-tram', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const w of [...site.basins, ...site.river]) if (boxHit(b.box, w.box) && ringRing(b.r, w.r) === 0) out.push({ cat: 'building-water', kind: 'building', x: b.box[0], z: b.box[1] });
+    for (const l of site.landmarks ?? []) if (boxHit(b.box, l.box) && overlapArea(b.r, l.r, 0.5) > 1) out.push({ cat: 'building-landmark', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const t of site.towers) if (ringRing(b.r, circleRing(t.x, t.z, t.r + TOWER_MARGIN, 12)) === 0) out.push({ cat: 'building-tower', kind: 'building', x: b.box[0], z: b.box[1] });
   }
   // moving things: routes must stay off houses and out of water
@@ -648,7 +655,7 @@ export function newtownSite(plots: { x: number; z: number }[]): Site {
     carriage.push(strip([-L / 2, s * R, L / 2, s * R], W, id++), strip([s * R, -L / 2, s * R, L / 2], W, id++));
     for (const o of [-1, 1]) { const c = s * R + o * (W / 2 + SW / 2); foot.push(strip([-L / 2, c, L / 2, c], SW, id++), strip([c, -L / 2, c, L / 2], SW, id++)); }
   }
-  return { half: L / 2, buildings: [], carriage, foot, basins: [], river: [], bikes: [], tram: [], towers: plots.map((p) => ({ x: p.x, z: p.z, r: pad })) };
+  return { half: L / 2, buildings: [], carriage, foot, basins: [], river: [], bikes: [], tram: [], landmarks: [], towers: plots.map((p) => ({ x: p.x, z: p.z, r: pad })) };
 }
 
 // Footprints of the deterministic Newtown furniture, ready for `hits`.

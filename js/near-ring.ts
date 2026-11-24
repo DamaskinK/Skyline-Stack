@@ -251,8 +251,8 @@ const WIN = {
 // `towers`: circles round the sites of the finished towers of the other plots inside this extract (towerCircles in js/core/placement.ts).
 // Every placement rule (what may stand where) lives in js/core/placement.ts; this file only draws the plan. The plan is on `group.userData.plan`
 // so the browser audit can compare it with the objects of the scene.
-export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set<string> | null = null, towers: Circle[] = []): THREE.Group {
-  const plan = planNearRing(osm0, { towers }), osm = plan.osm;
+export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set<string> | null = null, towers: Circle[] = [], landmarks: number[][] = []): THREE.Group {
+  const plan = planNearRing(osm0, { towers, landmarks }), osm = plan.osm;
   const group = new THREE.Group(); group.name = 'near-ring'; group.userData.plan = plan;
 
   // ── ground ──
@@ -324,10 +324,12 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     cx /= n; cz /= n;
     if (hide && hide.has(bd.n as string)) continue;          // replaced by a hand-built landmark model
     const hv = hash(cx, cz), area = Math.abs(polyArea(p));
-    const bh = bd.h ?? 0, panel = (bd.lv ?? 0) >= 5 || (bd.a && bh >= 12);                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
-    const old = bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel;
+    const tiny = area < 15 && bd.k !== 'church';             // a kiosk, a transformer hut, a shed: one storey with a shop front and a roof, never a 7-14 m blank pillar
+    const bh = bd.h ?? 0, panel = !tiny && ((bd.lv ?? 0) >= 5 || (bd.a && bh >= 12));                // estates: prefab blocks (plot extracts carry the flats tag and the level count)
+    const old = tiny || (bd.k !== 'theatre' && area < 2200 && !(bh > 20) && !panel);
     let storeys: number;
-    if (bd.k === 'church') storeys = 6;
+    if (tiny) storeys = 1;
+    else if (bd.k === 'church') storeys = 6;
     else if (old) storeys = bh >= 3 ? Math.min(6, Math.max(2, Math.round(bh / STOREY_H))) : 2 + Math.floor(hv * 3);
     else storeys = Math.min(20, Math.max(2, Math.round((bh >= 3 ? bh : 9 + hv * 8) / STOREY_H)));
     const h = storeys * STOREY_H;
