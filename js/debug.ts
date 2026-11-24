@@ -1,6 +1,6 @@
 // Hooks for the browser check scripts (tests/browser). Nothing here runs unless a script calls it.
 import * as THREE from 'three';
-import { aimSun, auditProcedural, updateWorld } from './world.js';
+import { aimSun, auditProcedural, updateWorld, traffic } from './world.js';
 import { PHASES } from './config.js';
 import { windClock } from './vegetation.js';
 import { auditScene, auditMiddle } from './placement-audit.js';
@@ -107,6 +107,7 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
     }
     return out;
   }
+  const trafficStats = () => ({ waiting: traffic.waiting, minGap: traffic.minGap, cars: traffic.count });   // cars that stand at a red light, the smallest centre distance between two cars on one route and direction
   const houseSpots = () => scene.getObjectByName('near-ring')?.userData.houseSpots ?? {};   // nearest old-town / panel / in-between house (S0004 02 screenshot poses)
   // instanced house modules of the near ring: meshes (draw calls, without the shadow pass), instances and triangles per module type
   function houseStats() {
@@ -123,5 +124,5 @@ export function installDebug({ renderer, scene, camera, loadPlot = null }: Debug
   // S0004 03: where the street detail stands (traffic lights, crossings, bikes, plates, trams) for the screenshot poses, and the hour of the day
   const detailSpots = () => { const n = scene.getObjectByName('near-ring'); const d = n?.userData.plan?.detail; return d ? { lights: d.lights.map((l: { x: number; z: number; arms: unknown[] }) => ({ x: l.x, z: l.z, n: l.arms.length })), zebras: d.zebras.slice(0, 40), signs: n?.userData.plan.items.sign.slice(0, 4), racks: n?.userData.plan.items.rack.slice(0, 4), counts: n?.userData.detailCounts } : null; };
   const setHour = (hour: number) => { for (let i = 0; i < 60; i++) updateWorld(0.5, PHASES[0], { x: 0, z: 0 }, focus, 0, { hour, grade: null }); };
-  window.__debug = { detailSpots, setHour, snap, flicker, info, loadPlot, placementAudit, landmarkHulls, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
+  window.__debug = { detailSpots, setHour, snap, flicker, info, loadPlot, placementAudit, landmarkHulls, trafficStats, houseSpots, houseStats, hideModules };   // loadPlot(n): build the scene of Kosice plot n (0-4) around the tower
 }

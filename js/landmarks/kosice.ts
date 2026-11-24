@@ -27,6 +27,7 @@ const AT: Record<'cathedral' | 'theatre' | 'chapel' | 'urban' | 'fountain' | 'im
 // Circles (city frame, metres) the procedural middle ring keeps clear when these landmarks lie beyond the near ring (r = footprint radius + a block's reach)
 export const clearance = [
   { x: AT.cathedral.x, z: AT.cathedral.z, r: 85 }, { x: AT.urban.x, z: AT.urban.z, r: 50 }, { x: AT.chapel.x, z: AT.chapel.z, r: 50 }, { x: AT.theatre.x, z: AT.theatre.z, r: 75 },
+  { x: AT.fountain.x, z: AT.fountain.z, r: 32 }, { x: AT.immaculata.x, z: AT.immaculata.z, r: 24 },
 ];
 
 // ring of columns / half cylinders helper

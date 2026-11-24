@@ -391,8 +391,8 @@ function brake(x: number, z: number, hx: number, hz: number): number {
   }
   return f;
 }
-export const traffic: { waiting: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
-  count: 34, want: 34, mode: 'grid', routes: [], waiting: 0,
+export const traffic: { waiting: number; minGap: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
+  count: 34, want: 34, mode: 'grid', routes: [], waiting: 0, minGap: 1e9,
   setLights(h) { lightsNow = h; },
   setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
   // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
@@ -405,7 +405,7 @@ export const traffic: { waiting: number; count: number; want: number; mode: 'gri
   },
   updateRoutes(dt) {
     const R = this.routes; if (!R.length) return;
-    let waiting = 0;
+    let waiting = 0, minGap = 1e9;
     for (let i = 0; i < this.count; i++) {
       const c = cars[i], r = R[i % R.length];
       c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= i % 2 ? 1 : -1;
@@ -415,7 +415,7 @@ export const traffic: { waiting: number; count: number; want: number; mode: 'gri
       // car following: the nearest car ahead on the same route and direction (centre to centre; a bus is longer): slow down, stop at 7 m
       let gap = 1e9; const mine = c.bus ? 12 : 7;
       for (let j = 0; j < this.count; j++) { if (j === i || j % R.length !== i % R.length) continue; const o = cars[j]; if (o.s === undefined || o.d !== c.d) continue; const g = (o.s - c.s) * c.d; if (g > 0 && g < gap) gap = g; }
-      ahead = Math.min(ahead, Math.max(0, Math.min(1, (gap - mine) / 8)));
+      ahead = Math.min(ahead, Math.max(0, Math.min(1, (gap - mine) / 8))); minGap = Math.min(minGap, gap);
       if (ahead < 0.05) waiting++;
       c.s += c.d * (c.sp || 6) * 0.7 * dt * ahead;
       if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
@@ -426,7 +426,7 @@ export const traffic: { waiting: number; count: number; want: number; mode: 'gri
       o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
       carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);
     }
-    this.waiting = waiting; carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
+    this.waiting = waiting; this.minGap = minGap; carMesh.instanceMatrix.needsUpdate = true; carLights.instanceMatrix.needsUpdate = true;
   },
   update(dt) {
     if (this.mode === 'osm') { lightsNow?.update(dt); return this.updateRoutes(dt); }
