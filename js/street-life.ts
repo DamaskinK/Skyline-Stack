@@ -23,20 +23,23 @@ const SHAPES: Record<string, () => Part[]> = {
   stop: () => [[box(0.1, 2.9, 0.1, -1.4, 1.45, 0), 0x55606b], [box(0.1, 2.9, 0.1, 1.4, 1.45, 0), 0x55606b], [box(3.2, 0.14, 1.3, 0, 2.95, 0), 0x3c4a58], [box(2.9, 1.7, 0.05, 0, 1.6, -0.55), 0x9ec9d8], [box(1.8, 0.05, 0.45, 0, 0.5, -0.3), 0x7a5a3a], [box(0.7, 0.9, 0.06, 1.8, 2.3, 0.2), 0xf0c02a], [box(0.08, 2.4, 0.08, 1.8, 1.2, 0.2), 0x55606b]],
   sign: () => [[box(0.07, 2.6, 0.07, 0, 1.3, 0), 0x4a4d52]]   // the name plate is drawn by js/street-detail.ts,
 };
-// ── life that grows with the district (S0002 06): shopfronts, market stalls, a street musician ──
+// ── life that grows with the district (S0002 06): shopfronts, cafe terraces, a street musician ──
 const SHOP_FRAME = (): Part[] => [[box(0.22, 3.3, 0.3, -1.85, 1.65, 0.1), 0x4a4d52], [box(0.22, 3.3, 0.3, 1.85, 1.65, 0.1), 0x4a4d52], [box(4.0, 0.5, 0.22, 0, 3.05, 0.12), 0x2b2f36], [box(3.5, 0.12, 0.34, -0.6, 0.45, 0.16), 0x8a8478], [box(1.2, 2.3, 0.1, 1.1, 1.15, 0.04), 0x3a3d44]];
 const SHOP_AWNING = (): Part[] => [[new THREE.BoxGeometry(3.8, 0.08, 1.2).rotateX(0.28).translate(0, 2.6, 0.62), 0xffffff], [box(3.8, 0.3, 0.06, 0, 2.38, 1.17), 0xffffff]];
 const SHOP_GLASS = (): Part[] => [[box(2.2, 1.6, 0.05, -0.6, 1.4, 0.12), 0xffffff], [box(0.9, 1.95, 0.05, 1.1, 1.08, 0.12), 0xffffff]];
-const STALL_BODY = (): Part[] => [[box(2.4, 0.08, 1.2, 0, 0.9, 0), 0x8a6a45], [box(2.3, 0.78, 0.06, 0, 0.5, 0.55), 0xa98a5e],
-  ...[[-1.2, -0.55], [1.2, -0.55], [-1.2, 0.55], [1.2, 0.55]].map(([x, z]): Part => [box(0.07, 2.4, 0.07, x, 1.2, z), 0x6b4f32]),
-  [box(0.55, 0.2, 0.4, -0.8, 1.04, 0.1), 0xd84a3a], [box(0.55, 0.2, 0.4, -0.15, 1.04, 0.1), 0x5aa347], [box(0.55, 0.2, 0.4, 0.5, 1.04, 0.1), 0xe8b93a], [box(0.4, 0.3, 0.4, 0.95, 1.1, -0.2), 0xb88a52]];
-const STALL_CANOPY = (): Part[] => [[new THREE.BoxGeometry(2.9, 0.06, 1.9).rotateX(0.14).translate(0, 2.42, 0), 0xffffff], [box(2.9, 0.22, 0.05, 0, 2.2, 0.93), 0xffffff]];
+// A cafe terrace as on Hlavna in summer: two round tables, four chairs (seat 0.5 m) and one big parasol; local +z faces the street
+const TERRACE_SET = (): Part[] => [[cyl(0.04, 0.04, 2.45, 1.22, 6), 0xd8d2c0],
+  ...[-0.8, 0.8].flatMap((x): Part[] => [[cyl(0.36, 0.36, 0.04, 0.74, 10), 0x3a3d44], [cyl(0.04, 0.04, 0.72, 0.37, 6), 0x2b2f36],
+    ...[-0.62, 0.62].flatMap((z): Part[] => [[box(0.4, 0.05, 0.4, x, 0.47, z), 0x6b4f32], [box(0.4, 0.45, 0.05, x, 0.72, z + Math.sign(z) * 0.18), 0x6b4f32],
+      ...[[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]].map(([dx, dz]): Part => [box(0.04, 0.45, 0.04, x + dx, 0.225, z + dz), 0x2b2f36])]),
+    [cyl(0.07, 0.07, 0.12, 0.8, 6), 0xe8e4d8]])];
+const TERRACE_PARASOL = (): Part[] => [[new THREE.ConeGeometry(1.5, 0.5, 8).translate(0, 2.7, 0), 0xffffff], [cyl(0.05, 0.05, 0.1, 2.98, 6), 0xd8d2c0]];
 const BUSK_CASE = (): Part[] => [[box(0.9, 0.14, 0.38, 0, 0.07, 0), 0x1b1b1d], [box(0.8, 0.02, 0.28, 0, 0.145, 0), 0x7a2030], [box(0.12, 0.02, 0.1, 0.1, 0.16, 0), 0xe0b84a], [box(0.42, 0.5, 0.28, 1.0, 0.25, -0.1), 0x2a2a2a]];
 const AWNING_COLORS = [0xc6483c, 0x2f6fb0, 0x3f8f4a, 0xe0a52a, 0x8a4aa8, 0xe8e4d8];
 const glassMat = new THREE.MeshStandardMaterial({ color: 0x6f8ea0, emissive: 0xffc468, emissiveIntensity: 0, roughness: 0.25, metalness: 0.1 });
 glowMats.push(glassMat);               // world.js lights these windows as night falls, like the shop windows of the procedural city
 // What is out at each count of finished plots (index = plots, 0..5), as shares of what the scene could hold
-export const LIFE_STEPS = { shops: [0, 3, 6, 10, 13, 16], stalls: [0, 0, 2, 4, 6, 8], musicians: [0, 0, 0, 1, 1, 2] };
+export const LIFE_STEPS = { shops: [0, 3, 6, 10, 13, 16], terraces: [0, 0, 2, 4, 6, 8], musicians: [0, 0, 0, 0, 1, 1] };
 const furnitureMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
 
 function offsetLine(p: number[], off: number): number[] {         // polyline moved sideways by off metres (left of travel direction for off > 0)
@@ -89,7 +92,7 @@ export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, plan
 
   // ── furniture along the footways, seats and standing spots ──
   const { items, benches } = plan, sit: Spot[] = plan.sit.map((q) => ({ ...q, y: Y })), stand: Spot[] = plan.stand;
-  const shopSpots = plan.shops, stalls: Spot[] = plan.stalls, musicians: Spot[] = plan.musicians;
+  const shopSpots = plan.shops, terraces: Spot[] = plan.terraces, musicians: Spot[] = plan.musicians;
   const batch = (name: string, parts: () => Part[], list: Spot[], tint: boolean, shadow = false): THREE.InstancedMesh | null => {
     if (!list.length) return null;
     const im = new THREE.InstancedMesh(mergeParts(parts()), name.includes('glass') ? glassMat : furnitureMat, list.length), c = new THREE.Color();
@@ -98,15 +101,15 @@ export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, plan
   };
   const o = new THREE.Object3D();
   const shopIm = [batch('shop-frame', SHOP_FRAME, shopSpots, false), batch('shop-awning', SHOP_AWNING, shopSpots, true), batch('shop-glass', SHOP_GLASS, shopSpots, false)].filter((m): m is THREE.InstancedMesh => !!m);
-  const stallIm = [batch('stall-body', STALL_BODY, stalls, false, true), batch('stall-canopy', STALL_CANOPY, stalls, true)].filter((m): m is THREE.InstancedMesh => !!m);
+  const terraceIm = [batch('terrace-set', TERRACE_SET, terraces, false, true), batch('terrace-parasol', TERRACE_PARASOL, terraces, true, true)].filter((m): m is THREE.InstancedMesh => !!m);
   const buskIm = [batch('busker-props', BUSK_CASE, musicians, false)].filter((m): m is THREE.InstancedMesh => !!m);
   const life = {
-    shown: { shops: 0, stalls: 0, musicians: 0 }, stalls, musicians,
+    shown: { shops: 0, terraces: 0, musicians: 0 }, terraces, musicians,
     // n = finished plots of the district (0-5): what is out in the street
-    setProgress(this: { shown: { shops: number; stalls: number; musicians: number } }, n: number) {
+    setProgress(this: { shown: { shops: number; terraces: number; musicians: number } }, n: number) {
       const k = Math.max(0, Math.min(5, Math.round(n)));
       const set = (ims: THREE.InstancedMesh[], want: number, have: number): number => { const c = Math.min(want, have); for (const im of ims) im.count = c; return c; };
-      this.shown.shops = set(shopIm, LIFE_STEPS.shops[k], shopSpots.length); this.shown.stalls = set(stallIm, LIFE_STEPS.stalls[k], stalls.length); this.shown.musicians = set(buskIm, LIFE_STEPS.musicians[k], musicians.length);
+      this.shown.shops = set(shopIm, LIFE_STEPS.shops[k], shopSpots.length); this.shown.terraces = set(terraceIm, LIFE_STEPS.terraces[k], terraces.length); this.shown.musicians = set(buskIm, LIFE_STEPS.musicians[k], musicians.length);
       return this.shown;
     },
   };
@@ -117,5 +120,5 @@ export function buildStreetLife(osm: OsmExtract, kit: LevelAssets, { group, plan
     im.castShadow = true; im.receiveShadow = true; im.name = 'furniture-' + name; group.add(im);
   }
   instanceKit(kit.bench, benches, 0, group, { lengthFit: 2.0 });
-  return { sit, stand, bikeRoutes, basins, events: life, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: plan.bikeLanes.filter((l) => !l.cycleway).length, shops: shopSpots.length, stalls: stalls.length, musicians: musicians.length } };
+  return { sit, stand, bikeRoutes, basins, events: life, counts: { benches: benches.length, ...Object.fromEntries(Object.entries(items).map(([k, v]) => [k, v.length])), lanes: plan.bikeLanes.filter((l) => !l.cycleway).length, shops: shopSpots.length, terraces: terraces.length, musicians: musicians.length } };
 }

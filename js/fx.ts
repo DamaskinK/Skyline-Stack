@@ -294,7 +294,7 @@ export const People = {
       return { p, off, cum, len: cum[cum.length - 1] };
     }).filter((r) => r.len > 25);
   },
-  // Finished plots of the district (0-5): more people, cars, open shops, market stalls and musicians. Rebuilds the street life when it changed.
+  // Finished plots of the district (0-5): more people, cars, open shops, cafe terraces and a musician. Rebuilds the street life when it changed.
   setDistrictLife(plots: number) {
     const n = Math.max(0, Math.min(5, Math.round(plots)));
     if (n === this.progress) return;
@@ -336,13 +336,16 @@ export const People = {
     }
     this.buildEvents();
   },
-  // Vendors and customers at the open market stalls, a musician with an audience
+  // Guests seated at the open cafe terraces, a musician with an audience
   buildEvents() {
     const E = this.life?.events; if (!E) return;
-    E.stalls.slice(0, E.shown.stalls).forEach((st, i) => {
-      const bx = Math.sin(st.rot), bz = Math.cos(st.rot);               // front of the stall (customers side)
-      place2(this, { x: st.x - bx * 0.55, z: st.z - bz * 0.55, rot: st.rot });
-      if (i % 2 === 0) place2(this, { x: st.x + bx * 1.2, z: st.z + bz * 1.2, rot: st.rot + Math.PI + (Math.random() - 0.5) * 0.4 });
+    E.terraces.slice(0, E.shown.terraces).forEach((t, i) => {
+      const c = Math.cos(t.rot), sn = Math.sin(t.rot);                  // local x = (c, -sn), local z (toward the street) = (sn, c)
+      const seats: [number, number][] = [[-0.8, 0.62], [0.8, -0.62], [-0.8, -0.62], [0.8, 0.62]];
+      for (const [lx, lz] of seats.slice(0, 2 + (i % 3))) {              // two to four guests, facing their table
+        const p = makePerson(false, { sit: true }); p.userData.u.uAmp.value = 0; p.userData.u.uPhase.value = 0;
+        p.position.set(t.x + c * lx + sn * lz, 0.05 + SIT_DROP, t.z - sn * lx + c * lz); p.rotation.y = t.rot + (lz > 0 ? Math.PI : 0); this.folk.push({ p });
+      }
     });
     this.musicians = E.musicians.slice(0, E.shown.musicians).map((m, i) => {
       const fx = Math.sin(m.rot), fz = Math.cos(m.rot), p = place2(this, { x: m.x - fx * 0.9, z: m.z - fz * 0.9, rot: m.rot, tilt: 0.06 });

@@ -7,6 +7,9 @@ where plausible; street musicians stay but fewer. Everything through the placeme
 **Blocked by:** None (can start immediately).
 
 **Type:** change
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] No market stalls; terraces in front of old-town ground-floor shops; audit passes.
+- [x] No market stalls; terraces in front of old-town ground-floor shops; audit passes.
+
+## Comments
+Market stalls replaced by cafe terraces (2 tables, 4 chairs, parasol; 2-4 seated guests) planned in front of shopfronts through the placement rules (kind terrace, max 8). One busker per district, shown from 5 plots. Flower kiosks stay as before (already rare, max 4). Audit 0 findings on plots 0-4; district-life check passes. Not compared with Commons photos (no web check done).

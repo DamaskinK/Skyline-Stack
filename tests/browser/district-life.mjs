@@ -30,7 +30,7 @@ for (const n of steps) {
     const sc = window.__scene, find = (nm) => { let r = null; sc.traverse((o) => { if (o.name === nm) r = o; }); return r; };
     const cnt = (nm) => find(nm)?.count ?? 0;
     return { progress: People.progress, walkers: People.walkers.length, folk: People.folk.length, cyclists: People.cyclists.length, musicians: People.musicians.length, cars: traffic.count,
-      shops: cnt('shop-frame'), stalls: cnt('stall-body'), busk: cnt('busker-props'), farTowers: cnt('far-towers'), realTowers: sc.getObjectByName('district-towers').children.filter((c) => c.isGroup).length, calls: 0 };
+      shops: cnt('shop-frame'), terraces: cnt('terrace-set'), busk: cnt('busker-props'), farTowers: cnt('far-towers'), realTowers: sc.getObjectByName('district-towers').children.filter((c) => c.isGroup).length, calls: 0 };
   });
   const perf = await page.evaluate(() => new Promise((res) => { const t = []; let last = performance.now(), k = 0; const f = (now) => { t.push(now - last); last = now; if (++k < 150) requestAnimationFrame(f); else { t.sort((a, b) => a - b); res({ p50: t[75], p90: t[135] }); } }; requestAnimationFrame(f); }));
   const info = await page.evaluate(() => window.__debug.info());
@@ -51,7 +51,7 @@ for (const n of steps) {
     const E = People.life?.events, city = cityById('kosice'), pl = city.district.plots, c0 = plotOffset('kosice', pl[3]);
     const near = (q, d = 10, hgt = 3.2) => q ? { pos: [q.x + Math.sin(q.rot) * d, hgt, q.z + Math.cos(q.rot) * d], look: [q.x, 1.4, q.z] } : null;
     const far = pl.map((p) => { const o = plotOffset('kosice', p); return [o.x - c0.x, o.z - c0.z]; });
-    return { stall: near(E?.stalls[0]), busker: near(E?.musicians[0], 7), far };
+    return { terrace: near(E?.terraces[0]), busker: near(E?.musicians[0], 7), far };
   });
   const dist = (v) => Math.hypot(v[0], v[1]);
   const farOne = poses.far.map((v, i) => ({ v, i })).filter((o) => dist(o.v) > 800).sort((a, b) => dist(a.v) - dist(b.v))[0];
@@ -59,7 +59,7 @@ for (const n of steps) {
   await snapPng('street-night', [34, 9, 38], [0, 1.5, 0], true);
   const done = poses.far.map((v, i) => ({ v, i })).filter((o) => o.i !== 3 && ORDER.slice(0, n).includes(['terasa', 'juzna', 'kulturpark', 'hlavna-south', 'cathedral'][o.i]) && dist(o.v) < 900).sort((a, b) => dist(a.v) - dist(b.v))[0];
   if (done) await snapPng('tower-site', [done.v[0] + 70, 85, done.v[1] + 70], [done.v[0], 10, done.v[1]]);   // finished tower seen from above: no building under it
-  if (poses.stall) await snapPng('stall', poses.stall.pos, poses.stall.look);
+  if (poses.terrace) await snapPng('terrace', poses.terrace.pos, poses.terrace.look);
   if (poses.busker) await snapPng('busker', poses.busker.pos, poses.busker.look);
   if (farOne) {                                                  // stand 60 m off the plot looking at the tower 800 m+ away
     const [x, z] = farOne.v, d = dist(farOne.v), ux = x / d, uz = z / d;
@@ -70,6 +70,6 @@ for (const n of steps) {
   ok(errors.length === 0, `${n} finished: no console errors ${errors.slice(0, 2).join(' | ')}`);
   await page.close();
 }
-if (steps.length >= 2) { const a = stats[steps[0]], b = stats[steps[steps.length - 1]]; ok(b.walkers > a.walkers && b.cars > a.cars && b.shops > a.shops && b.stalls >= a.stalls, 'density grows with progress'); }
+if (steps.length >= 2) { const a = stats[steps[0]], b = stats[steps[steps.length - 1]]; ok(b.walkers > a.walkers && b.cars > a.cars && b.shops > a.shops && b.terraces >= a.terraces, 'density grows with progress'); }
 await browser.close();
 process.exit(fails.length ? 1 : 0);

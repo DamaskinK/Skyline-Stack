@@ -113,7 +113,7 @@ export function showDistrictTowers(cityId: string, plotId: string | null, plots:
     else far.push({ x, y, z, floors: st.bestHeight, type: p.buildingType });
   }
   if (far.length) addFarTowers(far);
-  // the district comes alive with its finished plots (ticket 06): people, traffic, shops, stalls, musicians
+  // the district comes alive with its finished plots (ticket 06): people, traffic, shops, terraces, musicians
   People.setDistrictLife(list.filter((p) => plotOf(plots, p.id).counted).length);
   return { real, far: far.length };
 }

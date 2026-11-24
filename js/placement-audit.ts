@@ -1,5 +1,5 @@
 // Scene side of the placement audit (ticket S0004 00): reads the placed objects back from the built near ring (instance matrices of the
-// trees, hedges, flower beds, street furniture, shopfronts, stalls) and runs the same core audit on them (js/core/placement.ts), then
+// trees, hedges, flower beds, street furniture, shopfronts, terraces) and runs the same core audit on them (js/core/placement.ts), then
 // compares the counts with the plan the near ring was built from. Used by `check.mjs audit` through __debug.placementAudit().
 import * as THREE from 'three';
 import { auditPlan, countByCategory, footprint } from './core/placement.js';
@@ -9,7 +9,7 @@ import type { Box4 } from './core/geometry2d.js';
 
 const KIND_OF: Record<string, Kind> = {
   'furniture-bin': 'bin', 'furniture-bollard': 'bollard', 'furniture-rack': 'rack', 'furniture-planter': 'planter', 'furniture-kiosk': 'kiosk', 'furniture-stop': 'stop', 'furniture-sign': 'sign',
-  'shop-frame': 'shop', 'stall-body': 'stall', 'busker-props': 'busker',
+  'shop-frame': 'shop', 'terrace-set': 'terrace', 'busker-props': 'busker',
 };
 // The middle ring (js/far-ring.ts): its footprints against the square of the near ring, the circles round finished towers and landmarks,
 // the river, and each other. Findings per category.
@@ -49,9 +49,9 @@ export function auditScene(near: THREE.Object3D): SceneAudit {
   const findings = auditPlan({ ...plan, placed }), mismatches: string[] = [];
   const planned: Record<string, number> = { tree: plan.trees.length, hedge: plan.hedges.length, bed: plan.beds.length };
   for (const k of Object.keys(plan.items)) planned[k] = plan.items[k].length;
-  planned.stall = plan.stalls.length; planned.busker = plan.musicians.length; planned.shop = plan.shops.length;
+  planned.terrace = plan.terraces.length; planned.busker = plan.musicians.length; planned.shop = plan.shops.length;
   // shops, stalls and musicians are shown by the number of finished plots (up to the plan's number); everything else stands as planned
-  const byProgress = new Set(['shop', 'stall', 'busker']);
+  const byProgress = new Set(['shop', 'terrace', 'busker']);
   for (const [k, n] of Object.entries(planned)) { const c = counts[k] || 0; if (byProgress.has(k) ? c > n : c !== n) mismatches.push(`${k}: scene ${c}, plan ${n}`); }
   return { counts, findings, byCategory: countByCategory(findings), planFindings: countByCategory(auditPlan(plan)), mismatches };
 }

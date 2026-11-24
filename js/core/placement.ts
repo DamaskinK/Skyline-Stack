@@ -132,7 +132,7 @@ export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), t
 
 // ── the kinds of things that are placed, and what each must keep away from ──
 export type Kind = 'person' | 'sitter' | 'tree' | 'hedge' | 'bed' | 'bush' | 'lamp' | 'carStreet' | 'carLot' | 'bench' | 'bin' | 'bollard' | 'rack' | 'planter' | 'kiosk' | 'stop' | 'sign'
-  | 'shop' | 'stall' | 'busker' | 'pole' | 'platform' | 'padSlab' | 'tower' | 'bikeLane' | 'tramBed' | 'block'
+  | 'shop' | 'terrace' | 'busker' | 'pole' | 'platform' | 'padSlab' | 'tower' | 'bikeLane' | 'tramBed' | 'block'
   | 'kerb' | 'zebra' | 'dash' | 'manhole' | 'drain' | 'tlight';
 // Clearances in metres between the object's footprint and the real edge of the obstacle (undefined = that obstacle does not matter).
 // foot: 'full' = the whole width of the footway, number = that many metres from its centre line. Objects never overlap each other (`solid`).
@@ -156,7 +156,7 @@ export const RULES: Record<Kind, Rule> = {
   stop: { b: 0.2, road: 0.2, foot: 0.3, bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
   sign: { b: 0.1, road: 0.1, foot: 0.3, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
   shop: { road: 0.1, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },            // stands against a wall: the wall is its host
-  stall: { b: 0.2, road: 0.2, foot: 0.3, bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
+  terrace: { b: 0.2, road: 0.2, foot: 0.3, bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
   busker: { b: 0.2, road: 0.2, foot: 0.3, bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
   pole: { b: 0.1, road: 0.1, bike: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
   platform: { b: 0.2, bike: 0.1, basin: 0.3, river: 0.3, pad: true, tower: true },
@@ -206,7 +206,7 @@ export function hits(site: Site, o: Placed): string[] {
 // ── footprints of the things we place ──
 const OBB: Record<string, [number, number]> = {          // half length (local x), half depth (local z), metres
   bench: [1.0, 0.35], bin: [0.3, 0.3], bollard: [0.12, 0.12], rack: [0.8, 0.9], planter: [0.6, 0.6], kiosk: [1.2, 1.0], stop: [1.8, 0.9], sign: [0.15, 0.15],
-  shop: [1.7, 0.3], stall: [1.5, 1.0], busker: [0.8, 0.4], carStreet: [0.95, 2.2], carLot: [0.95, 2.2],
+  shop: [1.7, 0.3], terrace: [1.5, 1.0], busker: [0.8, 0.4], carStreet: [0.95, 2.2], carLot: [0.95, 2.2],
 };
 export const footprint = (kind: Kind, x: number, z: number, rot = 0): Ring => {
   if (kind === 'tree') return circleRing(x, z, 0.5, 8);
@@ -227,7 +227,7 @@ export interface Plan {
   trees: [number, number, number, number][]; hedges: [number, number, number, number][]; beds: [number, number, number, number, number][]; bushes: [number, number][];
   lamps: number[][]; cars: number[][]; carKinds: ('street' | 'lot')[];
   bikeLanes: { p: Line; w: number; cycleway: boolean }[]; bikeRoutes: { p: Line; len: number; d: number }[];
-  items: Record<string, number[][]>; benches: number[][]; shops: { x: number; z: number; rot: number; d: number }[]; stalls: { x: number; z: number; rot: number }[]; musicians: { x: number; z: number; rot: number }[];
+  items: Record<string, number[][]>; benches: number[][]; shops: { x: number; z: number; rot: number; d: number }[]; terraces: { x: number; z: number; rot: number }[]; musicians: { x: number; z: number; rot: number }[];
   sit: { x: number; z: number; rot: number }[]; stand: { x: number; z: number; rot: number; mate: boolean }[];
   tramLines: Route[]; tramBeds: { p: Line; paved: boolean }[]; poles: [number, number, number][]; platforms: { x: number; z: number; r: number; s: number; line: number }[];
   detail: Detail;                                      // kerbs, crossings, markings, manholes, traffic lights (js/core/street-detail.ts)
@@ -243,7 +243,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
   const towers = opts.towers || [], lms = opts.landmarks || [], kept = keptBuildings(osm0, towers, lms), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers, lms), site = makeSite(osm, kept, towers, lms);
   const plan: Plan = {
     osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
-    shops: [], stalls: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
+    shops: [], terraces: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
   };
   const bbIn = (x: number, z: number, m = 0): boolean => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
   const clearPlaza = (x: number, z: number): boolean => Math.abs(x) < PLAZA_HALF + 2 && Math.abs(z) < PLAZA_HALF + 2;
@@ -433,7 +433,7 @@ function planTram(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number, m?: 
   });
 }
 
-// ── street furniture, shops, stalls, musicians ──
+// ── street furniture, shops, cafe terraces, musicians ──
 function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number, m?: number) => boolean, clearPlaza: (x: number, z: number) => boolean,
   free: (kind: Kind, x: number, z: number, rot?: number, own?: number, ring?: Ring) => boolean): void {
   const { site } = plan;
@@ -494,7 +494,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
       }
     }
   }
-  // shopfronts on the walls beside the streets (a street's side where a wall is within 9 m), market stalls and street musicians
+  // shopfronts on the walls beside the streets (a street's side where a wall is within 9 m), cafe terraces in front of them (as on Hlavna in summer) and a street musician
   const taken = [...Object.values(items).flat(), ...benches].map((q) => [q[0], q[2]]);
   const clearOf = (x: number, z: number, m: number): boolean => taken.every(([a, b]) => Math.hypot(a - x, b - z) > m);
   const shopSpots: { x: number; z: number; rot: number; d: number }[] = [];
@@ -521,7 +521,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
   // the plan keeps only the shops that are shown at most; the others never stand in the scene, so they are not audited
   plan.placed = plan.placed.filter((o) => o.kind !== 'shop' || shopSpots.some((q) => q.x === o.x && q.z === o.z));
   const cand: { x: number; z: number; rot: number; d: number }[] = [];
-  const probe = (x: number, z: number): boolean => bbIn(x, z, 10) && !clearPlaza(x, z) && !hits(site, { kind: 'stall', x, z, ring: circleRing(x, z, 0.3, 6) }).length;
+  const probe = (x: number, z: number): boolean => bbIn(x, z, 10) && !clearPlaza(x, z) && !hits(site, { kind: 'terrace', x, z, ring: circleRing(x, z, 0.3, 6) }).length;
   for (const { r } of walks) {
     for (let i = 0; i + 3 < r.p.length; i += 2) {
       const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 6) continue;
@@ -535,8 +535,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
   cand.sort((a, b) => a.d - b.d);
   const roomy = (q: { x: number; z: number }): boolean => { let k = 0; for (let a = 0; a < 8; a++) if (probe(q.x + Math.cos(a * 0.785) * 3.6, q.z + Math.sin(a * 0.785) * 3.6)) k++; return k >= 7; };
   const roomyList = cand.filter((q) => roomy(q));
-  const musicians = [roomyList[1] || roomyList[0], roomyList[4]].filter((q, i, a) => q && a.indexOf(q) === i);
-  const stalls = cand.filter((q) => !musicians.includes(q)).slice(0, 8);
+  const musicians = [roomyList[1] || roomyList[0]].filter((q) => q);       // few: one busker per district
   // people who sit or stand: only where a person fits (not in a carriageway, on a lane, in a basin)
   const fits = (q: { x: number; z: number }): boolean => !hits(site, { kind: 'sitter', x: q.x, z: q.z, ring: footprint('sitter', q.x, q.z) }).length;
   plan.sit = plan.sit.filter(fits);
@@ -547,7 +546,12 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
     if (q.mate && !free('person', q.x + Math.sin(q.rot) * 0.9, q.z + Math.cos(q.rot) * 0.9, q.rot)) q.mate = false;
     return true;
   });
-  for (const q of stalls) { if (free('stall', q.x, q.z, q.rot)) plan.stalls.push(q); }
+  // cafe terraces: a table group with a parasol on the footway in front of a shopfront (the shop faces the street, so the terrace sits 2 m out)
+  for (const s of shopSpots) {
+    if (plan.terraces.length >= 8) break;
+    const x = s.x + Math.sin(s.rot) * 2.0, z = s.z + Math.cos(s.rot) * 2.0;
+    if (clearOf(x, z, 2.5) && free('terrace', x, z, s.rot)) plan.terraces.push({ x, z, rot: s.rot });
+  }
   for (const q of musicians) { if (free('busker', q.x, q.z, q.rot)) plan.musicians.push(q); }
 }
 
