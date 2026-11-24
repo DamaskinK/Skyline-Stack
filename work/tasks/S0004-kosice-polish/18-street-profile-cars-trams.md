@@ -20,3 +20,5 @@
       the tram road is in view; trams run and stop there.
 - [ ] audit, flicker --plot all --quality all, check.mjs all High/Low pass; screenshots from the game camera on
       Terasa and Juzna showing the street profile and a tram.
+- [ ] Tall blank pale pillars along the road on the Kulturpark plot (seen by the S0004 13 modeler) - find their source and fix.
+- [ ] Far-facade glass of offices shows a room with curtains - offices get an office interior/reflective glass cell.

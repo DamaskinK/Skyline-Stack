@@ -19,6 +19,8 @@ import { FacadeBuilder } from './baked-facades.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
+/** A roof of the near ring: `tile` (pitched, with its ridge) or flat (`panel`, `old`, `mid`, with the footprint and its winding sign). */
+export interface RoofSite { kind: 'tile' | 'panel' | 'old' | 'mid'; h: number; dist: number; hv: number; roof?: RoofInfo; color?: THREE.Color; p?: number[]; sign?: number }
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
@@ -329,6 +331,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   // Everything larger or taller: plain calm facade, flat roof.
   const walls = new Map<string, { kind: string; v: number; b: Builder }>(), tiles = new Builder(), flats = new Builder(), relief = new Builder();
   const spots: Record<string, { x: number; z: number; h: number; storeys: number; d: number }> = {}; group.userData.houseSpots = spots;     // nearest house of each style (screenshot poses)
+  const roofs: RoofSite[] = []; group.userData.roofs = roofs;        // every roof that stands: perches for the pigeons (js/birds.ts), roof props (js/roof-props.ts)
   const frameR = settings.quality === 'low' ? 75 : 110, kitR = settings.quality === 'low' ? 32 : 48;     // window frames only where the camera can see them; cornices and plinths everywhere
   const PLINTH = new THREE.Color(0x8c8579), SILL = new THREE.Color(0xf1ece0), tint = new THREE.Color(), band = new THREE.Color();
   // S0004 02: houses are assembled from the Blender module kit (js/house-kit.ts); `?houses=procedural` or a kit that failed to load keeps the procedural facades
@@ -425,8 +428,10 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
       const rc = modern ? new THREE.Color(BK_ROOF[Math.floor(hv * 7919) % BK_ROOF.length]) : ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
       const roof = (hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null) ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
       if (hk && dist < kitR && !modern) addDormers(hk, roof, rc, plasterC, hv);       // the barracks have plain metal roofs
+      roofs.push({ kind: 'tile', h, roof, dist, hv, color: rc });
     } else {
       fillPoly(flats, p, h, 8);
+      roofs.push({ kind: panel ? 'panel' : old ? 'old' : 'mid', h, p, sign, dist, hv });
       if (!hk) for (let i = 0; i < n; i++) { const j = (i + 1) % n; stripe(relief, p[2 * i], p[2 * i + 1], p[2 * j], p[2 * j + 1], 0.22, h, h + 0.5, band); }   // parapet
     }
   }

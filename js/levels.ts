@@ -26,10 +26,10 @@ export const LEVELS: Level[] = [
           windScale: 0.6, weather: [{ fromFloor: 0, kind: 'clear' }], landmarksInView: [] },     // car park between the estate blocks and the pitches
         { id: 'juzna', name: 'Juzna trieda', site: { lat: 48.71440, lon: 21.24912 }, buildingType: 'panel', target: 14, require: {},
           windScale: 0.7, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 8, kind: 'rain' }], landmarksInView: [] },   // car park on the way in, south-west of the old town
-        { id: 'kulturpark', name: 'Kulturpark', site: { lat: 48.71373, lon: 21.25634 }, buildingType: 'hotel', target: 16, require: { maxLivesLost: 2 },
-          windScale: 0.9, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 9, kind: 'rain' }], landmarksInView: ['st-elisabeth'] },   // edge of the old barracks park, cathedral 600 m north
-        { id: 'hlavna-south', name: 'Hlavna street', site: { lat: 48.71952, lon: 21.25860 }, buildingType: 'office', target: 20, require: { maxLivesLost: 2 },
-          windScale: 0.95, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 12, kind: 'rain' }], landmarksInView: ['st-elisabeth', 'state-theatre'] },   // south end of the main street, 40 m south of the first pick so the camera never sits inside the cathedral model (S0002 03)
+        { id: 'kulturpark', name: 'Kulturpark', site: { lat: 48.71454, lon: 21.25675 }, buildingType: 'hotel', target: 16, require: { maxLivesLost: 2 },
+          windScale: 0.9, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 9, kind: 'rain' }], landmarksInView: ['st-elisabeth'] },   // in the old barracks park, 90 m north-east of the first pick so the real tram line 195 m north (Hlavna/Mlynska) falls inside the 250 m extract; cathedral 600 m north
+        { id: 'hlavna-south', name: 'Business centre', site: { lat: 48.71841, lon: 21.26584 }, buildingType: 'office', target: 20, require: { maxLivesLost: 2 },
+          windScale: 0.95, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 12, kind: 'rain' }], landmarksInView: ['st-elisabeth'] },   // open car park next to Aupark Tower, Duett I/II and the offices round Namestie osloboditelov (id kept: saved progress and tests use it)
         { id: 'cathedral', name: 'Cathedral square', site: { lat: 48.72100, lon: 21.25755 }, buildingType: 'deco', target: 22, require: { minPerfectShare: 0.3 },
           windScale: 1.0, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 12, kind: 'rain' }], landmarksInView: ['st-elisabeth', 'state-theatre', 'hlavna'] },   // today's site
       ],

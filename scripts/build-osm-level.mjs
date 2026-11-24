@@ -25,7 +25,7 @@ const LEVELS = {
   },
 };
 const PLOT_HALF = 260, PLOT_KEEP = 250;       // plot extract: a 500 m square around the plot site (the middle ring takes over beyond it)
-const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+const MIRRORS = ['https://lz4.overpass-api.de/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
 
 const id = process.argv[2] || 'kosice';
 const plotsMode = process.argv[3] === 'plots';
@@ -56,7 +56,7 @@ const query = `[out:json][timeout:120];
 out geom tags;`;
 
 async function fetchOverpass() {
-  for (let attempt = 0; attempt < 12; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
     const url = MIRRORS[attempt % MIRRORS.length];
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'skyline-stack-level-build/1.0' }, body: 'data=' + encodeURIComponent(query) });
@@ -66,11 +66,53 @@ async function fetchOverpass() {
     } catch (e) { console.error(`${url}: ${e.message}`); }
     await new Promise((s) => setTimeout(s, 4000 * (1 + attempt)));
   }
-  throw new Error('Overpass unavailable');
+  return null;
+}
+
+// Fallback when every Overpass mirror is down (S0004 12): the main OSM API (api.openstreetmap.org/api/0.6/map) serves raw data for small boxes.
+// One request per plot box (500 m square, well under the 0.25 deg2 limit), 2 s apart, with this script's own User-Agent (usage policy: no bulk).
+// The XML is converted to the same raw shape as `out geom tags` and filtered like the Overpass query above. Multipolygon relations: the outer ways of
+// simple ones (one outer ring) keep the relation's tags.
+const UA = 'skyline-stack-level-build/1.0';
+const attr = (s, k) => { const m = s.match(new RegExp(`\\b${k}="([^"]*)"`)); return m ? m[1] : null; };
+const unesc = (v) => v.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+function parseOsmXml(xml) {
+  const nodes = new Map(), ways = [], rels = [];
+  const tagsOf = (body) => { const t = {}; for (const m of body.matchAll(/<tag k="([^"]*)" v="([^"]*)"\s*\/>/g)) t[unesc(m[1])] = unesc(m[2]); return t; };
+  for (const m of xml.matchAll(/<node ([^>]*?)(\/>|>([\s\S]*?)<\/node>)/g)) nodes.set(attr(m[1], 'id'), { lat: +attr(m[1], 'lat'), lon: +attr(m[1], 'lon'), tags: m[3] ? tagsOf(m[3]) : {} });
+  for (const m of xml.matchAll(/<way ([^>]*?)>([\s\S]*?)<\/way>/g)) ways.push({ id: +attr(m[1], 'id'), refs: [...m[2].matchAll(/<nd ref="(\d+)"/g)].map((x) => x[1]), tags: tagsOf(m[2]) });
+  for (const m of xml.matchAll(/<relation ([^>]*?)>([\s\S]*?)<\/relation>/g)) rels.push({ id: +attr(m[1], 'id'), tags: tagsOf(m[2]), outer: [...m[2].matchAll(/<member type="way" ref="(\d+)" role="outer"/g)].map((x) => +x[1]) });
+  return { nodes, ways, rels };
+}
+const wanted = (t) => t.highway || t.building || /^(park|garden|pitch|playground)$/.test(t.leisure || '') || /^(grass|recreation_ground|village_green)$/.test(t.landuse || '') || /^(water|wood)$/.test(t.natural || '') || t.railway === 'tram' || t.amenity === 'parking';
+async function fetchOsmApi() {
+  const raw = { elements: [] }, seenIds = new Set();
+  for (const pl of plotList) {
+    const [s, w, n, e] = bboxOf(pl.site, PLOT_HALF + 10).split(',');
+    const url = `https://api.openstreetmap.org/api/0.6/map?bbox=${w},${s},${e},${n}`;
+    let xml = null;
+    for (let attempt = 0; attempt < 3 && !xml; attempt++) {
+      await new Promise((r) => setTimeout(r, 2000 * (1 + attempt * 3)));
+      try { const r = await fetch(url, { headers: { 'user-agent': UA } }); if (r.ok) xml = await r.text(); else console.error(`OSM API ${pl.id}: HTTP ${r.status}`); } catch (err) { console.error(`OSM API ${pl.id}: ${err.message}`); }
+    }
+    if (!xml) return null;
+    const { nodes, ways, rels } = parseOsmXml(xml);
+    const geomOf = (wy) => wy.refs.map((r) => nodes.get(r)).filter(Boolean).map((p) => ({ lat: p.lat, lon: p.lon }));
+    const byId = new Map(ways.map((wy) => [wy.id, wy]));
+    for (const rel of rels) if (rel.tags.type === 'multipolygon' && rel.outer.length === 1 && byId.has(rel.outer[0])) { const wy = byId.get(rel.outer[0]); if (!Object.keys(wy.tags).length) wy.tags = { ...rel.tags }; }
+    for (const wy of ways) {
+      if (!wanted(wy.tags) || seenIds.has('w' + wy.id)) continue;
+      seenIds.add('w' + wy.id); raw.elements.push({ type: 'way', id: wy.id, tags: wy.tags, geometry: geomOf(wy) });
+    }
+    for (const [id, p] of nodes) if ((p.tags.railway === 'tram_stop' || (p.tags.public_transport === 'stop_position' && p.tags.tram === 'yes')) && !seenIds.has('n' + id)) { seenIds.add('n' + id); raw.elements.push({ type: 'node', id: +id, lat: p.lat, lon: p.lon, tags: p.tags }); }
+    console.error(`OSM API ${pl.id}: ${ways.length} ways, ${nodes.size} nodes`);
+  }
+  return raw;
 }
 
 const cache = process.env.OSM_RAW;   // optional: path of a saved raw response, to rebuild without the network
-const raw = cache && fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, 'utf8')) : await fetchOverpass();
+const raw = cache && fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, 'utf8')) : (await fetchOverpass()) || (plotsMode ? await fetchOsmApi() : null);
+if (!raw) throw new Error('Overpass and the OSM API are unavailable');
 if (cache && !fs.existsSync(cache)) fs.writeFileSync(cache, JSON.stringify(raw));
 
 const r1 = (v) => Math.round(v * 10) / 10;
@@ -152,6 +194,9 @@ function extract(site, keep, outId) {
     else if (closed(w.geometry) && (t.natural === 'water')) { p.length -= 2; out.water.push({ p }); }
     else if (closed(w.geometry) && (t.leisure || t.landuse || t.natural === 'wood')) { p.length -= 2; out.parks.push({ p, k: t.leisure === 'pitch' ? 'pitch' : t.natural === 'wood' ? 'wood' : 'park' }); }
   }
+  // a pool or atrium water polygon inside a building footprint is not open water: drop it (the placement audit flags a house on water)
+  const inside = (pt, ring) => { let c = false; for (let i = 0, n = ring.length / 2, j = n - 1; i < n; j = i++) { const xi = ring[2 * i], zi = ring[2 * i + 1], xj = ring[2 * j], zj = ring[2 * j + 1]; if ((zi > pt[1]) !== (zj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - zi) / (zj - zi) + xi) c = !c; } return c; };
+  out.water = out.water.filter((wt) => { const n = wt.p.length / 2; let cx = 0, cz = 0; for (let i = 0; i < wt.p.length; i += 2) { cx += wt.p[i] / n; cz += wt.p[i + 1] / n; } return !out.buildings.some((b) => inside([cx, cz], b.p)); });
   out.landmarks = L.landmarks.map((lm) => { const [x, z] = toXZ(lm); return { id: lm.id, at: [r1(x), r1(z)], dist: Math.round(Math.hypot(x, z)), bearing: Math.round((Math.atan2(x, -z) * 180 / Math.PI + 360) % 360) }; });
 
   return { out, toXZ };

@@ -257,7 +257,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
   const solidFree = (kind: Kind, x: number, z: number, rot = 0, own?: number, ring?: Ring): boolean => {      // also clear of the solid objects already placed
     const o: Placed = { kind, x, z, rot, own, ring: ring || footprint(kind, x, z, rot) };
     if (hits(site, o).length) { drop(kind); return false; }
-    if (RULES[kind].solid) { const b = ringBox(o.ring); for (const q of plan.placed) if (RULES[q.kind].solid && Math.abs(q.x - x) < 6 && Math.abs(q.z - z) < 6 && boxHit(b, ringBox(q.ring), 0.05) && ringRing(o.ring, q.ring) < 0.05) { drop(kind); return false; } }
+    if (RULES[kind].solid) { const b = ringBox(o.ring); for (const q of plan.placed) if (RULES[q.kind].solid && Math.abs(q.x - x) < 12 && Math.abs(q.z - z) < 12 && boxHit(b, ringBox(q.ring), 0.05) && ringRing(o.ring, q.ring) < 0.05) { drop(kind); return false; } }
     plan.placed.push(o); return true;
   };
 

@@ -85,9 +85,14 @@ describe('Kosice plots', () => {
       for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) if (b[i].box[0] < b[j].box[2] && b[j].box[0] < b[i].box[2] && b[i].box[1] < b[j].box[3] && b[j].box[1] < b[i].box[3]) expect(overlapArea(b[i].r, b[j].r, 0.5)).toBeLessThan(1);
     }
   });
+  it('a plot within 400 m of another sees its tower circle', () => {
+    const site = kosice?.site as { lat: number; lon: number };
+    const pair = [{ ...plots[0], id: 'a', site }, { ...plots[1], id: 'b', site: { lat: site.lat + 0.003, lon: site.lon } }];
+    expect(towerCircles(site, pair, 'a').length).toBeGreaterThan(0);
+  });
   it('towers of the other plots keep their site free where two plots share an extract', () => {
     const near = plots.filter((p) => towerCircles(kosice?.site, plots, p.id).length > 0);
-    expect(near.length).toBeGreaterThan(0);                  // Hlavna street and Cathedral square lie within each other's extract
+    // since S0004 12 no two real plots are close enough to share an extract; the rule is checked on a made-up pair below
     for (const p of near) {
       const osm = extract(p.id), towers = towerCircles(kosice?.site, plots, p.id, osm.half), plan = planNearRing(osm, { towers });
       for (const t of towers) for (const b of plan.site.buildings) expect(ringRing(b.r, boxRing(t.x, t.z, t.r, t.r, 0))).toBeGreaterThan(0);
