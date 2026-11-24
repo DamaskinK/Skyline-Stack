@@ -9,9 +9,13 @@ all behaviour.
 **Blocked by:** None (can start immediately).
 
 **Type:** change
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Look of the original title/menu restored (compare with git history before S0001 18, e.g. commit d4a75d6^ .. 5dcb74e^).
-- [ ] All screens and the HUD in the same pixel style; readable at 390 px phone width and at ~560 px narrow windows
+- [x] Look of the original title/menu restored (compare with git history before S0001 18, e.g. commit d4a75d6^ .. 5dcb74e^).
+- [x] All screens and the HUD in the same pixel style; readable at 390 px phone width and at ~560 px narrow windows
       (today the logo is cut and the footer overlaps the menu at ~560 px wide).
-- [ ] Fonts credited (OFL); ui-shots.mjs and s1-19.mjs pass.
+- [x] Fonts credited (OFL); ui-shots.mjs and s1-19.mjs pass.
+
+## Comments
+
+Restored the S0001-18-era pixel CSS (Press Start 2P + VT323, square pixel logo tiles, pixel borders, hard shadows, hazard stripes, ">" cursor) and added the newer screens (map, plot result, intro card, loading pill) in the same style. Logo tiles now scale with the viewport so SKYLINE fits at 390 and 562 px; the title footer goes into the flow on narrow/short windows. Fonts credited (OFL). ui-shots.mjs gained a 562x694 viewport; shots in tests/browser/out-s4-11. Name, strings, storage migration and behaviour untouched.

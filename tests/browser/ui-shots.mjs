@@ -12,7 +12,7 @@ const fails = [];
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) fails.push(m); };
 const RESULT = { plot: { reached: true, landings: 14, perfects: 9, livesLost: 1 }, counts: true, stars: 2, floors: 18, best: 18, residents: 61, bonuses: { view: true, skyline: false }, goalReached: true, goalNew: true, nextCity: { city: 'Prague' },
   totals: { residents: 120, goal: 150, counted: 3, plots: 5, stars: 7, maxStars: 15 } };
-for (const [name, vp, touch] of [['desktop', { width: 1280, height: 720 }, false], ['phone', { width: 390, height: 844 }, true]]) {
+for (const [name, vp, touch] of [['desktop', { width: 1280, height: 720 }, false], ['narrow', { width: 562, height: 694 }, false], ['phone', { width: 390, height: 844 }, true]]) {
   const ctx = await browser.newContext({ viewport: vp, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const errors = []; page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('pageerror', (e) => errors.push(e.message));
