@@ -164,12 +164,28 @@ function hullArea(p: number[]): number {
   return Math.abs(a) / 2;
 }
 const convexish = (p: number[], area: number): boolean => area > 12 && area / Math.max(1, hullArea(p)) > 0.86;
+// Roof axis of a footprint that is (nearly) a rectangle: the direction of its longest edge, or null when the shape is not one (an L, a trapezoid, a
+// curve): the ridge of a hip roof over such a footprint runs skewed, so those get a flat roof (S0004 15). Every vertex must lie within
+// max(0.7 m, 9 % of the half width) of the edge of the bounding rectangle in that frame, and the footprint must fill 85 % of the rectangle.
+export function rectAxis(p: number[]): [number, number] | null {
+  const n = p.length / 2; if (n < 3) return null;
+  let best = 0, ax: [number, number] = [1, 0];
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n, dx = p[2 * j] - p[2 * i], dz = p[2 * j + 1] - p[2 * i + 1], l = Math.hypot(dx, dz); if (l > best) { best = l; ax = [dx / l, dz / l]; } }
+  let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  for (let i = 0; i < n; i++) { const u = p[2 * i] * ax[0] + p[2 * i + 1] * ax[1], v = -p[2 * i] * ax[1] + p[2 * i + 1] * ax[0]; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  const tol = Math.max(0.7, 0.09 * Math.min(u1 - u0, v1 - v0) / 2);
+  for (let i = 0; i < n; i++) {
+    const u = p[2 * i] * ax[0] + p[2 * i + 1] * ax[1], v = -p[2 * i] * ax[1] + p[2 * i + 1] * ax[0];
+    if (Math.min(u - u0, u1 - u, v - v0, v1 - v) > tol) return null;
+  }
+  return Math.abs(polyArea(p)) / Math.max(1, (u1 - u0) * (v1 - v0)) > 0.85 ? ax : null;
+}
 // hip roof over a roughly convex footprint: the ridge runs along the long axis, eave ring at height h
 export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Color, rhFixed = 0, eave = 0): RoofInfo {
   const n = p.length / 2; let cx = 0, cz = 0, sxx = 0, szz = 0, sxz = 0;
   for (let i = 0; i < n; i++) { cx += p[2 * i]; cz += p[2 * i + 1]; } cx /= n; cz /= n;
   for (let i = 0; i < n; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; sxx += dx * dx; szz += dz * dz; sxz += dx * dz; }
-  const th = 0.5 * Math.atan2(2 * sxz, sxx - szz), c = Math.cos(th), s = Math.sin(th);
+  const ra = rectAxis(p), th = ra ? Math.atan2(ra[1], ra[0]) : 0.5 * Math.atan2(2 * sxz, sxx - szz), c = Math.cos(th), s = Math.sin(th);
   let hu = 0, hv = 0;
   for (let i = 0; i < n; i++) { const dx = p[2 * i] - cx, dz = p[2 * i + 1] - cz; hu = Math.max(hu, Math.abs(dx * c + dz * s)); hv = Math.max(hv, Math.abs(-dx * s + dz * c)); }
   let ax: [number, number] = [c, s]; if (hv > hu) { ax = [-s, c]; [hu, hv] = [hv, hu]; }
@@ -208,7 +224,7 @@ export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Col
 // Gable roof over a four-cornered footprint (S0004 02): the ridge runs along the long side, eaves 0.45 m, barge 0.2 m, the gable ends are plain plaster (`fill`).
 // Returns the roof for dormers, or null when the footprint is not a rectangle.
 function gableRoof(tiles: Builder, fill: Builder, p: number[], h: number, color: THREE.Color, plaster: THREE.Color): RoofInfo | null {
-  if (p.length !== 8) return null;
+  if (p.length !== 8 || !rectAxis(p)) return null;
   const l01 = Math.hypot(p[2] - p[0], p[3] - p[1]), l12 = Math.hypot(p[4] - p[2], p[5] - p[3]);
   if (Math.max(l01, l12) < 1.25 * Math.min(l01, l12) || Math.min(l01, l12) < 5) return null;
   const long = l01 >= l12 ? 0 : 1, a0 = p[2 * long + 2] - p[2 * long], a1 = p[2 * long + 3] - p[2 * long + 1], al = Math.hypot(a0, a1);
@@ -336,7 +352,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     { const kind = old ? 'old' : panel ? 'panel' : 'mid', d0 = Math.hypot(cx, cz), cur = spots[kind]; if (d0 > 30 && (!cur || d0 < cur.d)) spots[kind] = { x: cx, z: cz, h, storeys, d: d0 }; }
     const v = Math.floor(hv * 1000) % OLD_PALETTE.length;
     const W = old ? wallB('old', bd.k === 'church' ? 99 : v) : wallB('plain', Math.floor(hv * 977) % PLAIN_PALETTE.length);
-    const pitched = old && area < 1500 && convexish(p, area), wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
+    const pitched = old && area < 1500 && convexish(p, area) && rectAxis(p) !== null, wk = old ? 'old' : 'plain', dist = Math.hypot(cx, cz);
     const shade = 0.93 + 0.13 * hash(cx * 3.1, cz * 1.7), warm = (hash(cz, cx * 2.3) - 0.5) * 0.06;     // slight plaster variation per building
     tint.setRGB(shade * (1 + warm), shade, shade * (1 - warm));
     band.setHex(bd.k === 'church' ? 0xdad3c3 : old ? OLD_PALETTE[v] : PLAIN_PALETTE[Math.floor(hv * 977) % PLAIN_PALETTE.length]).multiplyScalar(1.06 * shade);
