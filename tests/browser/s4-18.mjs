@@ -23,7 +23,7 @@ const snap = async (name, p) => {
   }, { p, w: W, h: H });
   writeFileSync(join(out, name), Buffer.from(url.split(',')[1], 'base64'));
 };
-const POSES = { game: { pos: [23, 12, 0], look: [0, 6, 0] }, game2: { pos: [-16, 14, 16], look: [0, 3, 0] }, high: { pos: [0, 60, 62], look: [0, 0, 0] } };
+const POSES = { garages: { pos: [10, 7, -40], look: [10, 2, -63] }, game: { pos: [23, 12, 0], look: [0, 6, 0] }, game2: { pos: [-16, 14, 16], look: [0, 3, 0] }, high: { pos: [0, 60, 62], look: [0, 0, 0] } };
 for (const n of plots) {
   await page.evaluate((n) => window.__debug.loadPlot(n, 'kosice'), n); await page.waitForTimeout(4000);
   for (const [k, p] of Object.entries(POSES)) await snap(`p${n}-${quality}-${k}.png`, p);
