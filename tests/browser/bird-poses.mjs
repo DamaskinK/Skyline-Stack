@@ -1,4 +1,5 @@
-// Screenshots of the birds (S0004 16): pigeons on a roof ridge, on a landmark ledge and on the plaza, a flock from the game camera distance.
+// Screenshots of the birds and roofs (S0004 16): pigeons on a roof ridge, on a landmark ledge and on the plaza, a flock from the game camera distance;
+// the roof of the nearest panel block and of the nearest old-town house from above and from the game camera height.
 // Usage: node tests/browser/bird-poses.mjs [--app http://localhost:8002] [--quality high|low] [--out dir] [--plots 0,1] [--size 1280x720]
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -34,6 +35,13 @@ for (const n of plots) {
   if (high[0]) await snap(`p${n}-${quality}-ledge.png`, near(high[0], 4, 1.2));
   if (ground[0]) await snap(`p${n}-${quality}-plaza.png`, near(ground[0], 2.5, 1.0));
   const f = s.spots.flying; if (f.length) { const c = f[0]; await snap(`p${n}-${quality}-flock-near.png`, { pos: [c[0] + 9, c[1] + 1, c[2] + 9], look: c }); }
+  const hs = await page.evaluate(() => window.__debug.houseSpots());
+  for (const kind of ['panel', 'old']) {
+    const h = hs[kind]; if (!h) continue;
+    const d = Math.hypot(h.x, h.z) || 1, ux = -h.x / d, uz = -h.z / d;
+    await snap(`p${n}-${quality}-roof-${kind}-top.png`, { pos: [h.x + ux * 14 - uz * 10, h.h + 16, h.z + uz * 14 + ux * 10], look: [h.x, h.h, h.z] });
+    await snap(`p${n}-${quality}-roof-${kind}-far.png`, { pos: [h.x + ux * 45, h.h + 22, h.z + uz * 45], look: [h.x, h.h, h.z] });
+  }
   await snap(`p${n}-${quality}-game.png`, { pos: [-22, 20, -19], look: [0, 14, 0] });
 }
 if (errs.length) console.log('console errors', errs.slice(0, 4));

@@ -12,7 +12,7 @@ tile roofs need unevenness; pigeons sitting would be nice".
 - [x] Bird models from Blender: pigeons (grey, iridescent neck), swallows/swifts, crows; flapping and gliding cycles
       (vertex animation or a few baked poses), LODs; flocks keep a minimum distance from the camera and never pass
       through it; pigeons sit on roof ridges, cornices, the cathedral and the square, and take off when the crane passes.
-- [ ] Panel-block roofs: parapet, lift machine rooms, stair exits, vent stacks, antennas, satellite dishes, roof
+- [x] Panel-block roofs: parapet, lift machine rooms, stair exits, vent stacks, antennas, satellite dishes, roof
       membrane texture with patches and drains; varied per block.
 - [ ] Tile roofs (old town): uneven tiles (slight sag and row offsets in the normal map or geometry), chimneys with
       caps, roof windows, gutters; moss/weathering variation.
@@ -32,3 +32,11 @@ tile roofs need unevenness; pigeons sitting would be nice".
   File:Apus_apus_01.jpg, File:Hooded_crow_(Corvus_cornix_cornix)_in_flight_Kemeri.jpg (local copies /private/tmp/claude-501/refs/s4-16/).
 - Checks (wip worktree, :8002): perf 2560x1440 DPR 2 High 575 calls / 1.54 M tris p90 16.7 ms, Low 133 / 0.48 M p90 16.7 ms; flicker PASS; audit 0 findings on plots 0, 1, 2, 4; plot 3 has
   2 building-water findings from the uncommitted OSM/plot data of ticket 12 (not birds). Previews /private/tmp/claude-501/s416/birds/, game poses tests/browser/out-s4-16/ (`tests/browser/bird-poses.mjs`).
+- Panel roofs: `scripts/blender/roofprops.py` -> `assets/levels/kosice/roofprops.glb` (27 KB, 12 modules, one vertex-colour material with contact occlusion, bevelled boxes): lift machine room
+  (door, louvre, cowl, 328 tris), stair exit with a mono-pitch slab, three capped vent heads on a plinth, soil pipe, TV mast with two Yagi arrays and guys, satellite dish, roof outlet, hatch;
+  plus chimney, roof window, gutter and downpipe for the tile roofs. Textures (numpy, tiling): `roof_membrane_{col,nrm}.webp` (8 m: 1 m bitumen strips with lapped seams, staggered end
+  laps, patches, ponding stains; 13 + 6 KB) on every flat roof, `roof_tiles_{col,nrm}.webp` (for the tile roofs). `js/roof-props.ts` places per panel block (and mid blocks over 12 m) a lift
+  room per ~16 m stair section (stair exits on blocks up to 5 storeys), vents, drains, pipes, 1-3 masts, 0-4 dishes looking south near the parapet, a hatch, all varied by the block hash,
+  kept 0.45 m off the parapet and apart; one InstancedMesh per module (High within 330 m, Low 170 m and fewer kinds). near-ring.ts: two lines (membrane material, `buildRoofProps`).
+- Checks after the roofs: flicker --plot all --quality all PASS; audit --plot all 0 findings; perf 2560x1440 DPR 2 High 567 calls / 1.53 M tris p90 16.7 ms, Low 139 / 0.48 M p90 16.7 ms.
+  Shots: tests/browser/out-s4-16/p0-high-roof-panel-{top,far}.png.

@@ -16,6 +16,7 @@ import { buildTramLine } from './trams.js';
 import { HouseKit, addHouse, addDormers, PANEL_SCHEMES } from './house-kit.js';
 import type { RoofInfo } from './house-kit.js';
 import { FacadeBuilder } from './baked-facades.js';
+import { buildRoofProps, membraneMaterial } from './roof-props.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
@@ -449,7 +450,8 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   }
   mesh(tiles, material(tile(tileRoofTex), { vertexColors: true, ...surface('roof', 3, 1.1) }), group, true);
   mesh(relief, material(null, { vertexColors: true, roughness: 0.9 }), group, false);   // no shadow casting: the details are too small to show in the shadow map
-  mesh(flats, material(tile(roofTex), { color: 0xb8b8b8 }), group);
+  mesh(flats, membraneMaterial(kit) ?? material(tile(roofTex), { color: 0xb8b8b8 }), group);
+  buildRoofProps(group, roofs, kit);                         // S0004 16: machine rooms, vents, masts, dishes, chimneys, roof windows, gutters (js/roof-props.ts)
 
   // ── trees in parks, bushes on park corners, street lights, parked cars: all placed by the plan (js/core/placement.ts) ──
   const { trees, bushes, lamps, hedges, beds } = plan;

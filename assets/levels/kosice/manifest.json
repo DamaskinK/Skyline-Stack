@@ -114,6 +114,36 @@
       "type": "json",
       "url": "assets/levels/kosice/housefacade.json",
       "bytes": 3348
+    },
+    {
+      "id": "roofprops",
+      "type": "gltf",
+      "url": "assets/levels/kosice/roofprops.glb",
+      "bytes": 27844
+    },
+    {
+      "id": "roof_membrane_col",
+      "type": "texture",
+      "url": "assets/levels/kosice/roof_membrane_col.webp",
+      "bytes": 13304
+    },
+    {
+      "id": "roof_membrane_nrm",
+      "type": "texture",
+      "url": "assets/levels/kosice/roof_membrane_nrm.webp",
+      "bytes": 5696
+    },
+    {
+      "id": "roof_tiles_col",
+      "type": "texture",
+      "url": "assets/levels/kosice/roof_tiles_col.webp",
+      "bytes": 60372
+    },
+    {
+      "id": "roof_tiles_nrm",
+      "type": "texture",
+      "url": "assets/levels/kosice/roof_tiles_nrm.webp",
+      "bytes": 65382
     }
   ]
 }
