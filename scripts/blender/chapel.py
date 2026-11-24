@@ -31,10 +31,13 @@ def window(x, z, face, w=1.5, h=4.2, depth=0.5):
     with cut.at(x, 2.4, z, face): cut.prism(prof, -depth, 0.8)
     with inl.at(x, 2.4, z, face):
         inl.prism(prof, -depth + 0.02, -depth + 0.14, 'glass')
-        inl.box(-0.05, 0.05, 0.0, top - 0.5, -depth + 0.02, -depth + 0.3, 'stone')                   # mullion
-        inl.box(-w / 2, w / 2, h * 0.6, h * 0.6 + 0.09, -depth + 0.02, -depth + 0.26, 'stone')       # transom
-    # label moulding over the arch
-    with body.at(x, 2.4, z, face): body.prism([(-(w / 2 + 0.25), top - 0.8), ((w / 2 + 0.25), top - 0.8), (0, top + 0.55)], 0.0, 0.16, 'stone')
+        tracery(inl, w, h, 1.15, 2, z=-depth + 0.24, bar=0.1, d=0.16, role='stone')                  # S0004 09: two lights and a ring with a quatrefoil
+    # dark dressed-stone surround of the opening (File:Kaplnka_svätého_Michala_Koszyce_2SM.jpg): a frame proud of the whitewash
+    outer, otop = arch_profile(w + 0.7, h, (w * 1.15 + 0.35) / (w + 0.7))
+    with body.at(x, 2.4, z, face):
+        body.box(-(w / 2 + 0.35), w / 2 + 0.35, -0.35, 0.0, 0.0, 0.14, 'stone')                       # sill
+        for sgn in (-1, 1): body.box(sgn * (w / 2 + 0.35) - 0.175 * (1 + sgn) + 0.0, sgn * (w / 2 + 0.35) + 0.175 * (1 - sgn), 0.0, h, 0.0, 0.12, 'stone')
+        arc_bar(body, [(px, py) for px, py in outer[2:]] , 0.35, 0.24, 'stone')
 
 def buttress(x, z, face, w=0.95, proj=1.05, h=7.4):
     # side profile in (outward, y): wedge-capped block; frame turned so local -x is outward
