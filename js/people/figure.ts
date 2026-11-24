@@ -26,6 +26,7 @@ export function buildFigure(o: Outfit, skin: number, rnd: Rnd = Math.random): TH
 
   // legs and shoes (o.sit: thighs forward, shins down, no swing)
   for (const [sx, limb] of [[-1, 3], [1, 4]]) {
+    if (o.ride) continue;                                                // a cyclist's legs are separate pedalling meshes (js/fx.ts)
     if (o.sit && garment !== 'robe') {
       const legC = garment === 'skirt' ? col(o.tights ?? skin, rnd) : bottom;
       add(box(0.11, 0.11, 0.42, sx * 0.075, 0.53, 0.2), legC, 0); add(box(0.1, 0.5, 0.1, sx * 0.075, 0.28, 0.4), legC, 0); add(box(0.12, 0.07, 0.19, sx * 0.075, 0.035, 0.44), shoes, 0);
@@ -108,6 +109,7 @@ export function buildFigure(o: Outfit, skin: number, rnd: Rnd = Math.random): TH
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(cl, 3)); geo.setAttribute('aLimb', new THREE.BufferAttribute(limb, 1));
   geo.userData.tris = count / 3; geo.userData.amp = ampScale;
+  geo.userData.legCol = garment === 'skirt' ? col(o.tights ?? skin, rnd) : bottom; geo.userData.shoeCol = shoes;   // for the separate legs of a cyclist
   geo.computeBoundingSphere();
   return geo;
 }

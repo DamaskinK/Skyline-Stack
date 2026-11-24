@@ -29,7 +29,7 @@ export interface Outfit {
   w: number; top: Col; bottom?: Col; shoes?: Col; hair?: Col; hairStyle?: string; sleeves?: string;
   garment?: string; coat?: string; coatCol?: Col; vest?: Col; vestTrim?: number; hat?: string; hatCol?: Col;
   headwear?: string; headCol?: Col; scarf?: Col; tie?: number; bag?: string; bagCol?: Col; scale?: number; tights?: Col;
-  folk?: boolean; robe?: Col; sit?: boolean;
+  folk?: boolean; robe?: Col; sit?: boolean; ride?: boolean;   // ride: a cyclist, no legs in the mesh (the bike code builds pedalling legs)
 }
 export interface CityStyle { outfits: Outfit[] }
 export const STYLES: Record<string, CityStyle> = {

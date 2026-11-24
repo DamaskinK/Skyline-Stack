@@ -143,7 +143,7 @@ export function updateBolt(dt: number) {
 // Figures live in js/people/: clothing data per city (styles.js) and the low-poly figure with swinging limbs (figure.js).
 let city = 'kosice', cold = false;
 // What a person is for: sitting on a bench, or a cyclist (no robes, they would tangle in the chain).
-interface PersonExtra { sit?: boolean; noRobe?: boolean }
+interface PersonExtra { sit?: boolean; noRobe?: boolean; ride?: boolean }
 function dress(extra: PersonExtra | null = null) {
   const st = styleFor(city), skins = skinFor(city);
   let o: Outfit = st.outfits[0];
@@ -155,6 +155,7 @@ function dress(extra: PersonExtra | null = null) {
   }
   if (cold) o = dressForCold(o, Math.random);
   if (extra?.sit) o = { ...o, sit: true };
+  if (extra?.ride) o = { ...o, ride: true };
   return { geo: buildFigure(o, skins[Math.floor(Math.random() * skins.length)]), scale: o.scale ?? 1 };
 }
 const umbrellaTexs = ([[0xe74c3c, 0xffffff], [0x3498db, 0xffffff], [0xf1c40f, 0xe67e22], [0x2ecc71, 0xffffff], [0x9b59b6, 0xffd34d]] as [number, number][]).map(([a, b]) => {
@@ -201,15 +202,43 @@ function mergeCol(parts: ColGeo[]) {
   for (const [g0, c] of parts) { const g = g0.index ? g0.toNonIndexed() : g0, k = new THREE.Color(c); pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); for (let i = 0; i < g.attributes.position.count; i++) col.push(k.r, k.g, k.b); }
   const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); o.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return o;
 }
+// A bike is several meshes so that parts can turn (S0004 15): frame (static), two wheels (turn with the ground speed), crank arm (turns with the legs).
+const BIKE_R = 0.3, BB: V3 = [0, 0.3, 0.02], CRANK = 0.17, HIP: V3 = [0, 0.78, -0.16], THIGH = 0.42, SHIN = 0.42;
 const bikeGeos: Record<number, THREE.BufferGeometry> = {};
-function bikeGeo(color: number) {
+function bikeGeo(color: number) {                                    // frame, fork, bars, saddle (no wheels, no crank)
   if (bikeGeos[color]) return bikeGeos[color];
-  const P: ColGeo[] = [], R = 0.3, tyre = 0x23252b;
-  for (const z of [-0.46, 0.46]) P.push([new THREE.TorusGeometry(R, 0.028, 4, 14).rotateY(Math.PI / 2).translate(0, R, z), tyre], [new THREE.TorusGeometry(R * 0.8, 0.006, 3, 10).rotateY(Math.PI / 2).translate(0, R, z), 0xb8bcc2]);
+  const P: ColGeo[] = [], R = BIKE_R;
   bar(P, [0, R, -0.46], [0, 0.55, -0.12], 0.022, color); bar(P, [0, 0.55, -0.12], [0, 0.62, 0.34], 0.022, color); bar(P, [0, R, -0.46], [0, 0.62, 0.34], 0.018, color);
   bar(P, [0, 0.3, 0.02], [0, 0.55, -0.12], 0.022, color); bar(P, [0, R, 0.46], [0, 0.66, 0.36], 0.022, 0x3a3d44); bar(P, [-0.2, 0.7, 0.35], [0.2, 0.7, 0.35], 0.016, 0x3a3d44);
-  P.push([new THREE.BoxGeometry(0.1, 0.04, 0.22).translate(0, 0.7, -0.16), 0x2a2a2a], [new THREE.BoxGeometry(0.04, 0.05, 0.16).translate(0.12, 0.3, 0.02), 0x2a2a2a], [new THREE.BoxGeometry(0.04, 0.05, 0.16).translate(-0.12, 0.3, 0.02), 0x2a2a2a]);
+  bar(P, [0, 0.3, 0.02], [0, R, -0.46], 0.016, color);
+  P.push([new THREE.BoxGeometry(0.1, 0.04, 0.22).translate(0, 0.7, -0.16), 0x2a2a2a]);
   return (bikeGeos[color] = mergeCol(P));
+}
+let wheelGeoCache: THREE.BufferGeometry | null = null;
+function wheelGeo() {                                                // tyre, rim and four spokes, centred on the axle, turns about x
+  if (wheelGeoCache) return wheelGeoCache;
+  const P: ColGeo[] = [], R = BIKE_R;
+  P.push([new THREE.TorusGeometry(R, 0.028, 4, 14).rotateY(Math.PI / 2), 0x23252b], [new THREE.TorusGeometry(R * 0.8, 0.006, 3, 10).rotateY(Math.PI / 2), 0xb8bcc2]);
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 4; bar(P, [0, Math.sin(a) * R * 0.8, Math.cos(a) * R * 0.8], [0, -Math.sin(a) * R * 0.8, -Math.cos(a) * R * 0.8], 0.006, 0xb8bcc2); }
+  return (wheelGeoCache = mergeCol(P));
+}
+let crankGeoCache: THREE.BufferGeometry | null = null;
+function crankGeo() { if (crankGeoCache) return crankGeoCache; const P: ColGeo[] = []; bar(P, [0, 0, CRANK], [0, 0, -CRANK], 0.014, 0x8a8f96); return (crankGeoCache = mergeCol(P)); }
+const legGeos: Record<string, THREE.BufferGeometry> = {};
+function legGeo(kind: 'thigh' | 'shin', leg: number, shoe: number) {          // a bone along +z from the joint; the shin carries the shoe (local +y is forward when the shin points down)
+  const key = `${kind}${leg}-${shoe}`; if (legGeos[key]) return legGeos[key];
+  const P: ColGeo[] = [[new THREE.BoxGeometry(0.11, 0.11, kind === 'thigh' ? THIGH : SHIN).translate(0, 0, (kind === 'thigh' ? THIGH : SHIN) / 2), leg]];
+  if (kind === 'shin') P.push([new THREE.BoxGeometry(0.12, 0.21, 0.07).translate(0, 0.07, SHIN + 0.01), shoe]);
+  return (legGeos[key] = mergeCol(P));
+}
+// Two-bone leg from the hip to the pedal, the knee bending forward; each bone mesh is placed by its start and the angle in the y-z plane.
+function poseLeg(thigh: THREE.Mesh, shin: THREE.Mesh, x: number, ty: number, tz: number) {
+  let dy = ty - HIP[1], dz = tz - HIP[2]; const d0 = Math.hypot(dy, dz) || 1e-3, d = Math.min(THIGH + SHIN - 0.01, d0);
+  dy *= d / d0; dz *= d / d0;
+  const along = d / 2, h = Math.sqrt(Math.max(0, THIGH * THIGH - along * along)), ux = dz / d, uy = dy / d;      // direction hip -> target as (z, y)
+  const ky = HIP[1] + uy * along + ux * h, kz = HIP[2] + ux * along - uy * h;                                     // knee: perpendicular (-dy, dz) in (z, y) = forward
+  thigh.position.set(x, HIP[1], HIP[2]); thigh.rotation.x = Math.atan2(-(ky - HIP[1]), kz - HIP[2]);
+  shin.position.set(x, ky, kz); shin.rotation.x = Math.atan2(-(HIP[1] + dy - ky), HIP[2] + dz - kz);
 }
 const BIKE_COLORS = [0x2f6fb0, 0xc6483c, 0x3f8f4a, 0x222428, 0xe0a52a, 0x8a4aa8];
 const bikeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
@@ -276,7 +305,7 @@ interface Walker {
   p: THREE.Group; dog: THREE.Mesh | null; kind: 'street' | 'plaza'; a: number; r: number; sp: number; ph: number; rt: number; road: number; pos: number; off: number; v: number;
   s?: number; d?: number;                  // place and direction along the route, set when the walker first uses one
 }
-interface Cyclist { g: THREE.Group; rider: THREE.Group; r: Route & { d: number }; s: number; d: number; v: number; ph: number }
+interface Cyclist { g: THREE.Group; rider: THREE.Group; r: Route & { d: number }; s: number; v: number; ph: number; wf: THREE.Mesh; wr: THREE.Mesh; crank: THREE.Mesh; legs: THREE.Mesh[] }
 interface Musician { x: number; z: number; t: number }
 type WalkRoute = Route & { off: number };
 type WalkList = { p: number[]; off: number }[] & { life?: Life | null };
@@ -329,10 +358,15 @@ export const People = {
     const nb = lifeCount('bikes', n);
     for (let i = 0; routes.length && i < nb; i++) {
       const r = routes[i % routes.length], g = new THREE.Group(), bike = new THREE.Mesh(bikeGeo(rnd(BIKE_COLORS)), bikeMat); bike.castShadow = true; g.add(bike);
-      const rider = makePerson(false, { noRobe: true }), pivot = new THREE.Group(); rider.scale.setScalar(1); rider.position.set(0, -0.62, 0); rider.userData.body.castShadow = true;
-      rider.userData.u.uAmp.value = 0.5; pivot.position.set(0, 0.8, -0.14); pivot.rotation.x = 0.35; pivot.add(rider); g.add(pivot);
+      const wf = new THREE.Mesh(wheelGeo(), bikeMat), wr = new THREE.Mesh(wheelGeo(), bikeMat), crank = new THREE.Mesh(crankGeo(), bikeMat);
+      wf.position.set(0, BIKE_R, 0.46); wr.position.set(0, BIKE_R, -0.46); crank.position.set(...BB); g.add(wf, wr, crank);
+      const rider = makePerson(false, { noRobe: true, ride: true }), pivot = new THREE.Group(); rider.scale.setScalar(1); rider.position.set(0, -0.58, 0); rider.userData.body.castShadow = true;
+      rider.userData.u.uAmp.value = 0; pivot.position.set(...HIP); pivot.rotation.x = 0.6; pivot.add(rider); g.add(pivot);
+      const gd = rider.userData.body.geometry.userData, legs: THREE.Mesh[] = [];
+      for (let k = 0; k < 4; k++) legs.push(new THREE.Mesh(legGeo(k % 2 ? 'shin' : 'thigh', gd.legCol, gd.shoeCol), bikeMat));
+      g.add(...legs);
       g.scale.setScalar(1.2); scene.add(g);
-      this.cyclists.push({ g, rider, r, s: nearestS(r, i), d: i % 2 ? 1 : -1, v: 3 + (i % 3) * 0.6, ph: Math.random() * 6 });
+      this.cyclists.push({ g, rider, r, s: nearestS(r, i), v: 3 + (i % 3) * 0.6, ph: Math.random() * 6, wf, wr, crank, legs });
     }
     this.buildEvents();
   },
@@ -445,10 +479,16 @@ export const People = {
     }
     for (const f of this.folk) f.p.userData.umbrella.visible = raining && !f.p.userData.extra?.sit;
     for (const c of this.cyclists) {
-      c.s += c.d * c.v * dt; c.ph += dt * c.v * 2.4;
-      if (c.s > c.r.len) { c.s = c.r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
-      const [x, z, ux, uz] = along(c.r, c.s);
-      c.g.position.set(x, 0.06, z); c.g.rotation.y = Math.atan2(ux * c.d, uz * c.d); c.rider.userData.u.uPhase.value = c.ph;
+      const ds = c.v * dt; c.s += ds;                                              // bike lanes are right-hand lanes of their own direction: always ride forward
+      if (c.s > c.r.len) c.s = 0;                                                  // the lane ends: leave and come in again at the start (shrunk to nothing at both ends)
+      c.ph += ds / BIKE_R * 0.5;                                                   // crank turns at half the wheel's rate
+      const [x, z, ux, uz] = along(c.r, c.s), fade = Math.min(1, c.s / 2.5, (c.r.len - c.s) / 2.5);
+      c.g.position.set(x, 0.06, z); c.g.rotation.y = Math.atan2(ux, uz); c.g.scale.setScalar(1.2 * Math.max(0.01, fade));
+      c.wf.rotation.x = c.wr.rotation.x = c.ph * 2; c.crank.rotation.x = -c.ph;
+      for (let k = 0; k < 2; k++) {                                                // pedals opposite each other; the shoe rides on the pedal
+        const a = c.ph + k * Math.PI, side = k ? 0.1 : -0.1;
+        poseLeg(c.legs[2 * k], c.legs[2 * k + 1], side, BB[1] + Math.sin(a) * CRANK + 0.05, BB[2] + Math.cos(a) * CRANK);
+      }
     }
   },
   clear() { for (const f of this.flyers) removePerson(f.p); this.flyers = []; },
