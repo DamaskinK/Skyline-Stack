@@ -45,6 +45,8 @@ const CFG_LOW_LIFT = 5, CFG_LOW_FOV = 4;   // metres the look-at point rises and
 
 function render(rdt: number) {
   clock += rdt;
+  // main menu: a fixed picture is shown instead of the canvas, so nothing is drawn (the menu stays light)
+  if (document.body.classList.contains('menu-bg')) { Music.update(); game.ui.update(rdt, 0); return; }
   const T = game.tower, bv = game.blockView, b = bv ? game.block : null, playing = game.state === 'play' && T;
   game.syncTower(rdt);
   const n = T ? T.n : 0, ph = game.state === 'menu' ? game.weather : game.run ? game.run.wx : game.weather;

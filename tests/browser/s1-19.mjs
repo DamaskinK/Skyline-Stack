@@ -1,4 +1,4 @@
-// S0001 19: menu over the real city, intro card and camera pass, skip, transitions, frame time. Usage: node tests/browser/s1-19.mjs [--quality low|medium|high] [--out dir]
+// S0001 19: menu on a fixed picture (S0004 19), intro card and camera pass, skip, transitions, frame time. Usage: node tests/browser/s1-19.mjs [--quality low|medium|high] [--out dir]
 import { chromium } from 'playwright';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,8 +22,8 @@ for (const [name, vp, touch] of [['desktop', { width: 1280, height: 720 }, false
   await page.goto(app, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game, null, { timeout: 15000 });
   const shot = async (n, w = 500) => { await page.waitForTimeout(w); await page.screenshot({ path: join(out, `${name}-${n}.png`) }); };
-  await page.waitForFunction(() => window.__game.loadedPlotId === 'cathedral', null, { timeout: 30000 }).then(() => ok(true, `${name}: menu loaded the Kosice centre plot in the background`), () => ok(false, `${name}: menu scene did not load`));
-  ok(await page.evaluate(() => document.getElementById('menuLoad').hidden), `${name}: loading pill gone after load`);
+  // S0004 19: the menu loads no city; it shows one fixed picture
+  ok(await page.evaluate(() => document.body.classList.contains('menu-bg') && !window.__game.levelId), `${name}: menu shows the fixed picture and loaded no city`);
   await shot('1-menu', 900);
   const f1 = await frames(page, 3000); ok(f1.p95 < 25, `${name}: menu frames p95 ${f1.p95.toFixed(1)} ms, worst ${f1.max.toFixed(1)} ms (${f1.n} frames)`);
   await page.evaluate(() => { document.querySelector('[data-go="sNew"]').click(); }); await page.waitForSelector('#sNew:not([hidden])');
@@ -49,7 +49,7 @@ for (const [name, vp, touch] of [['desktop', { width: 1280, height: 720 }, false
   await page.evaluate(() => document.getElementById('btnPause').click()); await page.waitForSelector('#sPause:not([hidden])');
   await page.evaluate(() => document.getElementById('btnQuit').click()); await page.waitForSelector('#sTitle:not([hidden])');
   await shot('6-menu-again', 1500);
-  ok(await page.evaluate(() => window.__game.levelId === 'kosice' && window.__game.loadedPlotId === 'cathedral'), `${name}: menu scene is the last played city`);
+  ok(await page.evaluate(() => document.body.classList.contains('menu-bg')), `${name}: back in the menu the fixed picture shows again`);
   ok(errors.length === 0, `${name}: no console errors ${errors.slice(0, 3).join(' / ')}`);
   await ctx.close();
 }

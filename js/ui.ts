@@ -1,7 +1,7 @@
 // Menus, settings, scores and the in-game HUD. Screens are <section class="screen"> elements shown one at a time.
 import { BUILDING_TYPES, buildingTypeById } from './building-types.js';
 import { CFG, DIFFICULTY, BTYPES, WEATHER, specialFor } from './config.js';
-import { NAME_KEY, settings, setSetting, loadScores, addScore, resetScores, loadProgress, loadLastCity, saveLastCity } from './settings.js';
+import { NAME_KEY, settings, setSetting, loadScores, addScore, resetScores, loadProgress, saveLastCity } from './settings.js';
 import { levelById, cityById, DISTRICT_CITIES, LEVELS } from './levels.js';
 import { landmarkSpots } from './level-scene.js';
 import { introKeys, introDuration } from './core/intro-path.js';
@@ -13,10 +13,11 @@ import { createDistrictMap } from './district-map.js';
 import { Sfx } from './audio.js';
 import { S, UI, applyStrings } from './strings.js';
 import { People } from './fx.js';
-import { buildDemo, clearDemo } from './game.js';
+import { clearDemo } from './game.js';
 import type { Game, GameUi, GameMode } from './game.js';
 import type { AssetError } from './assets.js';
 import type { Run } from './core/run.js';
+import { pixelIcon, heartIcon, starIcon, weatherIcon, weatherIconNames, muteIcon, compassIcon } from './pixel-icons.js';
 import type { Level, DifficultyId, District, Plot, Settings } from './types.js';
 
 // The page (index.html) always has the elements the code asks for, so a missing one is a bug and fails loudly later.
@@ -24,27 +25,23 @@ const $ = <T extends HTMLElement = HTMLElement>(s: string): T => document.queryS
 const $$ = <T extends HTMLElement = HTMLElement>(s: string): T[] => [...document.querySelectorAll<T>(s)];
 const esc = (s: unknown): string => String(s).replace(/[<>&"]/g, '');
 
-export const WX_ICONS: Record<string, string> = {
-  Clear: '<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="7" fill="#ffd34d" stroke="#000" stroke-width="2"/><g stroke="#ffd34d" stroke-width="3"><path d="M16 2v5M16 25v5M2 16h5M25 16h5M6 6l3 3M23 23l3 3M26 6l-3 3M6 26l3-3"/></g></svg>',
-  Rain: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#c8d2e2" stroke="#000" stroke-width="2"/><path d="M10 22l-2 6M16 22l-2 6M22 22l-2 6" stroke="#52d9ff" stroke-width="2.5"/></svg>',
-  Snow: '<svg viewBox="0 0 32 32"><path d="M8 18a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#eef3fa" stroke="#000" stroke-width="2"/><g fill="#fff" stroke="#000"><circle cx="10" cy="25" r="2"/><circle cx="17" cy="27" r="2"/><circle cx="23" cy="24" r="2"/></g></svg>',
-  Storm: '<svg viewBox="0 0 32 32"><path d="M8 17a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#5a6378" stroke="#000" stroke-width="2"/><path d="M17 15l-5 8h5l-3 7 8-10h-5l3-5z" fill="#ffd34d" stroke="#000" stroke-width="1.5"/></svg>',
-  'Heat haze': '<svg viewBox="0 0 32 32"><circle cx="16" cy="12" r="6" fill="#ffd34d" stroke="#000" stroke-width="2"/><g stroke="#ff9a4d" stroke-width="2.5" fill="none" stroke-linecap="round"><path d="M3 22q3-3 6 0t6 0 6 0 6 0M3 28q3-3 6 0t6 0 6 0 6 0"/></g></svg>',
-  Sandstorm: '<svg viewBox="0 0 32 32"><g stroke="#d8a468" stroke-width="3" stroke-linecap="round" fill="none"><path d="M4 10h16a3 3 0 1 0-3-3M4 17h22a3 3 0 1 1-3 3M4 24h12"/></g></svg>',
-  Typhoon: '<svg viewBox="0 0 32 32"><path d="M8 17a6 6 0 0 1 1-12 8 8 0 0 1 15 3 5 5 0 0 1 0 9z" fill="#3a4258" stroke="#000" stroke-width="2"/><path d="M10 21l-3 8M16 21l-3 8M22 21l-3 8" stroke="#52d9ff" stroke-width="3"/></svg>',
-  Fog: '<svg viewBox="0 0 32 32"><g stroke="#f2c0a0" stroke-width="3" stroke-linecap="round"><path d="M4 10h20M8 16h20M4 22h18M10 28h14"/></g></svg>',
-};
-const HEART = (on: boolean): string => `<svg viewBox="0 0 24 22" class="${on ? '' : 'off'}"><path d="M12 21 L3 12 A5 5 0 0 1 12 5 A5 5 0 0 1 21 12 Z" fill="#ff4d5e" stroke="#000" stroke-width="2"/></svg>`;
-const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+export const WX_ICONS: Record<string, string> = Object.fromEntries(weatherIconNames.map((n) => [n, weatherIcon(n)]));
+const HEART = heartIcon;
+const STAR = starIcon;
 const hex = (c: number): string => '#' + c.toString(16).padStart(6, '0');
 
 export function createUI(game: Game): GameUi {
   applyStrings();
+  for (const el of $$('[data-icon]')) el.innerHTML = el.dataset.icon === 'mute' ? muteIcon() : el.dataset.icon === 'compass' ? compassIcon() : pixelIcon(el.dataset.icon as string);
   // ── screen stack ──
   let stack: string[] = [];
   const screens = $$('.screen');
+  // The menu screens sit over one fixed pre-rendered picture (#menuBg); the 3D city loads only when a plot starts. Other screens keep what shows.
+  const MENU_SCREENS = new Set(['sTitle', 'sNew', 'sMap', 'sScores', 'sSettings', 'sHelp']);
+  const menuBg = (on: boolean): void => { document.body.classList.toggle('menu-bg', on); };
   function show(id: string, push = true): void {
     for (const s of screens) s.hidden = s.id !== id;
+    if (id !== 'sLoading') menuBg(MENU_SCREENS.has(id));
     if (push) stack.push(id);
     const s = $('#' + id);
     s.style.animation = 'none'; void s.offsetWidth; s.style.animation = '';
@@ -54,7 +51,7 @@ export function createUI(game: Game): GameUi {
     if (id === 'sSettings') syncSettings();
     setTimeout(() => ((s.querySelector('[aria-pressed="true"].card-opt, .mi, .btn, button') as HTMLElement | null) || s).focus({ preventScroll: true }), 30);
   }
-  function hideScreens() { for (const s of screens) s.hidden = true; }
+  function hideScreens() { for (const s of screens) s.hidden = true; menuBg(false); }
   function back() {
     if (stack.length <= 1) return;
     stack.pop(); Sfx.uiBack();
@@ -85,7 +82,7 @@ export function createUI(game: Game): GameUi {
   for (const [k, d] of Object.entries(DIFFICULTY)) {
     const b = document.createElement('button'); b.type = 'button'; b.className = `card-opt d-${k}`; b.dataset.diff = k;
     const m = d.meters, bar = (v: number): string => `<span class="meter"><i style="width:${v * 100}%"></i></span>`;
-    b.innerHTML = `<b>${d.label}</b><span>${d.desc}</span><span class="meters"><span>${S.meterLbl.crane}</span>${bar(m.crane)}<span>${S.meterLbl.wind}</span>${bar(m.wind)}<span>${S.meterLbl.precision}</span>${bar(m.precision)}<span>${S.meterLbl.lives}</span><span>${'♥'.repeat(d.lives)}</span></span>`;
+    b.innerHTML = `<b>${d.label}</b><span>${d.desc}</span><span class="meters"><span>${S.meterLbl.crane}</span>${bar(m.crane)}<span>${S.meterLbl.wind}</span>${bar(m.wind)}<span>${S.meterLbl.precision}</span>${bar(m.precision)}<span>${S.meterLbl.lives}</span><span class="hearts">${HEART(true).repeat(d.lives)}</span></span>`;
     b.onclick = () => { pickDiff = k as DifficultyId; Sfx.ui(); syncNew(); };
     dc.appendChild(b);
   }
@@ -122,9 +119,6 @@ export function createUI(game: Game): GameUi {
     $('#hud').hidden = true; $('#wxCard').hidden = true;
     const info = districtMap.render(cityId, { focusNext: true });
     const plots = cityProgress(loadDistrictProgress(), cityId).plots;
-    const shown = plotId ? showDistrictTowers(cityId, plotId, plots, { withCurrent: true }) : null;
-    if (!shown || !plots[plotId as string] || !plots[plotId as string].counted) buildDemo();
-    People.setWalkers(9);
     stack = ['sTitle', 'sNew']; show('sMap');
     return info;
   }
@@ -132,31 +126,9 @@ export function createUI(game: Game): GameUi {
   let starting = false;
   // ── menu scene and transitions ──
   // The veil is a black layer between the 3D scene and the screens: a scene swap happens while it is opaque.
-  const $veil = $('#veil'), $menuLoad = $('#menuLoad');
+  const $veil = $('#veil');
   const veilOn = (): Promise<void> => { $veil.classList.add('on'); return new Promise((r) => setTimeout(r, 300)); };
   const veilOff = (): void => { $veil.classList.remove('on'); };
-  // The main menu flies over the real scene of the last played city (first city: Kosice), on its centre (last) plot.
-  let menuLoading: Promise<void> = Promise.resolve();
-  function menuTarget(): { city: Level; pid: string } {
-    const last = loadLastCity(), city = DISTRICT_CITIES.find((c) => c.id === last && c.built) || DISTRICT_CITIES.find((c) => c.built) as Level;
-    const plots = (city.district as District).plots;
-    return { city, pid: plots[plots.length - 1].id };
-  }
-  function loadMenuScene(): Promise<void> {
-    const { city, pid } = menuTarget();
-    buildDemo(city.id);
-    if (game.levelId === city.id && game.loadedPlotId === pid) { showDistrictTowers(city.id, pid, cityProgress(loadDistrictProgress(), city.id).plots); return menuLoading; }
-    menuLoading = menuLoading.then(async () => {
-      $menuLoad.textContent = S.menuLoading(city.city); $menuLoad.hidden = false;
-      let swapped = false;
-      try {
-        await game.loadPlot(city.id, pid, undefined, async () => { if (game.state === 'menu' && !starting) { swapped = true; await veilOn(); } });
-      } catch (e) { console.warn('menu scene', e); }   // the procedural demo stays
-      $menuLoad.hidden = true;
-      if (swapped) { buildDemo(city.id); People.setWalkers(9); veilOff(); }
-    });
-    return menuLoading;
-  }
   // The camera pass before a plot: place card over a fly-by of the landmarks in view; Space, Enter, Esc or a click skips it.
   function runIntro(cityId: string, plot: Plot): Promise<void> {
     const city = cityById(cityId) as Level, plots = (city.district as District).plots;
@@ -175,7 +147,6 @@ export function createUI(game: Game): GameUi {
   async function startGame(mode: GameMode, diff: DifficultyId, level = 'kosice', plotId: string | null = null): Promise<void> {
     if (starting) return; starting = true;
     Sfx.init(); Sfx.uiOk(); stack = [];
-    await menuLoading;
     const plots = (DISTRICT_CITIES.find((c) => c.id === level) || {}).district?.plots;
     const pid = plotId || (plots ? plots[plots.length - 1].id : null);
     await veilOn();
@@ -303,7 +274,7 @@ export function createUI(game: Game): GameUi {
   }
   $('#btnPause').onclick = togglePause; $('#btnResume').onclick = togglePause;
   $('#btnRestart').onclick = () => { game.paused = false; restart(); };
-  function syncMute() { $('#muteX').hidden = !settings.muted; $('#muteWave').hidden = settings.muted; $('#btnMute').setAttribute('aria-label', settings.muted ? S.muteOff : S.muteOn); }
+  function syncMute() { $('#muteX').toggleAttribute('hidden', !settings.muted); $('#muteWave').toggleAttribute('hidden', settings.muted); $('#btnMute').setAttribute('aria-label', settings.muted ? S.muteOff : S.muteOn); }
   function toggleMute() { setSetting('muted', !settings.muted); syncMute(); }
   function cycleCam() { game.camMode = (game.camMode + 1) % 3; setSetting('camera', game.camMode); }
   $('#btnMute').onclick = toggleMute; $('#btnCam').onclick = cycleCam;
@@ -312,8 +283,8 @@ export function createUI(game: Game): GameUi {
   function toMenu() {
     game.clear(); game.state = 'menu'; game.paused = false;
     $('#hud').hidden = true; $('#wxCard').hidden = true;
-    clearDistrictTowers();                    // the menu tower stands at the origin: no finished tower on that spot (loadMenuScene shows the others)
-    stack = []; show('sTitle'); People.setWalkers(9); void loadMenuScene();
+    clearDistrictTowers();
+    stack = []; show('sTitle');
   }
   $('#btnQuit').onclick = () => { Sfx.uiBack(); toMenu(); };
   $('#btnMenu').onclick = () => { Sfx.uiBack(); toMenu(); };
@@ -415,7 +386,7 @@ export function createUI(game: Game): GameUi {
       setHTML('hLives', Array.from({ length: game.diff.lives }, (_, i) => HEART(i < game.lives)).join(''));
       setText('hWind', `${w.speed.toFixed(1)} m/s`);
       setText('hTrend', w.trend > 0.08 ? S.trendUp : w.trend < -0.08 ? S.trendDown : S.trendSteady);
-      $('#arrow').setAttribute('transform', `rotate(${((w.angle - camAz + Math.PI / 2) * 180 / Math.PI).toFixed(1)})`);
+      $('#arrow').setAttribute('transform', `rotate(${(Math.round((w.angle - camAz + Math.PI / 2) * 12 / Math.PI) * 15).toFixed(0)} 8.5 8.5)`);
       setText('hWeather', ph.name);
       setHTML('wxIcon', WX_ICONS[ph.name]);
       const nx = game.run ? game.run.nextWeather() : null;
@@ -439,6 +410,5 @@ export function createUI(game: Game): GameUi {
     },
   };
   show('sTitle');
-  void loadMenuScene();
   return ui;
 }

@@ -22,3 +22,5 @@
       Terasa and Juzna showing the street profile and a tram.
 - [ ] Tall blank pale pillars along the road on the Kulturpark plot (seen by the S0004 13 modeler) - find their source and fix.
 - [ ] Far-facade glass of offices shows a room with curtains - offices get an office interior/reflective glass cell.
+- [ ] FIRST: flicker regression in this worktree - after S0004 16 tile roofs the depth check on game/low poses rose to 0.75-0.8 % mean, 1.0-1.27 % max on every plot (was 0.26 %). Likely the new high-frequency clay-tile/membrane textures aliasing (check mipmaps, anisotropy, texel scale) or another WIP; bisect over the s/S0004-wip commits and fix so flicker --plot all --quality all passes again.
+- [ ] Barracks roofs (S0004 13) should read as dark metal, not tinted clay tiles.

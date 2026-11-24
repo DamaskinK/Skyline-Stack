@@ -8,10 +8,11 @@ import { loadDistrictProgress } from './settings.js';
 import { cityProgress } from './core/district-progress.js';
 import { isPlotOpen, nextPlot, plotOf, plotBonuses, plotResidents, districtTotals, RESIDENTS_PER_FLOOR, DEFAULT_RESIDENTS_PER_FLOOR,
   VIEW_BONUS, VIEW_MIN_FLOORS, SKYLINE_BONUS, SKYLINE_MIN_DIFF, SKYLINE_RADIUS_M } from './core/district.js';
+import { pixelIcon, starIcon } from './pixel-icons.js';
 import type { District, GridXZ, Level, Plot, PlotStates, PlotState } from './types.js';
 
 const esc = (s: unknown): string => String(s).replace(/[<>&"]/g, '');
-const STAR = (on: boolean): string => `<svg viewBox="0 0 24 24" class="${on ? '' : 'off'}" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.6 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="#ffd34d" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+const STAR = starIcon;
 const landmarkName = (id: string): string => S.landmarks[id] || id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 export function requirementText(plot: Pick<Plot, 'target' | 'require'>): string {
@@ -86,7 +87,7 @@ export function createDistrictMap({ onPlay, onBack }: DistrictMapHandlers): Dist
       + d.plots.map((p, i) => {
         const s = stateOf(city, plots, p);
         return `<button type="button" class="pin ${s.kind}${p.id === selected ? ' sel' : ''}" data-plot="${esc(p.id)}" style="left:${(pos[i].x / W * 100).toFixed(2)}%;top:${(pos[i].y / H * 100).toFixed(2)}%" `
-          + `aria-label="${S.plotAria(i + 1, esc(p.name), S.kind[s.kind])}"><span>${i + 1}</span></button>`
+          + `aria-label="${S.plotAria(i + 1, esc(p.name), S.kind[s.kind])}"><span>${s.kind === 'built' ? pixelIcon('check') : s.kind === 'locked' ? pixelIcon('lock') : i + 1}</span></button>`
           + `<span class="pinlbl${i % 2 ? "" : " up"}" style="left:${(pos[i].x / W * 100).toFixed(2)}%;top:${(pos[i].y / H * 100).toFixed(2)}%">${esc(p.name)}</span>`;
       }).join('');
 
