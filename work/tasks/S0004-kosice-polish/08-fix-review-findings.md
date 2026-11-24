@@ -7,7 +7,7 @@ look items. Reviewer's screenshots and pose helper: /private/tmp/claude-501/-Use
 **Blocked by:** None (can start immediately).
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 1. Far facades shifted by half bays: `js/baked-facades.ts` ~72 `ux = phase * BAY` -> `ux = phase * c.bays * BAY`;
       verify bay alignment with the near modules on every plot (no half columns at corners, no jump at the switch).
