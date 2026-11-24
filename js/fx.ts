@@ -69,14 +69,14 @@ export const FX: FxApi = {
 function linePool(n: number, color: number, op: number): [THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>, Float32Array] {
   const p = new Float32Array(n * 6);
   const m = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p, 3)), new THREE.LineBasicMaterial({ color, transparent: true, opacity: op }));
-  m.frustumCulled = false; scene.add(m); return [m, p];
+  m.frustumCulled = false; m.visible = false; scene.add(m); return [m, p];   // hidden until updateWeather runs (it is skipped while the menu shows its still picture)
 }
 const RAIN_N = 1100, SNOW_N = 1000, STREAK_N = 70;
 const [rain, rainPos] = linePool(RAIN_N, 0xbfd6ff, 0.5);
 const [streaks, streakPos] = linePool(STREAK_N, 0xffffff, 0.35);
 const snowPos = new Float32Array(SNOW_N * 3);
 const snow = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(snowPos, 3)), new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, map: puffTex, transparent: true, depthWrite: false }));
-snow.frustumCulled = false; scene.add(snow);
+snow.frustumCulled = false; snow.visible = false; scene.add(snow);
 for (let i = 0; i < RAIN_N; i++) { rainPos[i * 6] = (Math.random() - .5) * 50; rainPos[i * 6 + 1] = Math.random() * 40; rainPos[i * 6 + 2] = (Math.random() - .5) * 50; }
 for (let i = 0; i < SNOW_N; i++) { snowPos[i * 3] = (Math.random() - .5) * 50; snowPos[i * 3 + 1] = Math.random() * 40; snowPos[i * 3 + 2] = (Math.random() - .5) * 50; }
 for (let i = 0; i < STREAK_N; i++) { streakPos[i * 6] = (Math.random() - .5) * 40; streakPos[i * 6 + 1] = Math.random() * 30; streakPos[i * 6 + 2] = (Math.random() - .5) * 30; }

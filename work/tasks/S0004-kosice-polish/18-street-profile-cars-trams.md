@@ -6,7 +6,7 @@
 **Blocked by:** None (start when the near-ring/street files are free: after S0004 12, 13, 16 in this worktree)
 
 **Type:** bug
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Car models: some cars are stretched long (limousine-like yellow cars) - fix scaling (uniform scale from the real
       car length, no non-uniform stretch along the road); no parked or moving car on or touching the tower pad
@@ -22,5 +22,8 @@
       Terasa and Juzna showing the street profile and a tram.
 - [ ] Tall blank pale pillars along the road on the Kulturpark plot (seen by the S0004 13 modeler) - find their source and fix.
 - [ ] Far-facade glass of offices shows a room with curtains - offices get an office interior/reflective glass cell.
-- [ ] FIRST: flicker regression in this worktree - after S0004 16 tile roofs the depth check on game/low poses rose to 0.75-0.8 % mean, 1.0-1.27 % max on every plot (was 0.26 %). Likely the new high-frequency clay-tile/membrane textures aliasing (check mipmaps, anisotropy, texel scale) or another WIP; bisect over the s/S0004-wip commits and fix so flicker --plot all --quality all passes again.
+- [x] FIRST: flicker regression in this worktree - after S0004 16 tile roofs the depth check on game/low poses rose to 0.75-0.8 % mean, 1.0-1.27 % max on every plot (was 0.26 %). Likely the new high-frequency clay-tile/membrane textures aliasing (check mipmaps, anisotropy, texel scale) or another WIP; bisect over the s/S0004-wip commits and fix so flicker --plot all --quality all passes again.
 - [ ] Barracks roofs (S0004 13) should read as dark metal, not tinted clay tiles.
+
+## Comments
+- Flicker regression: not the tile textures. Ticket 19's menu picture skips `updateWeather` while the menu shows, so the rain/snow/streak pools stayed at their creation default `visible = true` (rain lines from random points to the origin) and moved between the two flicker renders. `js/fx.ts` creates the pools hidden. depth game/low back to 0.21 % mean / 0.38 % max on plot 1; `check.mjs flicker --plot all --quality all` PASS.
