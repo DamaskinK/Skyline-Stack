@@ -85,9 +85,9 @@ describe('Kosice plots', () => {
       for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) if (b[i].box[0] < b[j].box[2] && b[j].box[0] < b[i].box[2] && b[i].box[1] < b[j].box[3] && b[j].box[1] < b[i].box[3]) expect(overlapArea(b[i].r, b[j].r, 0.5)).toBeLessThan(1);
     }
   });
-  it('a plot within 400 m of another sees its tower circle', () => {
+  it('a plot within 250 m of another sees its tower circle', () => {
     const site = kosice?.site as { lat: number; lon: number };
-    const pair = [{ ...plots[0], id: 'a', site }, { ...plots[1], id: 'b', site: { lat: site.lat + 0.003, lon: site.lon } }];
+    const pair = [{ ...plots[0], id: 'a', site }, { ...plots[1], id: 'b', site: { lat: site.lat + 0.002, lon: site.lon } }];
     expect(towerCircles(site, pair, 'a').length).toBeGreaterThan(0);
   });
   it('towers of the other plots keep their site free where two plots share an extract', () => {
