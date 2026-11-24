@@ -16,7 +16,9 @@ from pipeline import *
 
 argv = cli(); out_glb = argv[0] if argv else '/tmp/urban.glb'
 PI = math.pi
-STYLES['stone'].update(c1=0xc9b58a, c2=0xb9a47a, mortar=0xc2ae84, bw=3.0, rh=1.2, msize=0.0, nz=0.45)           # ochre plaster of the shaft, blotchy
+# S0004 09: after the restoration (File:UrbanTower2021.jpg) the shaft is white plaster, the roof red tiles with a bell-cast eave and a dormer, a frieze of grey
+# sgraffito roundels under the eave, a pointed belfry window, a gilt ball and a wrought-iron cross
+STYLES['stone'].update(c1=0xeeebe3, c2=0xe7e3d9, mortar=0xe7e3d9, bw=4.0, rh=1.6, msize=0.0, nz=0.18)           # white plaster of the shaft
 STYLES['stone2'].update(c1=0xe3dcc8, c2=0xd7cfb8, mortar=0xcbc3ab, bw=2.0, rh=0.9, msize=0.0, nz=0.25)         # pale plaster of the arcade, trim
 PALETTE['copper'] = 0xa94c2e; PALETTE['copperDark'] = 0x8a3c26; PALETTE['copperLight'] = 0xc9703c
 ROLES['copper'].update(rough=0.7, metal=0.0)
@@ -53,11 +55,17 @@ def build():
         b.box(-w / 2 - s, w / 2 + s, y, y + hh, -w / 2 - s, w / 2 + s, 'stone2')
     frustum(b, SH0, SH0, FLOOR + 0.1, SH0, SH0, Y_SH0 + 0.3, 'stone')
     frustum(b, SH0, SH0, Y_SH0, SH1, SH1, Y_SH1, 'stone')
-    # steep pyramidal roof (slightly overhanging), dormers, ball and cross
-    frustum(b, SH1 + 1.2, SH1 + 1.2, Y_SH1, 0.35, 0.35, Y_SH1 + 7.2, 'tiles')
-    with b.at(0, Y_SH1 + 7.1, 0, 0):
-        b.lathe([(0, 0), (0.7, 0.0), (0.8, 0.7), (0.55, 1.25), (0.0, 1.3)], 8, 0, 'dark')
-        b.box(-0.08, 0.08, 1.2, 3.4, -0.08, 0.08, 'dark'); b.box(-0.55, 0.55, 2.4, 2.58, -0.08, 0.08, 'dark')
+    # steep hipped roof with a bell-cast eave, a dormer on the front, gilt ball and iron cross
+    frustum(b, SH1 + 1.5, SH1 + 1.5, Y_SH1 - 0.1, SH1 + 0.5, SH1 + 0.5, Y_SH1 + 1.0, 'tiles')
+    frustum(b, SH1 + 0.5, SH1 + 0.5, Y_SH1 + 1.0, 0.3, 0.3, Y_SH1 + 9.2, 'tiles')
+    with b.at(0, Y_SH1 + 3.2, (SH1 + 0.5) / 2 - 1.2, 0):
+        b.box(-0.6, 0.6, 0, 0.7, -0.6, 0.9, 'tiles'); b.prism([(-0.75, 0.7), (0.75, 0.7), (0, 1.0)], -0.6, 1.0, 'tiles')
+    with inl.at(0, Y_SH1 + 3.2, (SH1 + 0.5) / 2 - 1.2, 0): inl.box(-0.45, 0.45, 0.12, 0.6, 0.9, 0.95, 'dark')
+    with b.at(0, Y_SH1 + 9.1, 0, 0):
+        b.lathe([(0, 0), (0.25, 0.0), (0.42, 0.25), (0.45, 0.45), (0.32, 0.68), (0.0, 0.75)], 10, 0, 'gold')
+        b.box(-0.06, 0.06, 0.7, 3.0, -0.06, 0.06, 'dark'); b.box(-0.6, 0.6, 2.25, 2.37, -0.05, 0.05, 'dark'); b.box(-0.4, 0.4, 2.7, 2.8, -0.05, 0.05, 'dark')
+        for k in range(8):
+            a = 2 * PI * k / 8; b.beam((0, 2.3, 0), (0.45 * math.cos(a), 2.3 + 0.45 * math.sin(a), 0), 0.05, 0.05, (0, 0, 1), 'dark')
 
 def openings():
     # arcade: round arches 2.2 wide on the long sides, 7 on x and 6 on z faces
@@ -81,15 +89,19 @@ def openings():
             with cut.at(0, y, wf / 2, face): cut.prism(prof, -0.45, 0.5)
             with inl.at(0, y, wf / 2, face): inl.prism(prof, -0.43, -0.3, 'dark')
         wb = SH0 + (SH1 - SH0) * (20.2 - Y_SH0) / (Y_SH1 - Y_SH0)
-        prof, top = rarch(1.7, 3.0, 7)
+        prof, top = arch_profile(1.5, 2.2, 1.0, 5)                                                             # pointed belfry window with louvres
         with cut.at(0, 19.6, wb / 2, face): cut.prism(prof, -0.7, 0.5)
         with inl.at(0, 19.6, wb / 2, face):
             inl.prism(prof, -0.68, -0.5, 'dark')
-            for k in range(6): inl.box(-0.62, 0.62, 0.5 + k * 0.45, 0.62 + k * 0.45, -0.66, -0.3, 'stone2')                  # louvres
-        # medallions in the frieze under the roof: three round discs per face
-        for dx in (-2.4, 0.0, 2.4):
-            wm = SH0 + (SH1 - SH0) * (24.4 - Y_SH0) / (Y_SH1 - Y_SH0)
-            with inl.at(dx, 24.4, wm / 2, face): inl.prism([(0.55 * math.cos(2 * PI * i / 10), 0.55 * math.sin(2 * PI * i / 10)) for i in range(10)], -0.02, 0.1, 'stone2')
+            for k in range(6): inl.box(-0.62, 0.62, 0.4 + k * 0.48, 0.5 + k * 0.48, -0.66, -0.36, 'stone2')
+        with body.at(0, 19.6, wb / 2, face): arc_bar(body, [(0.85, 0.0), (0.85, 2.2)] + [(px * 1.13, py) for px, py in prof[3:-1]] + [(-0.85, 2.2), (-0.85, 0.0)], 0.18, 0.12, 'stone2')
+        # frieze of sgraffito roundels under the eave: four per face, grey disc in a pale ring
+        wm = SH0 + (SH1 - SH0) * (24.6 - Y_SH0) / (Y_SH1 - Y_SH0)
+        for dx in (-2.85, -0.95, 0.95, 2.85):
+            with inl.at(dx, 24.6, wm / 2, face):
+                inl.prism([(0.62 * math.cos(2 * PI * i / 14), 0.62 * math.sin(2 * PI * i / 14)) for i in range(14)], -0.02, 0.06, 'stone2')
+                inl.prism([(0.45 * math.cos(2 * PI * i / 14), 0.45 * math.sin(2 * PI * i / 14)) for i in range(14)], 0.04, 0.09, 'dark')
+                inl.box(-0.85, 0.85, -0.12, -0.04, -0.02, 0.07, 'stone2')
 
 build(); openings()
 VIEWS = {
@@ -101,6 +113,6 @@ VIEWS = {
 }
 import tempfile
 work = os.path.join(tempfile.gettempdir(), 'urban_work'); os.makedirs(work, exist_ok=True); tile_png = os.path.join(work, 'tile_pattern.png')
-if (argv[argv.index('--stage') + 1] if '--stage' in argv else 'full') == 'full': write_tile_texture(tile_png, 'slate')
+if (argv[argv.index('--stage') + 1] if '--stage' in argv else 'full') == 'full': write_tile_texture(tile_png, 'red')
 assemble('urban', body, cut, inl, argv, out_glb, size=2048, tiling={'tiles': dict(png=tile_png, period=TILE_PERIOD, rough=0.6, metal=0.0)}, views=VIEWS,
-         geom_colours={'stone': 0xc9b58a, 'stone2': 0xe3dcc8, 'tiles': 0x6a4a3a, 'dark': 0x2b2d31})
+         geom_colours={'stone': 0xeeebe3, 'stone2': 0xe3dcc8, 'tiles': 0xa4472c, 'gold': 0xd6aa48, 'dark': 0x2b2d31})
