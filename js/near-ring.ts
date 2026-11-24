@@ -445,7 +445,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
   const detail = buildStreetDetail(plan, group);       // kerbs, crossings, markings, traffic lights, bikes, name plates (js/street-detail.js)
   group.userData.streetLights = detail.lights; group.userData.detailCounts = detail.counts;
   // moving traffic: the streets nearest to the tower first, so the cars are where the camera looks
-  group.userData.carRoutes = plan.routes.car;
+  group.userData.carRoutes = plan.routes.car; group.userData.carInfo = plan.routes.carInfo;
   group.userData.walkRoutes = plan.routes.walk.map((p) => ({ p, off: 0.5, d: routeD(p), len: lineLen(p) }));
   group.userData.walkRoutes.life = life;      // People.setRoutes picks the life data (seats, bike routes, basins) up from here
   return group;

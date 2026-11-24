@@ -232,7 +232,7 @@ export interface Plan {
   tramLines: Route[]; tramBeds: { p: Line; paved: boolean }[]; poles: [number, number, number][]; platforms: { x: number; z: number; r: number; s: number; line: number }[];
   detail: Detail;                                      // kerbs, crossings, markings, manholes, traffic lights (js/core/street-detail.ts)
   placed: Placed[];                                    // every object above as a footprint, for the audit
-  routes: { car: Line[]; walk: Line[]; bike: Line[] };
+  routes: { car: Line[]; carInfo: { ow: number; w: number; ln: number }[]; walk: Line[]; bike: Line[] };   // carInfo[i]: one-way direction (0 = two-way), carriageway width and lanes of car[i]
   dropped: Record<string, number>;
 }
 
@@ -243,7 +243,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
   const towers = opts.towers || [], lms = opts.landmarks || [], kept = keptBuildings(osm0, towers, lms), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers, lms), site = makeSite(osm, kept, towers, lms);
   const plan: Plan = {
     osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
-    shops: [], terraces: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], walk: [], bike: [] }, dropped: {},
+    shops: [], terraces: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], carInfo: [], walk: [], bike: [] }, dropped: {},
   };
   const bbIn = (x: number, z: number, m = 0): boolean => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
   const clearPlaza = (x: number, z: number): boolean => Math.abs(x) < PLAZA_HALF + 2 && Math.abs(z) < PLAZA_HALF + 2;
@@ -557,8 +557,10 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
 
 // ── routes of the moving people and cars ──
 function planRoutes(osm: OsmExtract, plan: Plan): void {
-  plan.routes.car = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street' || (r.k === 'lane' && r.w >= 4)) && r.w >= 4 && lineLen(r.p) > 40)
-    .map((r) => ({ p: r.p, d: dOf(r.p) })).filter((r) => r.d < 220).sort((a, b) => a.d - b.d).slice(0, 18).map((r) => r.p);
+  const cars = osm.roads.filter((r) => (r.k === 'main' || r.k === 'street' || (r.k === 'lane' && r.w >= 4)) && r.w >= 4 && lineLen(r.p) > 40)
+    .map((r) => ({ r, d: dOf(r.p) })).filter((q) => q.d < 220).sort((a, b) => a.d - b.d).slice(0, 18);
+  plan.routes.car = cars.map((q) => q.r.p);
+  plan.routes.carInfo = cars.map(({ r }) => ({ ow: r.ow || 0, w: r.w, ln: r.ln || Math.max(1, Math.round(r.w / 3.4)) }));
   plan.routes.walk = osm.roads.filter((r) => r.k === 'walk' || r.k === 'path').map((r) => ({ p: r.p, len: lineLen(r.p), d: dOf(r.p) })).filter((r) => r.len > 30 && r.d > 18 && r.d < 160).sort((a, b) => a.d - b.d).slice(0, 24).map((r) => r.p);
   plan.routes.bike = plan.bikeRoutes.map((r) => r.p);
 }

@@ -139,10 +139,14 @@ export function planMarkings(osm: OsmExtract, ctx: Ctx, d: Detail): Detail {
     }
     if (r.k === 'lane' && r.w < 4) return;
     // dashed centre line of the wider streets: 3 m dash, 6 m gap, kept off junctions, crossings, bike lanes, tram beds
-    if (r.w >= 5.5) {
+    // two-way: one dashed centre line; one-way with several lanes: a dashed divider between the lanes (S0004 15); a single one-way lane has none
+    const nl = r.ow ? (r.ln || Math.max(1, Math.round(r.w / 3.4))) : 1;
+    const offs: number[] = r.ow ? Array.from({ length: nl - 1 }, (_, k) => (k + 1) * r.w / nl - r.w / 2) : [0];
+    if (r.w >= 5.5) for (const off of offs) {
+      const lp = off ? offsetLine(r.p, off) : r.p;
       let acc = 2 + hash(r.p[0], r.p[1]) * 3;
-      for (let i = 0; i + 3 < r.p.length; i += 2) {
-        const x0 = r.p[i], z0 = r.p[i + 1], dx = r.p[i + 2] - x0, dz = r.p[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 0.5) continue;
+      for (let i = 0; i + 3 < lp.length; i += 2) {
+        const x0 = lp[i], z0 = lp[i + 1], dx = lp[i + 2] - x0, dz = lp[i + 3] - z0, l = Math.hypot(dx, dz); if (l < 0.5) continue;
         const tx = dx / l, tz = dz / l, rot = Math.atan2(tx, tz);
         let s = acc;
         for (; s + 3 < l; s += 9) {

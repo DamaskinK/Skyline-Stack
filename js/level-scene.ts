@@ -77,7 +77,7 @@ export function applyLevelAssets(id: string, assets: LevelAssets, plot: Plot | n
     const near = buildNearRing(osm, assets, landmarkHide(id), towers, landmarkRings(id, off));
     group.add(near, buildMiddleFar(plotOsm ? { plot: off, inner: osm.half + 35, clear: landmarkClear(id) } : {}));
     const lm = buildLandmarks(id, assets); if (lm) { lm.position.set(-off.x, 0, -off.z); group.add(lm); lmRoot = lm; }
-    traffic.setLights(near.userData.streetLights || null); traffic.setRoutes(near.userData.carRoutes); People.setRoutes(near.userData.walkRoutes);
+    traffic.setLights(near.userData.streetLights || null); traffic.setRoutes(near.userData.carRoutes, near.userData.carInfo); People.setRoutes(near.userData.walkRoutes);
     Trams.use(near.userData.tram); People.setParked(near.userData.parked);
   }
   // Newtown: the procedural city is the scene; the whole city moves so the plot's site sits at the world origin

@@ -131,7 +131,7 @@ export interface CollapseInfo { from: number; count: number; items: CollapseItem
 // ── Rendering: OpenStreetMap extract of a plot (assets/levels/<city>/plots/<plot>.json, scripts/build-osm-level.mjs) ──
 // Polygons and polylines are flat [x0, z0, x1, z1, ...] in metres (x east, z south, origin = the plot's site).
 export type RoadKind = 'main' | 'street' | 'lane' | 'walk' | 'path' | 'rail';
-export interface OsmRoad { k: RoadKind; w: number; p: number[]; n?: string; bike?: number; br?: number }
+export interface OsmRoad { k: RoadKind; w: number; p: number[]; n?: string; bike?: number; br?: number; ow?: 1 | -1; ln?: number }   // ow: one-way along (1) or against (-1) the line; ln: lanes of the way
 export interface OsmPoly { p: number[] }
 export interface OsmBuilding extends OsmPoly { h?: number; lv?: number; a?: number; k?: 'theatre' | 'church'; n?: string }
 export interface OsmPark extends OsmPoly { k?: 'pitch' | 'park' | 'wood' }

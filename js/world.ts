@@ -365,14 +365,14 @@ const MAX_CARS = 40;
 const carMesh = new THREE.InstancedMesh(carGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 }), MAX_CARS);
 const carLights = new THREE.InstancedMesh(carLightGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), MAX_CARS);
 carMesh.castShadow = true; carMesh.frustumCulled = carLights.frustumCulled = false; scene.add(carMesh, carLights);
-type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number; px?: number; pz?: number };
+type Car = { road: number; lane: number; pos: number; sp: number; bus: boolean; parked: boolean; s?: number; d?: number; rl?: number; px?: number; pz?: number };
 const cars: Car[] = [];
 for (let i = 0; i < MAX_CARS; i++) {
   const road = i % 4, lane = i % 8 < 4 ? 1 : -1, bus = i % 9 === 0, parked = i % 11 === 5;
   cars.push({ road, lane, pos: -LEN / 2 + rnd() * LEN, sp: parked ? 0 : (9 + rnd() * 7) * (bus ? 0.7 : 1), bus, parked });
   carMesh.setColorAt(i, new THREE.Color(bus ? 0xf5b400 : carCols[i % carCols.length]));
 }
-export interface TrafficRoute { p: number[]; cum: number[]; len: number }
+export interface TrafficRoute { p: number[]; cum: number[]; len: number; ow: number; w: number; ln: number }
 // the traffic lights of the street in view (js/street-detail.ts): cars stop at the stop line of an arm that shows red or amber
 let lightsNow: { lights: Light[]; update(dt: number): void; time(): number } | null = null;
 function brake(x: number, z: number, hx: number, hz: number): number {
@@ -391,16 +391,17 @@ function brake(x: number, z: number, hx: number, hz: number): number {
   }
   return f;
 }
-export const traffic: { waiting: number; minGap: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
+export const traffic: { waiting: number; minGap: number; count: number; want: number; mode: 'grid' | 'osm'; routes: TrafficRoute[]; setLights(h: { lights: Light[]; update(dt: number): void; time(): number } | null): void; setCount(n: number): void; setRoutes(list: number[][], info?: { ow: number; w: number; ln: number }[]): void; updateRoutes(dt: number): void; update(dt: number): void } = {
   count: 34, want: 34, mode: 'grid', routes: [], waiting: 0, minGap: 1e9,
   setLights(h) { lightsNow = h; },
   setCount(n) { this.want = n; this.count = this.mode === 'osm' && !this.routes.length ? 0 : Math.min(MAX_CARS, n); carMesh.count = carLights.count = this.count; },
   // OpenStreetMap levels: cars drive along the real street polylines (flat [x, z, ...] lists), turn round at the ends, keep to the right lane.
-  setRoutes(list) {
-    this.routes = list.map((p) => {
+  setRoutes(list, info = []) {
+    this.routes = list.map((p, k) => {
       const cum = [0]; for (let i = 2; i < p.length; i += 2) cum.push(cum[cum.length - 1] + Math.hypot(p[i] - p[i - 2], p[i + 1] - p[i - 1]));
-      return { p, cum, len: cum[cum.length - 1] };
+      return { p, cum, len: cum[cum.length - 1], ow: info[k]?.ow || 0, w: info[k]?.w || 7, ln: info[k]?.ln || 2 };
     }).filter((r) => r.len > 40);
+    for (const c of cars) { c.s = undefined; c.d = undefined; c.rl = undefined; }
     this.setCount(this.want);
   },
   updateRoutes(dt) {
@@ -408,20 +409,23 @@ export const traffic: { waiting: number; minGap: number; count: number; want: nu
     let waiting = 0, minGap = 1e9;
     for (let i = 0; i < this.count; i++) {
       const c = cars[i], r = R[i % R.length];
-      c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= i % 2 ? 1 : -1;
+      c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= r.ow || (i % 2 ? 1 : -1);
+      // lane: two-way streets have one lane per direction (to the right of travel); a one-way carriageway has `ln` lanes side by side
+      const nl = r.ow ? r.ln : 1; c.rl ??= r.ow ? Math.floor(i / R.length) % nl : 0;
       let hx = 0, hz = 0;
       if (lightsNow) { let q = 1; while (q < r.cum.length - 1 && r.cum[q] < c.s) q++; const ll = r.cum[q] - r.cum[q - 1] || 1; hx = (r.p[2 * q] - r.p[2 * q - 2]) / ll * c.d; hz = (r.p[2 * q + 1] - r.p[2 * q - 1]) / ll * c.d; }
       let ahead = lightsNow ? brake(c.px ?? 1e9, c.pz ?? 1e9, hx, hz) : 1;
       // car following: the nearest car ahead on the same route and direction (centre to centre; a bus is longer): slow down, stop at 7 m
       let gap = 1e9; const mine = c.bus ? 12 : 7;
-      for (let j = 0; j < this.count; j++) { if (j === i || j % R.length !== i % R.length) continue; const o = cars[j]; if (o.s === undefined || o.d !== c.d) continue; const g = (o.s - c.s) * c.d; if (g > 0 && g < gap) gap = g; }
+      for (let j = 0; j < this.count; j++) { if (j === i || j % R.length !== i % R.length) continue; const o = cars[j]; if (o.s === undefined || o.d !== c.d || o.rl !== c.rl) continue; const g = (o.s - c.s) * c.d; if (g > 0 && g < gap) gap = g; }
       ahead = Math.min(ahead, Math.max(0, Math.min(1, (gap - mine) / 8))); minGap = Math.min(minGap, gap);
       if (ahead < 0.05) waiting++;
       c.s += c.d * (c.sp || 6) * 0.7 * dt * ahead;
-      if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
+      if (r.ow) { if (c.s > r.len) c.s = 0; else if (c.s < 0) c.s = r.len; }       // a one-way street: leave at the end, come in again at the start
+      else if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }
       let k = 1; while (k < r.cum.length - 1 && r.cum[k] < c.s) k++;
       const l = r.cum[k] - r.cum[k - 1] || 1, f = (c.s - r.cum[k - 1]) / l, x0 = r.p[2 * k - 2], z0 = r.p[2 * k - 1], x1 = r.p[2 * k], z1 = r.p[2 * k + 1];
-      const tx = (x1 - x0) / l * c.d, tz = (z1 - z0) / l * c.d, off = 1.7;
+      const tx = (x1 - x0) / l * c.d, tz = (z1 - z0) / l * c.d, off = r.ow ? ((c.rl! + 0.5) * r.w / nl - r.w / 2) : Math.min(4, Math.max(1.7, r.w / 4));
       c.px = x0 + (x1 - x0) * f - tz * off; c.pz = z0 + (z1 - z0) * f + tx * off; o3.position.set(c.px, 0.04, c.pz); o3.rotation.set(0, Math.atan2(tx, tz), 0);
       o3.scale.set(1, c.bus ? 1.5 : 1, c.bus ? 2.3 : 1); o3.updateMatrix();
       carMesh.setMatrixAt(i, o3.matrix); carLights.setMatrixAt(i, o3.matrix);

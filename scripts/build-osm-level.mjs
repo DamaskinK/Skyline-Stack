@@ -4,6 +4,7 @@
 // Fixed parameters live in LEVELS below. The script is the source of truth; the JSON in assets/levels/<id>/ is generated.
 // Data (c) OpenStreetMap contributors, ODbL. Output frame: metres, x = east, z = south (north is -z), origin = build site.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,7 +25,12 @@ const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.ku
 const id = process.argv[2] || 'kosice';
 const plotsMode = process.argv[3] === 'plots';
 const L = LEVELS[id]; if (!L) throw new Error(`unknown level ${id}`);
-const { LEVELS: GAME_LEVELS } = await import('../js/levels.js');
+// js/levels.ts is TypeScript: bundle it to a temp file first (esbuild is a dev dependency).
+const { buildSync } = await import('esbuild');
+const levelsOut = path.join(os.tmpdir(), `levels-${process.pid}.mjs`);
+buildSync({ entryPoints: [path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js', 'levels.ts')], bundle: true, format: 'esm', outfile: levelsOut, logLevel: 'silent' });
+const { LEVELS: GAME_LEVELS } = await import(levelsOut);
+fs.rmSync(levelsOut, { force: true });
 const plotList = plotsMode ? GAME_LEVELS.find((l) => l.id === id).district.plots : [];
 const bboxOf = (site, half) => {
   const dLat = half / 111320, dLon = half / (111320 * Math.cos(site.lat * Math.PI / 180));
@@ -108,8 +114,13 @@ function extract(site, keep, outId) {
       out.buildings.push(b);
     } else if (t.highway && ROAD[t.highway]) {
       const [k, w0] = ROAD[t.highway]; const lanes = parseFloat(t.lanes);
-      const wd = parseFloat(t.width) || (lanes > 0 && k !== 'path' ? Math.max(w0, lanes * 3.2) : w0);
+      // one-way: 'yes' runs along the way, '-1' against it; roundabouts and motorway links are one-way by default (S0004 15)
+      const ow = /^(yes|true|1)$/.test(t.oneway) || t.junction === 'roundabout' ? 1 : t.oneway === '-1' ? -1 : 0;
+      const LANE_W = 3.4;                                              // a real city lane is 3.0 - 3.5 m; a carriageway is lanes x lane width (the tag `width` wins)
+      const wd = parseFloat(t.width) || (lanes > 0 && k !== 'path' ? Math.max(w0, lanes * LANE_W) : w0);
       const r = { k, w: r1(wd), p }; if (t.bridge) r.br = 1; if (t.tunnel) continue; if (t.name) r.n = t.name;
+      if (ow && (k === 'main' || k === 'street' || k === 'lane')) r.ow = ow;
+      if (lanes > 0 && (k === 'main' || k === 'street')) r.ln = lanes;                   // lanes of this way (all directions together)
       const cyc = Object.keys(t).filter((x) => x.startsWith('cycleway')).map((x) => t[x]).concat(t.bicycle === 'designated' ? ['lane'] : []);
       if (t.highway === 'cycleway') r.bike = 2; else if (cyc.some((v) => v && v !== 'no' && v !== 'none')) r.bike = 1;   // 2: own cycle path, 1: lane on the street
       out.roads.push(r);
