@@ -16,12 +16,12 @@ import { buildTramLine } from './trams.js';
 import { HouseKit, addHouse, addDormers, PANEL_SCHEMES } from './house-kit.js';
 import type { RoofInfo } from './house-kit.js';
 import { FacadeBuilder } from './baked-facades.js';
-import { buildRoofProps, membraneMaterial } from './roof-props.js';
+import { buildRoofProps, membraneMaterial, tileMaterial } from './roof-props.js';
 import type { LevelAssets, OsmExtract } from './types.js';
 
 export { PLAZA_HALF, PAD_HALF, hash, insideRing, polyArea };
 /** A roof of the near ring: `tile` (pitched, with its ridge) or flat (`panel`, `old`, `mid`, with the footprint and its winding sign). */
-export interface RoofSite { kind: 'tile' | 'panel' | 'old' | 'mid'; h: number; dist: number; hv: number; roof?: RoofInfo; color?: THREE.Color; p?: number[]; sign?: number }
+export interface RoofSite { kind: 'tile' | 'panel' | 'old' | 'mid'; h: number; dist: number; hv: number; roof?: RoofInfo; color?: THREE.Color; p?: number[]; sign?: number; gable?: boolean }
 
 export const OLD_PALETTE = [0xefe2c4, 0xe8c9b4, 0xe9d89a, 0xc9ddc6, 0xc3d2de, 0xe4a99a, 0xf0ebe0];   // pastel plaster of the historic centre
 export const PLAIN_PALETTE = [0xe6e1d6, 0xd6d9d2, 0xdcd3c1];
@@ -216,7 +216,7 @@ export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Col
       let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
       const l = Math.hypot(nx, ny, nz); if (l < 1e-6) continue;
       if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
-      b.tri(A, B, C, [nx / l, ny / l, nz / l], uvf, color);
+      b.tri(A, B, C, [nx / l, ny / l, nz / l], slopeUv(E[i], ex, ez, [nx / l, ny / l, nz / l]) ?? uvf, color);
     }
     if (eave) {                                   // fascia board under the eave edge, a shade darker
       const d = color.clone().multiplyScalar(0.72), ex = E[j][0] - E[i][0], ez = E[j][2] - E[i][2], l = Math.hypot(ex, ez) || 1, nn = [ez / l * sg, 0, -ex / l * sg];
@@ -227,6 +227,15 @@ export function pitchedRoof(b: Builder, p: number[], h: number, color: THREE.Col
   return { cx, cz, ax, hu, hv, rh, rl, h };
 }
 
+
+// Tile UVs of a roof face (S0004 16): u along the eave (horizontal, direction ex, ez), v up the slope, 4 m per repeat; so the tile courses run level on every face.
+function slopeUv(o: Vec, ex: number, ez: number, n: Vec): UvFn | null {
+  const el = Math.hypot(ex, ez); if (el < 1e-4) return null;
+  const e = [ex / el, 0, ez / el];
+  let w = [n[1] * e[2] - n[2] * e[1], n[2] * e[0] - n[0] * e[2], n[0] * e[1] - n[1] * e[0]];      // n x e lies in the face, across the eave
+  if (w[1] < 0) w = [-w[0], -w[1], -w[2]];
+  return (q) => { const dx = q[0] - o[0], dy = q[1] - o[1], dz = q[2] - o[2]; return [(dx * e[0] + dz * e[2]) / 4, (dx * w[0] + dy * w[1] + dz * w[2]) / 4]; };
+}
 
 // Gable roof over a four-cornered footprint (S0004 02): the ridge runs along the long side, eaves 0.45 m, barge 0.2 m, the gable ends are plain plaster (`fill`).
 // Returns the roof for dormers, or null when the footprint is not a rectangle.
@@ -243,7 +252,8 @@ function gableRoof(tiles: Builder, fill: Builder, p: number[], h: number, color:
   for (const s of [-1, 1]) {
     const nrm = [bx[0] * s * rh, ev, bx[1] * s * rh], nl = Math.hypot(nrm[0], nrm[1], nrm[2]), n: Vec = [nrm[0] / nl, nrm[1] / nl, nrm[2] / nl];
     const e0 = P(-eu, s * ev, h - 0.15), e1 = P(eu, s * ev, h - 0.15), r0 = P(-eu, 0, h + rh + 0.2 * rh / ev), r1 = P(eu, 0, h + rh + 0.2 * rh / ev);
-    tiles.tri(e0, e1, r1, n, uvf, color); tiles.tri(e0, r1, r0, n, uvf, color);
+    const su = slopeUv(e0, e1[0] - e0[0], e1[2] - e0[2], n) ?? uvf;
+    tiles.tri(e0, e1, r1, n, su, color); tiles.tri(e0, r1, r0, n, su, color);
   }
   for (const s of [-1, 1]) {                                  // gable triangles in the wall plane
     const A = P(s * hu, -hv, h), B = P(s * hu, hv, h), C = P(s * hu, 0, h + rh);
@@ -427,9 +437,9 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     }
     if (pitched) {
       const rc = modern ? new THREE.Color(BK_ROOF[Math.floor(hv * 7919) % BK_ROOF.length]) : ROOF_COLORS[Math.floor(hv * 7919) % ROOF_COLORS.length], plasterC = new THREE.Color(OLD_PALETTE[v]).multiply(tint);
-      const roof = (hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null) ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
+      const gable = hk && hash(cx * 1.9, cz * 0.7) < 0.4 ? gableRoof(tiles, fill, p, h, rc, plasterC) : null, roof = gable ?? pitchedRoof(tiles, p, h, rc, 0, 0.5);
       if (hk && dist < kitR && !modern) addDormers(hk, roof, rc, plasterC, hv);       // the barracks have plain metal roofs
-      roofs.push({ kind: 'tile', h, roof, dist, hv, color: rc });
+      roofs.push({ kind: 'tile', h, roof, dist, hv, color: rc, p, sign, gable: !!gable });
     } else {
       fillPoly(flats, p, h, 8);
       roofs.push({ kind: panel ? 'panel' : old ? 'old' : 'mid', h, p, sign, dist, hv });
@@ -448,7 +458,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     if (b.empty) continue;
     mesh(b, calmMat(v === 99 ? 0xdad3c3 : kind === 'old' ? OLD_PALETTE[v] : PLAIN_PALETTE[v], kind, v, true), group, true);
   }
-  mesh(tiles, material(tile(tileRoofTex), { vertexColors: true, ...surface('roof', 3, 1.1) }), group, true);
+  mesh(tiles, tileMaterial(kit) ?? material(tile(tileRoofTex), { vertexColors: true, ...surface('roof', 3, 1.1) }), group, true);
   mesh(relief, material(null, { vertexColors: true, roughness: 0.9 }), group, false);   // no shadow casting: the details are too small to show in the shadow map
   mesh(flats, membraneMaterial(kit) ?? material(tile(roofTex), { color: 0xb8b8b8 }), group);
   buildRoofProps(group, roofs, kit);                         // S0004 16: machine rooms, vents, masts, dishes, chimneys, roof windows, gutters (js/roof-props.ts)

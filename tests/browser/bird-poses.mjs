@@ -42,6 +42,12 @@ for (const n of plots) {
     await snap(`p${n}-${quality}-roof-${kind}-top.png`, { pos: [h.x + ux * 14 - uz * 10, h.h + 16, h.z + uz * 14 + ux * 10], look: [h.x, h.h, h.z] });
     await snap(`p${n}-${quality}-roof-${kind}-far.png`, { pos: [h.x + ux * 45, h.h + 22, h.z + uz * 45], look: [h.x, h.h, h.z] });
   }
+  const rp = await page.evaluate(() => globalThis.__roofProps);
+  for (const kind of ['chimney', 'skylight', 'lift']) {
+    const c = rp?.at?.[kind]?.[0]; if (!c) continue;
+    const d = Math.hypot(c[0], c[2]) || 1, ux = -c[0] / d, uz = -c[2] / d;
+    await snap(`p${n}-${quality}-prop-${kind}.png`, { pos: [c[0] + ux * 9 - uz * 6, c[1] + 6, c[2] + uz * 9 + ux * 6], look: [c[0], c[1] + 0.5, c[2]] });
+  }
   await snap(`p${n}-${quality}-game.png`, { pos: [-22, 20, -19], look: [0, 14, 0] });
 }
 if (errs.length) console.log('console errors', errs.slice(0, 4));

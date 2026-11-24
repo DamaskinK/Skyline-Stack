@@ -180,10 +180,8 @@ def chimney():
     m = M('chimney', 0.0)
     m.cbox(0, 0, 0.62, 0.48, -1.2, 1.55, PLASTER)
     m.cbox(0, 0, 0.72, 0.58, 1.55, 1.65, PLASTER, skip='')                               # plaster band
-    for k in range(4):                                                                  # brick head: courses offset a little
-        y = 1.65 + k * 0.1; o = 0.012 if k % 2 else 0.0
-        m.cbox(o, 0, 0.64, 0.5, y, y + 0.09, BRICK, skip='')
-        m.cbox(o, 0, 0.6, 0.46, y + 0.09, y + 0.1, MORTAR, skip='ut')
+    m.cbox(0, 0, 0.64, 0.5, 1.65, 1.84, BRICK, skip='')                                    # brick head in two courses, the upper one stepped out
+    m.cbox(0, 0, 0.7, 0.56, 1.84, 2.05, BRICK, skip='')
     m.cbox(0, 0, 0.36, 0.24, 2.05, 2.06, DARK, skip='u')                                 # flue
     for px in (-0.26, 0.26):
         for pz in (-0.19, 0.19): m.cbox(px, pz, 0.07, 0.07, 2.05, 2.28, BRICK)
@@ -214,7 +212,7 @@ def downpipe():
     return m
 
 MODS = {'lift': (lift, 0.03), 'stair': (stair, 0.03), 'vents': (vents, 0.015), 'pipe': (pipe, 0), 'antenna': (antenna, 0), 'dish': (dish, 0), 'drain': (drain, 0),
-        'hatch': (hatch, 0.02), 'chimney': (chimney, 0.012), 'skylight': (skylight, 0), 'gutter': (gutter, 0), 'downpipe': (downpipe, 0)}
+        'hatch': (hatch, 0.02), 'chimney': (chimney, 0), 'skylight': (skylight, 0), 'gutter': (gutter, 0), 'downpipe': (downpipe, 0)}
 
 # ------------------------------------------------------------------ textures
 def _noise(px, cells, seed, octaves=3):
@@ -285,11 +283,11 @@ def tiles(folder, px=1024, period=4.0, seed=5):
     r = np.floor(Vw / rh).astype(int); fy = Vw / rh - r; rr = r % rows
     off = (rr % 2) * 0.5 + (rng.random(rows) * 0.16 - 0.08)[rr]                           # half-bond plus a little random shift per course
     c = np.floor(U / tw + off).astype(int); fx = U / tw + off - c; cc = c % cols
-    tint = rng.normal(1.0, 0.07, (rows, cols)); hue = rng.random((rows, cols)); tilt = rng.normal(0, 0.25, (rows, cols))
+    tint = rng.normal(1.0, 0.045, (rows, cols)); hue = rng.random((rows, cols)); tilt = rng.normal(0, 0.25, (rows, cols))
     red, brown, pale = _rgb(0xa9502f), _rgb(0x8a4630), _rgb(0xb86a44)
     hh = hue[rr, cc][..., None]
     img = (red * (1 - hh) + brown * hh) * tint[rr, cc][..., None]
-    img = np.where((hue[rr, cc] > 0.88)[..., None], pale * tint[rr, cc][..., None], img)
+    img = np.where((hue[rr, cc] > 0.95)[..., None], (pale * 0.6 + red * 0.4) * tint[rr, cc][..., None], img)
     # tail: the lower edge of a tile is a flat segment; the tile above covers the top 60 %, so the visible part is fy 0..0.45 of each course
     tail = 0.06 * (1 - (2 * fx - 1) ** 2)
     vis = fy                                                                              # 0 at the lower edge

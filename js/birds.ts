@@ -98,7 +98,7 @@ function makeFlocks(): void {
 }
 
 // ── perches ──
-interface RoofLike { kind: string; h: number; p?: number[]; sign?: number; roof?: { cx: number; cz: number; ax: [number, number]; rl: number; rh: number; h: number } }
+interface RoofLike { kind: string; h: number; p?: number[]; sign?: number; gable?: boolean; roof?: { cx: number; cz: number; ax: [number, number]; rl: number; rh: number; h: number; hv: number } }
 function findPerches(): Perch[] {
   const out: Perch[] = [];
   const roofs = (perchSrc?.roofs || []) as RoofLike[];
@@ -109,7 +109,7 @@ function findPerches(): Perch[] {
       const R = r.roof, d = Math.hypot(R.cx, R.cz); if (R.rl < 1.2) continue;
       cand.push({ d, f: () => {
         const n = 1 + Math.floor(rnd() * 3), u0 = (rnd() - 0.5) * R.rl * 1.4, yaw = Math.atan2(R.ax[0], R.ax[1]) + Math.PI / 2 + (rnd() < 0.5 ? Math.PI : 0);
-        for (let k = 0; k < n; k++) { const u = u0 + k * 0.45; out.push({ x: R.cx + R.ax[0] * u, y: R.h + R.rh + 0.02, z: R.cz + R.ax[1] * u, yaw: yaw + (rnd() - 0.5) * 0.6 }); }
+        for (let k = 0; k < n; k++) { const u = u0 + k * 0.45; out.push({ x: R.cx + R.ax[0] * u, y: R.h + R.rh + (r.gable ? 0.2 * R.rh / (R.hv + 0.45) : 0) + 0.02, z: R.cz + R.ax[1] * u, yaw: yaw + (rnd() - 0.5) * 0.6 }); }
       } });
     } else if (r.p && r.p.length >= 6) {
       const p = r.p, n = p.length / 2, top = r.kind === 'panel' ? 0.82 : 0.5, out0 = r.kind === 'panel' ? 0.06 : 0.07;

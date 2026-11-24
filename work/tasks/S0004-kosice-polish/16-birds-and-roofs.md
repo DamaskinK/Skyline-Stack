@@ -14,7 +14,7 @@ tile roofs need unevenness; pigeons sitting would be nice".
       through it; pigeons sit on roof ridges, cornices, the cathedral and the square, and take off when the crane passes.
 - [x] Panel-block roofs: parapet, lift machine rooms, stair exits, vent stacks, antennas, satellite dishes, roof
       membrane texture with patches and drains; varied per block.
-- [ ] Tile roofs (old town): uneven tiles (slight sag and row offsets in the normal map or geometry), chimneys with
+- [x] Tile roofs (old town): uneven tiles (slight sag and row offsets in the normal map or geometry), chimneys with
       caps, roof windows, gutters; moss/weathering variation.
 - [ ] Draw calls within budget (instancing), audit and flicker pass; screenshots from the game camera.
 
@@ -40,3 +40,13 @@ tile roofs need unevenness; pigeons sitting would be nice".
   kept 0.45 m off the parapet and apart; one InstancedMesh per module (High within 330 m, Low 170 m and fewer kinds). near-ring.ts: two lines (membrane material, `buildRoofProps`).
 - Checks after the roofs: flicker --plot all --quality all PASS; audit --plot all 0 findings; perf 2560x1440 DPR 2 High 567 calls / 1.53 M tris p90 16.7 ms, Low 139 / 0.48 M p90 16.7 ms.
   Shots: tests/browser/out-s4-16/p0-high-roof-panel-{top,far}.png.
+- Tile roofs: `roof_tiles_{col,nrm}.webp` (4 m period, 59 + 63 KB): clay plain tiles in 18 cm courses, half bond with a random shift per course, courses that sag and wander
+  (2-3 cm), every tile its own tint and tilt (normal map), gaps, shadow under each course, lichen and moss near the laps. near-ring.ts: the tile UVs now follow each slope (`slopeUv`: u along the
+  eave, v up the slope; before they were world x/z, so the courses ran skew on half the faces). `tileMaterial` (roof-props.ts) keeps each house's roof colour as a hue shift of the tiles and
+  lays world-space moss and soot patches over the roofs, so no two roofs repeat. Props on the tile roofs (High within 170 m, Low 90 m): 1-2 chimneys per roof (plastered shaft, brick head,
+  concrete cap on posts, 108 tris), and within 60 m (Low 32 m) roof windows in the roof plane (not on the near houses with dormers), half-round gutters along the eaves (long sides of gable
+  roofs, all round hip roofs) and two downpipes. Pigeon perches on gable ridges sit at the raised ridge now.
+- Checks after the tile roofs: audit --plot all 0 findings; perf 2560x1440 DPR 2 High 588 calls / 1.57 M tris p90 16.7 ms, Low 142 / 0.49 M p90 16.7 ms; flicker: the `game` and `low` depth
+  poses now measure 0.75-0.8 % mean, 1.0-1.2 % max (FAIL at 1.0 %) on every plot, but the same with the tile material and the tile props switched off (plot 1: 0.98 / 1.27 % max), while
+  after the panel-roof commit they measured 0.26 % mean: the rise comes from other WIP in this worktree (tickets 13 / 17-19), to be looked at by the main session.
+  Shots: tests/browser/out-s4-16/p0-high-prop-{chimney,skylight,lift}.png, p4-high-roof-old-{top,far}.png.
