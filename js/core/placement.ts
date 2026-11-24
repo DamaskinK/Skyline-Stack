@@ -546,10 +546,10 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
     if (q.mate && !free('person', q.x + Math.sin(q.rot) * 0.9, q.z + Math.cos(q.rot) * 0.9, q.rot)) q.mate = false;
     return true;
   });
-  // cafe terraces: a table group with a parasol on the footway in front of a shopfront (the shop faces the street, so the terrace sits 2 m out)
+  // cafe terraces: a table group with a parasol on the footway in front of a shopfront (the shop faces the street, so the terrace sits 3 m out: parasol radius 1.5 m, awning reach 1.2 m)
   for (const s of shopSpots) {
     if (plan.terraces.length >= 8) break;
-    const x = s.x + Math.sin(s.rot) * 2.0, z = s.z + Math.cos(s.rot) * 2.0;
+    const x = s.x + Math.sin(s.rot) * 3.0, z = s.z + Math.cos(s.rot) * 3.0;      // the 1.5 m parasol clears the 1.2 m awning
     if (clearOf(x, z, 2.5) && free('terrace', x, z, s.rot)) plan.terraces.push({ x, z, rot: s.rot });
   }
   for (const q of musicians) { if (free('busker', q.x, q.z, q.rot)) plan.musicians.push(q); }
