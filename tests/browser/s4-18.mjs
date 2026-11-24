@@ -23,10 +23,21 @@ const snap = async (name, p) => {
   }, { p, w: W, h: H });
   writeFileSync(join(out, name), Buffer.from(url.split(',')[1], 'base64'));
 };
-const POSES = { garages: { pos: [10, 7, -40], look: [10, 2, -63] }, game: { pos: [23, 12, 0], look: [0, 6, 0] }, game2: { pos: [-16, 14, 16], look: [0, 3, 0] }, high: { pos: [0, 60, 62], look: [0, 0, 0] } };
+const POSES = { rail: { pos: [-70, 2.2, 80], look: [-73, 0.1, 60] },  top: { pos: [-60, 26, 105], look: [-72, 0, 82] },  street: { pos: [-28, 5.5, 20], look: [-74, 1.2, 60] }, streetN: { pos: [-60, 12, 100], look: [-72, 0, 20] },  tram: { pos: [-40, 9, 20], look: [-74, 1, 40] }, tram2: { pos: [-20, 22, 40], look: [-80, 0, 50] }, garages: { pos: [10, 7, -40], look: [10, 2, -63] }, game: { pos: [23, 12, 0], look: [0, 6, 0] }, game2: { pos: [-16, 14, 16], look: [0, 3, 0] }, high: { pos: [0, 60, 62], look: [0, 0, 0] } };
 for (const n of plots) {
   await page.evaluate((n) => window.__debug.loadPlot(n, 'kosice'), n); await page.waitForTimeout(4000);
   for (const [k, p] of Object.entries(POSES)) await snap(`p${n}-${quality}-${k}.png`, p);
+  // a tram of the plot's line (the nearest one, waiting up to 40 s for one to come by): from the pavement beside its track
+  let tram = null;
+  for (let t = 0; t < 40 && !tram; t++) {
+    tram = await page.evaluate(() => { const l = window.__scene.getObjectByName('near-ring')?.userData.tram; const w = l ? l.where().filter((q) => Math.hypot(q.x, q.z) < 120).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0] : null; return w || null; });
+    if (!tram) await page.waitForTimeout(1000);
+  }
+  console.log('tram', JSON.stringify(tram));
+  // the street profile on the nearest main road: from the bike lane side, a little above the pavement, looking along the road
+  const mr = await page.evaluate(() => { const o = window.__scene.getObjectByName('near-ring')?.userData.plan?.osm; if (!o) return null; let best = null; for (const r of o.roads) if ((r.k === 'main' || (r.k === 'street' && r.w >= 9)) && r.p.length >= 4) { for (let i = 0; i + 3 < r.p.length; i += 2) { const mx = (r.p[i] + r.p[i + 2]) / 2, mz = (r.p[i + 1] + r.p[i + 3]) / 2, d = Math.hypot(mx, mz); if (d > 40 && d < 250 && (!best || d < best.d)) best = { d, mx, mz, tx: r.p[i + 2] - r.p[i], tz: r.p[i + 3] - r.p[i + 1], w: r.w }; } } return best; });
+  if (mr) { const l = Math.hypot(mr.tx, mr.tz), tx = mr.tx / l, tz = mr.tz / l; await snap(`p${n}-${quality}-profile.png`, { pos: [mr.mx - tz * (mr.w / 2 + 9) - tx * 14, 4.2, mr.mz + tx * (mr.w / 2 + 9) - tz * 14], look: [mr.mx + tx * 14 + tz * 1, 0.3, mr.mz + tz * 14 - tx * 1] }); }
+  if (tram) await snap(`p${n}-${quality}-tram-close.png`, { pos: [tram.x + 16, 5, tram.z + 10], look: [tram.x, 1.8, tram.z] });
   console.log(JSON.stringify({ plot: n, traffic: await page.evaluate(() => window.__debug.trafficStats?.()) }));
 }
 // a bus (own 11 m model, not a stretched car): find it among the instanced meshes and look at it from the side

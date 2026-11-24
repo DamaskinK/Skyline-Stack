@@ -22,8 +22,8 @@ export const LEVELS: Level[] = [
     district: {
       goal: 720,
       plots: [
-        { id: 'terasa', name: 'Terasa estate', site: { lat: 48.71874, lon: 21.24033 }, buildingType: 'panel', target: 12, require: {},
-          windScale: 0.6, weather: [{ fromFloor: 0, kind: 'clear' }], landmarksInView: [] },     // car park between the estate blocks and the pitches
+        { id: 'terasa', name: 'Terasa estate', site: { lat: 48.7191, lon: 21.23475 }, buildingType: 'panel', target: 12, require: {},
+          windScale: 0.6, weather: [{ fromFloor: 0, kind: 'clear' }], landmarksInView: [] },     // open ground between the estate blocks and Trieda SNP, moved 410 m west (S0004 18) so the real tram line (74 m west) is in view; first pick was a car park by the pitches
         { id: 'juzna', name: 'Juzna trieda', site: { lat: 48.71440, lon: 21.24912 }, buildingType: 'panel', target: 14, require: {},
           windScale: 0.7, weather: [{ fromFloor: 0, kind: 'clear' }, { fromFloor: 8, kind: 'rain' }], landmarksInView: [] },   // car park on the way in, south-west of the old town
         { id: 'kulturpark', name: 'Kulturpark', site: { lat: 48.71454, lon: 21.25675 }, buildingType: 'hotel', target: 16, require: { maxLivesLost: 2 },

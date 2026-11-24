@@ -28,7 +28,7 @@ function vn(x: number, z: number): number {
 function fbm(x: number, z: number, o = 4): number { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vn(x * f + i * 17.3, z * f - i * 9.1); a *= 0.5; f *= 2; } return s / (1 - 0.5 ** o); }
 const bearing = (x: number, z: number): number => { let b = Math.atan2(x, -z) * 180 / Math.PI; if (b < 0) b += 360; return b; };   // 0 north, 90 east
 const gauss = (b: number, c: number, w: number): number => { let d = Math.abs(b - c); if (d > 180) d = 360 - d; return Math.exp(-((d / w) ** 2)); };
-const riverX = (z: number): number => -1800 + 160 * Math.sin(z / 1100);
+const riverX = (z: number): number => -2350 + 160 * Math.sin(z / 1100);   // S0004 18: 550 m further west, clear of the Terasa plot that moved west to the tram line (Trieda SNP at x -1750)
 const RIVER_CLEAR = 60;                // the river is up to 96 m wide (34 + 14 either side of its centre); houses stay this far from its centre line
 
 // ground height at (x, z): flat city basin, rounded wooded hills rising from ~1.5 km, tallest in the north and north-west

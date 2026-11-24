@@ -333,6 +333,7 @@ export function buildNearRing(osm0: OsmExtract, kit: LevelAssets = {}, hide: Set
     if (r.k === 'walk' || r.k === 'path') ribbon(path, r.p, r.w, LAYER.path, 3);
     else ribbon(road, r.p, r.w, LAYER.road, 9);
   }
+  for (const w of plan.walks) ribbon(path, w.p, w.w, LAYER.path, 3);   // S0004 18: the sidewalk of each main road and street, beyond kerb and bike lane
   // car parks: asphalt a few cm above the streets, so a lot that overlaps a street or a park never shares its plane
   const lot = new Builder();
   for (const g of osm.parking || []) if (Math.abs(polyArea(g.p)) > 40) fillPoly(lot, g.p, LAYER.lot, 9, UP, 0.04);

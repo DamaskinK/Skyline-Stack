@@ -8,7 +8,7 @@
 import { cutPolyline, joinWays, makeRoute, pointAt, snapStops } from './tram-route.js';
 import type { Route } from './tram-route.js';
 import {
-  boxHit, boxRing, circleRing, lineLength, lineOutside, offsetLine, overlapArea, pointInRing, pointLine, ringArea, ringBox,
+  boxHit, boxRing, circleRing, lineLength, lineOutside, offsetLine, overlapArea, pointInRing, pointLine, pointSeg, ringArea, ringBox,
   ringLine, ringRing,
 } from './geometry2d.js';
 import type { Box4, Line, Ring } from './geometry2d.js';
@@ -30,7 +30,7 @@ export const polyArea = ringArea;
 
 // ── what stands where, with the sizes the renderers really draw ──
 export interface Obs { r: Ring; box: Box4 }
-export interface Strip { p: Line; w: number; box: Box4; id: number }
+export interface Strip { p: Line; w: number; box: Box4; id: number; walk?: boolean }   // walk: a sidewalk planned along a street (S0004 18): trees, hedges and beds keep off it, lamps, benches and bins stand on it
 export interface Circle { x: number; z: number; r: number }
 const strip = (p: Line, w: number, id: number): Strip => { const b = ringBox(p); return { p, w, id, box: [b[0] - w / 2, b[1] - w / 2, b[2] + w / 2, b[3] + w / 2] }; };
 const obs = (r: Ring): Obs => ({ r, box: ringBox(r) });
@@ -191,6 +191,7 @@ export function hits(site: Site, o: Placed): string[] {
     if (ringLine(ring, s.p, box, s.w / 2 + rule.road) < s.w / 2 + rule.road) { out.push('road'); break; }
   }
   if (rule.foot !== undefined) for (const s of site.foot) {
+    if (s.walk && rule.foot !== 'full') continue;
     const reach = rule.foot === 'full' ? s.w / 2 + 0.2 : rule.foot;
     if (!boxHit(box, s.box, reach)) continue;
     if (ringLine(ring, s.p, box, reach) < reach) { out.push('footway'); break; }
@@ -227,7 +228,7 @@ export interface Plan {
   site: Site;
   trees: [number, number, number, number][]; hedges: [number, number, number, number][]; beds: [number, number, number, number, number][]; bushes: [number, number][];
   lamps: number[][]; cars: number[][]; carKinds: ('street' | 'lot')[];
-  bikeLanes: { p: Line; w: number; cycleway: boolean }[]; bikeRoutes: { p: Line; len: number; d: number }[];
+  bikeLanes: { p: Line; w: number; cycleway: boolean }[]; walks: { p: Line; w: number }[]; bikeRoutes: { p: Line; len: number; d: number }[];
   items: Record<string, number[][]>; benches: number[][]; shops: { x: number; z: number; rot: number; d: number }[]; terraces: { x: number; z: number; rot: number }[]; musicians: { x: number; z: number; rot: number }[];
   sit: { x: number; z: number; rot: number }[]; stand: { x: number; z: number; rot: number; mate: boolean }[];
   tramLines: Route[]; tramBeds: { p: Line; paved: boolean }[]; poles: [number, number, number][]; platforms: { x: number; z: number; r: number; s: number; line: number }[];
@@ -243,7 +244,7 @@ const dOf = (p: number[]): number => { let d = Infinity; for (let i = 0; i < p.l
 export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landmarks?: Ring[] } = {}): Plan {
   const towers = opts.towers || [], lms = opts.landmarks || [], kept = keptBuildings(osm0, towers, lms), osm = clipNetwork(trimNetwork(osm0, towers), kept, towers, lms), site = makeSite(osm, kept, towers, lms);
   const plan: Plan = {
-    osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
+    osm, site, trees: [], hedges: [], beds: [], bushes: [], lamps: [], cars: [], carKinds: [], bikeLanes: [], walks: [], bikeRoutes: [], items: { bin: [], bollard: [], rack: [], planter: [], kiosk: [], stop: [], sign: [] }, benches: [],
     shops: [], terraces: [], musicians: [], sit: [], stand: [], tramLines: [], tramBeds: [], poles: [], platforms: [], detail: null as unknown as Detail, placed: [], routes: { car: [], carInfo: [], walk: [], bike: [] }, dropped: {},
   };
   const bbIn = (x: number, z: number, m = 0): boolean => Math.abs(x) < osm.half - m && Math.abs(z) < osm.half - m;
@@ -277,7 +278,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
     },
   };
   plan.detail = planCrossings(osm, dctx);
-  planBikes(osm, plan, zebraRings);
+  planBikes(osm, plan, zebraRings, plan.placed.filter((o) => o.kind === 'tlight').map((o) => o.ring));
   planMarkings(osm, dctx, plan.detail);
 
   // ── vegetation in the parks ──
@@ -328,7 +329,7 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
       if (l < 1) continue;
       const tx = dx / l, tz = dz / l, nx = -tz, nz = tx, rot = Math.atan2(tx, tz);
       for (let s = acc; s < l; s += gap) {
-        const x = x0 + tx * s, z = z0 + tz * s, side = (Math.floor(x * 7 + z * 3) & 1) ? 1 : -1, off = r.w / 2 + 1.2;
+        const x = x0 + tx * s, z = z0 + tz * s, side = (Math.floor(x * 7 + z * 3) & 1) ? 1 : -1, off = r.w / 2 + (profiled(r) ? WALK_OFF + 0.3 : 1.2);   // on the sidewalk, beyond kerb and bike lane (S0004 18)
         const lx = x + nx * off * side, lz = z + nz * off * side;
         if (plan.lamps.length < 40 && bbIn(lx, lz, 8) && !clearPlaza(lx, lz) && solidFree('lamp', lx, lz)) plan.lamps.push([lx, 0.03, lz, Math.atan2(-nx * side, -nz * side)]);
         const t = hash(x, z);
@@ -365,29 +366,78 @@ export function planNearRing(osm0: OsmExtract, opts: { towers?: Circle[]; landma
   return plan;
 }
 
-// ── bike lanes ──
-function planBikes(osm: OsmExtract, plan: Plan, crossings: Ring[] = []): void {
-  const { site } = plan, obstacles = [...site.buildings.map((b) => ({ r: b.r, box: b.box })), ...site.basins, ...site.river, ...crossings.map((r) => ({ r, box: ringBox(r) }))];
-  const cut = (p: Line, w: number): Line[] => lineOutside(p, obstacles, w / 2 + 0.3, 8);
-  const lenOf = lineLen;
-  const add = (p: Line, w: number, cycleway: boolean, route: boolean): void => {
-    for (const q of cut(p, w)) {
+// ── street profile (S0004 18) ──
+// From the centre of a main road outwards: the tram bed in the middle (the rails of the extract), the car lanes of each carriageway, a kerb (street-detail),
+// a bike lane, a sidewalk. A road without tram has no bed; a street without a bike tag has no bike lane (main roads always have one), but all of them have a sidewalk.
+// The lane and the sidewalk are only planned where OpenStreetMap does not already draw a cycleway / footway beside the road, and are cut at houses, crossings,
+// other carriageways, track beds and the median between the two carriageways of a divided road.
+// a main road: tagged main, or a street wide enough for several lanes (the carriageways of Kosice's boulevards are streets 10-14 m wide), or a street with a tagged bike lane
+const profiled = (r: OsmRoad): boolean => r.k === 'main' || (r.k === 'street' && (r.bike === 1 || r.w >= 9));
+export const PROFILE = { kerb: 0.15, bike: 1.5, walk: 2.2, gap: 0.05 };
+const BIKE_OFF = PROFILE.kerb + PROFILE.bike / 2, WALK_OFF = PROFILE.kerb + PROFILE.bike + PROFILE.gap + PROFILE.walk / 2;   // from the carriageway edge to the centre line of the lane / of the sidewalk
+const ribbonRing = (p: Line, w: number): Ring => { const l = offsetLine(p, w / 2), r = offsetLine(p, -w / 2), out = l.slice(); for (let i = r.length - 2; i >= 0; i -= 2) out.push(r[i], r[i + 1]); return out; };
+const nearestDir = (x: number, z: number, p: Line): { d: number; tx: number; tz: number } => {
+  let best = { d: Infinity, tx: 0, tz: 0 };
+  for (let i = 0; i + 3 < p.length; i += 2) { const d = pointSeg(x, z, p[i], p[i + 1], p[i + 2], p[i + 3]); if (d < best.d) { const l = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]) || 1; best = { d, tx: (p[i + 2] - p[i]) / l, tz: (p[i + 3] - p[i + 1]) / l }; } }
+  return best;
+};
+// the runs of a polyline whose samples (every 2 m) pass `ok`
+function keepRuns(p: Line, ok: (x: number, z: number) => boolean, minLen: number): Line[] {
+  const out: Line[] = []; let cur: Line = [];
+  const flush = (): void => { if (cur.length >= 4 && lineLen(cur) >= minLen) out.push(cur); cur = []; };
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const l = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]), k = Math.max(1, Math.ceil(l / 2));
+    for (let s = 0; s <= k; s++) { const x = p[i] + (p[i + 2] - p[i]) * s / k, z = p[i + 1] + (p[i + 3] - p[i + 1]) * s / k; if (ok(x, z)) { if (!(cur.length >= 2 && Math.hypot(cur[cur.length - 2] - x, cur[cur.length - 1] - z) < 1e-6)) cur.push(x, z); } else flush(); }
+  }
+  flush(); return out;
+}
+
+function planBikes(osm: OsmExtract, plan: Plan, crossings: Ring[] = [], poles: Ring[] = []): void {   // poles: the traffic lights the lanes now pass (they stand beside the kerb)
+  const { site } = plan, lenOf = lineLen;
+  const carriage = osm.roads.map((r, i) => ({ r, i })).filter(({ r }) => r.k === 'main' || r.k === 'street' || r.k === 'lane');
+  const rings = new Map<number, Ring>(carriage.map(({ r, i }) => [i, ribbonRing(r.p, r.w)]));
+  const baseObs = [...site.buildings.map((b) => ({ r: b.r, box: b.box })), ...site.basins, ...site.river, ...crossings.map((r) => ({ r, box: ringBox(r) }))];
+  const bedObs = (osm.rails || []).map((rl) => { const r = ribbonRing(rl.p, BED_W + 0.6); return { r, box: ringBox(r) }; });
+  const cycleways = osm.roads.filter((r) => r.bike === 2 && (r.k === 'path' || r.k === 'walk'));
+  const footways = osm.roads.filter((r) => (r.k === 'path' || r.k === 'walk') && r.bike !== 2);
+  // obstacles for one side of one road: houses, water, crossings, the other carriageways and the track beds
+  const poleObs = poles.map((r) => ({ r, box: ringBox(r) }));
+  const obstaclesFor = (ri: number, withPoles: boolean) => [...baseObs, ...(withPoles ? poleObs : []), ...bedObs, ...carriage.filter(({ i }) => i !== ri).map(({ i }) => ({ r: rings.get(i)!, box: ringBox(rings.get(i)!) }))];
+  const add = (p: Line, w: number, cycleway: boolean, route: boolean, obstacles = baseObs): void => {
+    for (const q of lineOutside(p, obstacles, w / 2 + 0.3, 8)) {
       plan.bikeLanes.push({ p: q, w, cycleway }); site.bikes.push(strip(q, w, plan.bikeLanes.length));
       if (route) plan.bikeRoutes.push({ p: q, len: lenOf(q), d: dOf(q) });
     }
   };
   for (const r of osm.roads) if (r.bike === 2 && lenOf(r.p) >= 20) add(r.p, r.w, true, true);
-  let lanes = osm.roads.filter((r) => r.k === 'street' && r.bike === 1 && lenOf(r.p) > 40);
-  if (lanes.length < 5) {
-    const extra = osm.roads.filter((r) => r.k === 'street' && !r.bike && r.w >= 7 && lenOf(r.p) > 70).map((r) => ({ r, d: dOf(r.p) })).filter((o) => o.d > 22 && o.d < 190).sort((a, b) => a.d - b.d);
-    lanes = lanes.concat(extra.slice(0, 5 - lanes.length).map((o) => o.r));
+  // which streets get a bike lane outside the kerb: main roads, the ones tagged, and (so a small extract is not bare) the nearest few wide streets
+  const withLane = new Set<number>(carriage.filter(({ r }) => profiled(r) && lenOf(r.p) > 40).map(({ i }) => i));
+  if (withLane.size < 5) {
+    const extra = carriage.filter(({ r }) => r.k === 'street' && !r.bike && r.w >= 7 && lenOf(r.p) > 70).map(({ r, i }) => ({ i, d: dOf(r.p) })).filter((o) => o.d > 22 && o.d < 190).sort((a, b) => a.d - b.d);
+    for (const o of extra.slice(0, 5 - withLane.size)) withLane.add(o.i);
   }
-  lanes.forEach((r, k) => {
+  let routes = 0;
+  for (const { r, i } of carriage) {
+    if (r.k === 'lane' || lenOf(r.p) < 20) continue;
+    const others = carriage.filter((o) => o.i !== i && o.r.k !== 'lane').map((o) => o.r);
     for (const side of [1, -1]) {
-      const p0 = offsetLine(r.p, side * (r.w / 2 - 0.95)), p = side > 0 ? p0 : (() => { const q: number[] = []; for (let i = p0.length - 2; i >= 0; i -= 2) q.push(p0[i], p0[i + 1]); return q; })();
-      add(p, 1.5, false, k < 4);
+      // the median of a divided road (another carriageway runs alongside, nearer than 12 m beyond its edge) and a tram bed beside the lane: not here
+      const inner = (x: number, z: number): boolean => {
+        for (const o of others) { const n = nearestDir(x, z, o.p); if (n.d < o.w / 2 + 12) { const tn = nearestDir(x, z, r.p); if (Math.abs(n.tx * tn.tx + n.tz * tn.tz) > 0.9) return true; } }
+        return (osm.rails || []).some((rl) => pointLine(x, z, rl.p) < BED_W / 2 + 2.5);
+      };
+      const orient = (q: Line): Line => { if (side > 0) return q; const o: number[] = []; for (let k = q.length - 2; k >= 0; k -= 2) o.push(q[k], q[k + 1]); return o; };
+      const lanePath = offsetLine(r.p, side * (r.w / 2 + BIKE_OFF)), walkPath = offsetLine(r.p, side * (r.w / 2 + WALK_OFF));
+      const obstacles = obstaclesFor(i, true), walkObstacles = obstaclesFor(i, false);
+      if (withLane.has(i)) {
+        const free = (x: number, z: number): boolean => !inner(x, z) && !cycleways.some((c) => pointLine(x, z, c.p) < c.w / 2 + PROFILE.bike);
+        for (const q of keepRuns(lanePath, free, 8)) add(orient(q), PROFILE.bike, false, routes++ < 4, obstacles);
+      }
+      // sidewalk: not where a drawn footway or cycleway already runs beside the road
+      const bare = (x: number, z: number): boolean => !inner(x, z) && !footways.some((c) => pointLine(x, z, c.p) < c.w / 2 + PROFILE.walk / 2 + 0.5) && !cycleways.some((c) => pointLine(x, z, c.p) < c.w / 2 + PROFILE.walk / 2);
+      for (const q0 of keepRuns(walkPath, bare, 8)) for (const q of lineOutside(q0, walkObstacles, PROFILE.walk / 2 + 0.3, 8)) { plan.walks.push({ p: q, w: PROFILE.walk }); site.foot.push({ ...strip(q, PROFILE.walk, 1000 + plan.walks.length), walk: true }); }
     }
-  });
+  }
 }
 
 // ── tram lines: beds, poles, platforms ──
@@ -603,6 +653,7 @@ export function auditPlan(plan: Plan, extra: Placed[] = []): Finding[] {
       void d;
       if (ringCoreHit(b.r, s)) out.push({ cat: 'building-road', kind: 'building', x: b.box[0], z: b.box[1] });
     }
+    for (const s of site.foot) if (s.walk && boxHit(b.box, s.box) && ringLine(b.r, s.p, b.box, s.w / 2) < s.w / 2) out.push({ cat: 'building-walk', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const s of site.bikes) if (boxHit(b.box, s.box) && ringLine(b.r, s.p, b.box, s.w / 2) < s.w / 2) out.push({ cat: 'building-bike', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const s of site.tram) if (boxHit(b.box, s.box) && ringLine(b.r, s.p, b.box, s.w / 2) < s.w / 2) out.push({ cat: 'building-tram', kind: 'building', x: b.box[0], z: b.box[1] });
     for (const w of [...site.basins, ...site.river]) if (boxHit(b.box, w.box) && ringRing(b.r, w.r) === 0) out.push({ cat: 'building-water', kind: 'building', x: b.box[0], z: b.box[1] });

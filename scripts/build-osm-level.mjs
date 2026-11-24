@@ -36,7 +36,7 @@ const levelsOut = path.join(os.tmpdir(), `levels-${process.pid}.mjs`);
 buildSync({ entryPoints: [path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'js', 'levels.ts')], bundle: true, format: 'esm', outfile: levelsOut, logLevel: 'silent' });
 const { LEVELS: GAME_LEVELS } = await import(levelsOut);
 fs.rmSync(levelsOut, { force: true });
-const plotList = plotsMode ? GAME_LEVELS.find((l) => l.id === id).district.plots : [];
+const plotList = plotsMode ? GAME_LEVELS.find((l) => l.id === id).district.plots.filter((pl) => !process.env.ONLY_PLOT || process.env.ONLY_PLOT.split(',').includes(pl.id)) : [];   // ONLY_PLOT=terasa,juzna rebuilds just those extracts
 const bboxOf = (site, half) => {
   const dLat = half / 111320, dLon = half / (111320 * Math.cos(site.lat * Math.PI / 180));
   return [site.lat - dLat, site.lon - dLon, site.lat + dLat, site.lon + dLon].map((v) => v.toFixed(5)).join(',');

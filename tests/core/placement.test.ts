@@ -3,7 +3,7 @@
 // plaza; the same audit runs on the built scene in `node tests/browser/check.mjs audit`.
 import { describe, expect, it } from 'vitest';
 import { auditObjects, auditPlan, clipNetwork, countByCategory, footprint, hits, keptBuildings, makeSite, newtownFurniture, newtownPlaced, newtownSite, planNearRing, trimNetwork, towerCircles, PAD_HALF, PLAZA_HALF } from '../../js/core/placement.js';
-import { boxRing, lineOutside, overlapArea, pointInRing, ringLine, ringRing } from '../../js/core/geometry2d.js';
+import { boxRing, lineOutside, overlapArea, pointInRing, pointLine, ringLine, ringRing } from '../../js/core/geometry2d.js';
 import { cityById } from '../../js/levels.js';
 import { NEWTOWN } from '../../js/levels.js';
 import { landmarkRings } from '../../js/core/landmark-sites.js';
@@ -80,6 +80,18 @@ describe('Kosice plots', () => {
     const plan = planNearRing(osm);
     for (const lane of plan.bikeLanes) for (const b of plan.site.buildings) expect(ringLine(b.r, lane.p, b.box, 1)).toBeGreaterThan(0.5);
     expect(plan.site.buildings.length).toBeGreaterThan(200);
+  });
+  it('terasa: the street profile (S0004 18) - tram bed, carriageways, kerb, bike lane, sidewalk, in that order from the middle', () => {
+    const osm = extract('terasa'), plan = planNearRing(osm), cars = osm.roads.filter((r) => r.k === 'main' || r.k === 'street' || r.k === 'lane');
+    expect(osm.rails?.length).toBeGreaterThan(0);                                     // the real tram line of Trieda SNP is in the extract (the plot sits 74 m from it)
+    expect(plan.tramLines.length).toBeGreaterThan(0);
+    expect(plan.walks.length).toBeGreaterThan(5);
+    const lanes = plan.bikeLanes.filter((l) => !l.cycleway);
+    expect(lanes.length).toBeGreaterThan(3);
+    const mid = (l: number[]): [number, number] => { const k = Math.floor(l.length / 4) * 2; return [l[k], l[k + 1]]; };
+    for (const w of plan.walks) for (const s of plan.site.carriage) { const [x, z] = mid(w.p); if (Math.abs(x) > osm.half - 30 || Math.abs(z) > osm.half - 30) continue; expect(ringLine([x - 0.01, z - 0.01, x + 0.01, z - 0.01, x + 0.01, z + 0.01], s.p, undefined, s.w / 2 + 1)).toBeGreaterThanOrEqual(s.w / 2 + 0.9); }   // no sidewalk inside a carriageway or its kerb strip
+    for (const l of lanes) { const [x, z] = mid(l.p); const near = cars.map((r) => pointLine(x, z, r.p) - r.w / 2).reduce((a, b) => Math.min(a, b), 99); expect(near).toBeGreaterThan(0.1); }   // a bike lane lies beyond the kerb, not in the carriageway
+    for (const l of lanes) for (const t of plan.osm.rails ?? []) { const [x, z] = mid(l.p); expect(pointLine(x, z, t.p), `lane at ${x.toFixed(1)},${z.toFixed(1)}`).toBeGreaterThan(2); }   // and never on the track bed
   });
   it('the player plot pad is bare plaza and no two houses overlap', () => {
     for (const p of plots) {
