@@ -11,31 +11,31 @@
       "id": "cathedral",
       "type": "gltf",
       "url": "assets/levels/kosice/cathedral.glb",
-      "bytes": 1760600
+      "bytes": 3470492
     },
     {
       "id": "theatre",
       "type": "gltf",
       "url": "assets/levels/kosice/theatre.glb",
-      "bytes": 1143824
+      "bytes": 1749484
     },
     {
       "id": "urban",
       "type": "gltf",
       "url": "assets/levels/kosice/urban.glb",
-      "bytes": 481348
+      "bytes": 580244
     },
     {
       "id": "chapel",
       "type": "gltf",
       "url": "assets/levels/kosice/chapel.glb",
-      "bytes": 513508
+      "bytes": 1199240
     },
     {
       "id": "immaculata",
       "type": "gltf",
       "url": "assets/levels/kosice/immaculata.glb",
-      "bytes": 145616
+      "bytes": 830760
     },
     {
       "id": "fountain",
