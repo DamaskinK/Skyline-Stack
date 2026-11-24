@@ -7,7 +7,7 @@ and the landmarks stay readable; keep the low-floor framing that shows the spire
 **Blocked by:** None (can start immediately).
 
 **Type:** change
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] New offsets/fov tested on all five plots at floors 0, 10, 20; screenshots before/after.
 - [ ] check.mjs all, s1-19.mjs, s4-04.mjs pass.
