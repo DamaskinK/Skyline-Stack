@@ -411,7 +411,11 @@ export const traffic: { waiting: number; count: number; want: number; mode: 'gri
       c.s ??= ((i * 0.618) % 1) * r.len; c.d ??= i % 2 ? 1 : -1;
       let hx = 0, hz = 0;
       if (lightsNow) { let q = 1; while (q < r.cum.length - 1 && r.cum[q] < c.s) q++; const ll = r.cum[q] - r.cum[q - 1] || 1; hx = (r.p[2 * q] - r.p[2 * q - 2]) / ll * c.d; hz = (r.p[2 * q + 1] - r.p[2 * q - 1]) / ll * c.d; }
-      const ahead = lightsNow ? brake(c.px ?? 1e9, c.pz ?? 1e9, hx, hz) : 1;
+      let ahead = lightsNow ? brake(c.px ?? 1e9, c.pz ?? 1e9, hx, hz) : 1;
+      // car following: the nearest car ahead on the same route and direction (centre to centre; a bus is longer): slow down, stop at 7 m
+      let gap = 1e9; const mine = c.bus ? 12 : 7;
+      for (let j = 0; j < this.count; j++) { if (j === i || j % R.length !== i % R.length) continue; const o = cars[j]; if (o.s === undefined || o.d !== c.d) continue; const g = (o.s - c.s) * c.d; if (g > 0 && g < gap) gap = g; }
+      ahead = Math.min(ahead, Math.max(0, Math.min(1, (gap - mine) / 8)));
       if (ahead < 0.05) waiting++;
       c.s += c.d * (c.sp || 6) * 0.7 * dt * ahead;
       if (c.s > r.len) { c.s = r.len; c.d = -1; } else if (c.s < 0) { c.s = 0; c.d = 1; }

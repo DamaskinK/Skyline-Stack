@@ -129,14 +129,15 @@ export function makeSite(osm: OsmExtract, kept: number[] = keptBuildings(osm), t
 }
 
 // ── the kinds of things that are placed, and what each must keep away from ──
-export type Kind = 'person' | 'tree' | 'hedge' | 'bed' | 'bush' | 'lamp' | 'carStreet' | 'carLot' | 'bench' | 'bin' | 'bollard' | 'rack' | 'planter' | 'kiosk' | 'stop' | 'sign'
+export type Kind = 'person' | 'sitter' | 'tree' | 'hedge' | 'bed' | 'bush' | 'lamp' | 'carStreet' | 'carLot' | 'bench' | 'bin' | 'bollard' | 'rack' | 'planter' | 'kiosk' | 'stop' | 'sign'
   | 'shop' | 'stall' | 'busker' | 'pole' | 'platform' | 'padSlab' | 'tower' | 'bikeLane' | 'tramBed' | 'block'
   | 'kerb' | 'zebra' | 'dash' | 'manhole' | 'drain' | 'tlight';
 // Clearances in metres between the object's footprint and the real edge of the obstacle (undefined = that obstacle does not matter).
 // foot: 'full' = the whole width of the footway, number = that many metres from its centre line. Objects never overlap each other (`solid`).
 interface Rule { b?: number; road?: number; foot?: 'full' | number; bike?: number; tram?: number; basin?: number; river?: number; pad?: boolean; tower?: boolean; solid?: boolean }
 export const RULES: Record<Kind, Rule> = {
-  person: { b: 0.1, road: 0.1, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: false, tower: true },    // someone sitting or standing
+  person: { b: 0.1, road: 0.1, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: false, tower: true, solid: true },    // someone standing: never inside a bench, bin or kiosk
+  sitter: { b: 0.1, road: 0.1, bike: 0.1, tram: 0.1, basin: 0.3, river: 0.3, pad: false, tower: true },    // someone sitting on a bench: the bench is under them, so not solid
   tree: { b: 0.4, road: 0.3, foot: 'full', bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
   hedge: { b: 0.2, road: 0.2, foot: 'full', bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true },
   bed: { b: 0.4, road: 0.3, foot: 'full', bike: 0.2, tram: 0.2, basin: 0.3, river: 0.3, pad: true, tower: true, solid: true },
@@ -203,7 +204,7 @@ const OBB: Record<string, [number, number]> = {          // half length (local x
 };
 export const footprint = (kind: Kind, x: number, z: number, rot = 0): Ring => {
   if (kind === 'tree') return circleRing(x, z, 0.5, 8);
-  if (kind === 'person') return circleRing(x, z, 0.3, 6);
+  if (kind === 'person' || kind === 'sitter') return circleRing(x, z, 0.3, 6);
   if (kind === 'lamp') return circleRing(x, z, 0.2, 6);
   if (kind === 'bush') return circleRing(x, z, 0.6, 8);
   if (kind === 'pole') return circleRing(x, z, 0.15, 6);
@@ -456,7 +457,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
         if (kind === 'planter' && hash(x, z) < 0.5) stand.push({ x: x + nx * -side * 1.6, z: z + nz * -side * 1.6, rot: faceRoad + Math.PI, mate: true });
         if (kiosks < 4 && hash(z, x) < 0.06 && Math.hypot(x, z) > 20) {
           const kx = x + nx * side * 1.6, kz = z + nz * side * 1.6;
-          if (free('kiosk', kx, kz, faceRoad + Math.PI)) { items.kiosk.push([kx, Y, kz, faceRoad + Math.PI]); stand.push({ x: x + nx * side * 0.2, z: z + nz * side * 0.2, rot: faceRoad + Math.PI, mate: true }); kiosks++; }
+          if (free('kiosk', kx, kz, faceRoad + Math.PI)) { items.kiosk.push([kx, Y, kz, faceRoad + Math.PI]); stand.push({ x: kx - nx * side * 1.3 + tx * 1.4, z: kz - nz * side * 1.3 + tz * 1.4, rot: faceRoad + Math.PI, mate: true }); kiosks++; }
         }
       }
       acc = ((acc - l) % 20 + 20) % 20;
@@ -480,7 +481,7 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
       if (!bbIn(x, z, 10) || clearPlaza(x, z)) continue;
       if (stops < 3 && l > 45) {
         const rot = Math.atan2(nx * side, nz * side) + Math.PI;
-        if (free('stop', x, z, rot)) { items.stop.push([x, Y, z, rot]); stops++; stand.push({ x: x + 0.2, z: z + 0.4, rot: Math.atan2(-nx * side, -nz * side), mate: false }); }
+        if (free('stop', x, z, rot)) { items.stop.push([x, Y, z, rot]); stops++; stand.push({ x: x - nx * side * 1.4, z: z - nz * side * 1.4, rot: Math.atan2(-nx * side, -nz * side), mate: false }); }
       } else if (signs < 14) {
         const sx = x0 + tx * 3 + nx * (r.w / 2 + 0.6) * side, sz = z0 + tz * 3 + nz * (r.w / 2 + 0.6) * side, rot = Math.atan2(tx, tz);
         if (bbIn(sx, sz, 10) && !clearPlaza(sx, sz) && free('sign', sx, sz, rot)) { items.sign.push([sx, Y, sz, rot]); signs++; }
@@ -531,10 +532,15 @@ function planStreetLife(osm: OsmExtract, plan: Plan, bbIn: (x: number, z: number
   const musicians = [roomyList[1] || roomyList[0], roomyList[4]].filter((q, i, a) => q && a.indexOf(q) === i);
   const stalls = cand.filter((q) => !musicians.includes(q)).slice(0, 8);
   // people who sit or stand: only where a person fits (not in a carriageway, on a lane, in a basin)
-  const fits = (q: { x: number; z: number }): boolean => !hits(site, { kind: 'person', x: q.x, z: q.z, ring: footprint('person', q.x, q.z) }).length;
-  plan.sit = plan.sit.filter(fits); plan.stand = plan.stand.filter(fits);
-  for (const q of plan.sit) plan.placed.push({ kind: 'person', x: q.x, z: q.z, ring: footprint('person', q.x, q.z) });
-  for (const q of plan.stand) plan.placed.push({ kind: 'person', x: q.x, z: q.z, ring: footprint('person', q.x, q.z) });
+  const fits = (q: { x: number; z: number }): boolean => !hits(site, { kind: 'sitter', x: q.x, z: q.z, ring: footprint('sitter', q.x, q.z) }).length;
+  plan.sit = plan.sit.filter(fits);
+  for (const q of plan.sit) plan.placed.push({ kind: 'sitter', x: q.x, z: q.z, ring: footprint('sitter', q.x, q.z) });
+  // standing people go through the same test as furniture (clear of benches, bins, kiosks, trees); a chatting mate 0.9 m ahead must fit too
+  plan.stand = plan.stand.filter((q) => {
+    if (!free('person', q.x, q.z, q.rot)) return false;
+    if (q.mate && !free('person', q.x + Math.sin(q.rot) * 0.9, q.z + Math.cos(q.rot) * 0.9, q.rot)) q.mate = false;
+    return true;
+  });
   for (const q of stalls) { if (free('stall', q.x, q.z, q.rot)) plan.stalls.push(q); }
   for (const q of musicians) { if (free('busker', q.x, q.z, q.rot)) plan.musicians.push(q); }
 }
